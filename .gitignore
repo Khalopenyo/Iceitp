@@ -1,0 +1,38 @@
+# Go cache
+.gocache
+
+# Environment variables (содержат секреты)
+.env
+
+# macOS
+.DS_Store
+
+# Node
+node_modules
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Go binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Uploaded files / storage data
+backend/storage/submissions/
+
+# Temp / debug files
+*.tmp
+tmp_*
+
+# Docker volumes data (если локально)
+db-data/
+
+# Images (если не нужны в репо)
+*.png
+backend/.gocache

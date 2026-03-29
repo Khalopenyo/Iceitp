@@ -1,0 +1,106 @@
+package config
+
+import (
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+type Config struct {
+	DatabaseURL    string
+	JWTSecret      string
+	Port           string
+	CORSOrigins    []string
+	TrustedProxies []string
+}
+
+func loadDotEnv() {
+	// Minimal .env loader for local development.
+	// - Searches for .env in current dir and repo root (../.env when run from backend/).
+	// - Does not override existing environment variables.
+	paths := []string{".env", filepath.Join("..", ".env")}
+	for _, p := range paths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		lines := strings.Split(string(b), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			if strings.HasPrefix(line, "export ") {
+				line = strings.TrimSpace(strings.TrimPrefix(line, "export "))
+			}
+			eq := strings.IndexByte(line, '=')
+			if eq <= 0 {
+				continue
+			}
+			key := strings.TrimSpace(line[:eq])
+			val := strings.TrimSpace(line[eq+1:])
+			if key == "" {
+				continue
+			}
+			// Strip inline comments for unquoted values.
+			if val != "" && !strings.HasPrefix(val, "\"") && !strings.HasPrefix(val, "'") {
+				if hash := strings.IndexByte(val, '#'); hash >= 0 {
+					val = strings.TrimSpace(val[:hash])
+				}
+			}
+			// Strip surrounding quotes.
+			if len(val) >= 2 {
+				if (val[0] == '"' && val[len(val)-1] == '"') || (val[0] == '\'' && val[len(val)-1] == '\'') {
+					val = val[1 : len(val)-1]
+				}
+			}
+			if _, exists := os.LookupEnv(key); exists {
+				continue
+			}
+			_ = os.Setenv(key, val)
+		}
+		return
+	}
+}
+
+func Load() Config {
+	loadDotEnv()
+	cfg := Config{
+		DatabaseURL:    os.Getenv("DATABASE_URL"),
+		JWTSecret:      os.Getenv("JWT_SECRET"),
+		Port:           os.Getenv("PORT"),
+		CORSOrigins:    splitEnvList(os.Getenv("CORS_ORIGINS")),
+		TrustedProxies: splitEnvList(os.Getenv("TRUSTED_PROXIES")),
+	}
+	if cfg.DatabaseURL == "" {
+		log.Fatal("DATABASE_URL is required")
+	}
+	if cfg.JWTSecret == "" {
+		log.Fatal("JWT_SECRET is required")
+	}
+	if cfg.Port == "" {
+		cfg.Port = "8080"
+	}
+	return cfg
+}
+
+func splitEnvList(value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		result = append(result, part)
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
