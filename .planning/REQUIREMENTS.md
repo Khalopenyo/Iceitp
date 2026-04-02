@@ -85,39 +85,39 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONS-01 | TBD | Pending |
-| CONS-02 | TBD | Pending |
-| AUTH-01 | TBD | Pending |
-| AUTH-02 | TBD | Pending |
-| AUTH-03 | TBD | Pending |
-| AUTH-04 | TBD | Pending |
-| PROF-01 | TBD | Pending |
-| PROF-02 | TBD | Pending |
-| PROF-03 | TBD | Pending |
-| PROF-04 | TBD | Pending |
-| PROG-01 | TBD | Pending |
-| PROG-02 | TBD | Pending |
-| PROG-03 | TBD | Pending |
-| PROG-04 | TBD | Pending |
-| PART-01 | TBD | Pending |
-| PART-02 | TBD | Pending |
-| PART-03 | TBD | Pending |
-| CHAT-01 | TBD | Pending |
-| CHAT-02 | TBD | Pending |
-| CHAT-03 | TBD | Pending |
-| FEED-01 | TBD | Pending |
-| DOCS-01 | TBD | Pending |
-| DOCS-02 | TBD | Pending |
-| DOCS-03 | TBD | Pending |
-| DOCS-04 | TBD | Pending |
-| INFO-01 | TBD | Pending |
-| INFO-02 | TBD | Pending |
-| UX-01 | TBD | Pending |
+| CONS-01 | Phase 1 | Pending |
+| CONS-02 | Phase 1 | Pending |
+| AUTH-01 | Phase 1 | Pending |
+| AUTH-02 | Phase 1 | Pending |
+| AUTH-03 | Phase 4 | Pending |
+| AUTH-04 | Phase 4 | Pending |
+| PROF-01 | Phase 1 | Pending |
+| PROF-02 | Phase 1 | Pending |
+| PROF-03 | Phase 1 | Pending |
+| PROF-04 | Phase 2 | Pending |
+| PROG-01 | Phase 2 | Pending |
+| PROG-02 | Phase 3 | Pending |
+| PROG-03 | Phase 2 | Pending |
+| PROG-04 | Phase 2 | Pending |
+| PART-01 | Phase 3 | Pending |
+| PART-02 | Phase 3 | Pending |
+| PART-03 | Phase 3 | Pending |
+| CHAT-01 | Phase 5 | Pending |
+| CHAT-02 | Phase 5 | Pending |
+| CHAT-03 | Phase 5 | Pending |
+| FEED-01 | Phase 5 | Pending |
+| DOCS-01 | Phase 6 | Pending |
+| DOCS-02 | Phase 6 | Pending |
+| DOCS-03 | Phase 6 | Pending |
+| DOCS-04 | Phase 6 | Pending |
+| INFO-01 | Phase 7 | Pending |
+| INFO-02 | Phase 7 | Pending |
+| UX-01 | Phase 7 | Pending |
 
 **Coverage:**
 - v1 requirements: 28 total
-- Mapped to phases: 0
-- Unmapped: 28
+- Mapped to phases: 28
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-02*
