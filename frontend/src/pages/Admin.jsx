@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiDelete, apiGet, apiPost, apiPut } from "../lib/api.js";
+import AdminProgramTab from "../components/admin/AdminProgramTab.jsx";
 import { defaultRooms } from "../data/rooms.js";
 
 const toInputDateTime = (value) => {
@@ -126,7 +127,6 @@ export default function Admin() {
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [sections, setSections] = useState([]);
-  const [schedule, setSchedule] = useState([]);
   const [consents, setConsents] = useState([]);
   const [rooms, setRooms] = useState(defaultRooms);
   const [tab, setTab] = useState("users");
@@ -195,7 +195,6 @@ export default function Admin() {
   const load = () => {
     apiGet("/admin/users").then(setUsers).catch(handleForbidden);
     apiGet("/sections").then(setSections).catch(() => setSections([]));
-    apiGet("/admin/schedule").then(setSchedule).catch(() => setSchedule([]));
     apiGet("/admin/consents").then(setConsents).catch(() => setConsents([]));
     apiGet("/rooms").then(setRooms).catch(() => setRooms(defaultRooms));
     apiGet("/admin/conference")
@@ -474,8 +473,8 @@ export default function Admin() {
           <button className={`tab-btn ${tab === "sections" ? "active" : ""}`} onClick={() => setTab("sections")}>
             Секции
           </button>
-          <button className={`tab-btn ${tab === "schedule" ? "active" : ""}`} onClick={() => setTab("schedule")}>
-            Расписание
+          <button className={`tab-btn ${tab === "program" ? "active" : ""}`} onClick={() => setTab("program")}>
+            Программа
           </button>
           <button className={`tab-btn ${tab === "rooms" ? "active" : ""}`} onClick={() => setTab("rooms")}>
             Аудитории
@@ -595,42 +594,7 @@ export default function Admin() {
               </div>
             </div>
           )}
-          {tab === "schedule" && (
-            <div className="card">
-              <h3>Расписание и участники</h3>
-              <div className="schedule-grid">
-                {schedule.map((item) => (
-                  <div key={item.section.id} className="schedule-card">
-                    <div className="schedule-header">
-                      <div>
-                        <strong>{item.section.title}</strong>
-                        <div className="muted">
-                          {item.section.start_at
-                            ? `${new Date(item.section.start_at).toLocaleString()} — ${new Date(item.section.end_at).toLocaleTimeString()}`
-                            : "Без времени"}
-                        </div>
-                      </div>
-                      <span className="pill">{item.section.room}</span>
-                    </div>
-                    {item.participants?.length ? (
-                      <div className="participant-list">
-                        {item.participants.map((p) => (
-                          <div key={p.user_id} className="participant-row">
-                            <div>
-                              <strong>{p.full_name}</strong>
-                              <div className="muted">{p.talk_title || "Без названия доклада"}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="muted">Пока нет назначенных участников.</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {tab === "program" && <AdminProgramTab />}
           {tab === "rooms" && (
             <div className="card">
               <h3>Аудитории</h3>
