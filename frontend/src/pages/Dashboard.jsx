@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPost, apiPostForm, apiPut } from "../lib/api.js";
+import { setUser } from "../lib/auth.js";
 import { getSessionStatus } from "../lib/sessionStatus.js";
 
 const defaultSubmissionState = {
@@ -57,6 +58,7 @@ const openExternal = (url) => {
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [sections, setSections] = useState([]);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState("profile");
   const [nowTs, setNowTs] = useState(() => Date.now());
@@ -85,13 +87,29 @@ export default function Dashboard() {
     }
   };
 
+  const loadSchedule = async () => {
+    try {
+      const response = await apiGet("/schedule");
+      setData(response);
+      setProfile(response.user.profile);
+    } catch {
+      setData(null);
+      setProfile(null);
+    }
+  };
+
+  const loadSections = async () => {
+    try {
+      const response = await apiGet("/sections");
+      setSections(response);
+    } catch {
+      setSections([]);
+    }
+  };
+
   useEffect(() => {
-    apiGet("/schedule")
-      .then((res) => {
-        setData(res);
-        setProfile(res.user.profile);
-      })
-      .catch(() => setData(null));
+    loadSchedule();
+    loadSections();
     loadSubmissions();
   }, []);
 
@@ -121,14 +139,22 @@ export default function Dashboard() {
   const sectionStatus = data?.section ? getSessionStatus(data.section, nowTs) : "unknown";
   const startTime = data?.section ? formatTimeOnly(data.section.start_at) : "Не указано";
   const endTime = data?.section ? formatTimeOnly(data.section.end_at) : "Не указано";
+  const selectedSection = sections.find((section) => String(section.id) === String(profile?.section_id));
 
   const save = async () => {
     setSaving(true);
     try {
-      await apiPut("/me/profile", profile);
+      await apiPut("/me/profile", {
+        ...profile,
+        section_id: profile?.section_id ? Number(profile.section_id) : null,
+      });
+      const [freshUser, freshSchedule] = await Promise.all([apiGet("/me"), apiGet("/schedule")]);
+      setUser(freshUser);
+      setData(freshSchedule);
+      setProfile(freshSchedule.user.profile);
       alert("Профиль обновлен");
-    } catch {
-      alert("Не удалось сохранить профиль");
+    } catch (err) {
+      alert(err.message || "Не удалось сохранить профиль");
     } finally {
       setSaving(false);
     }
@@ -222,6 +248,20 @@ export default function Dashboard() {
                     <input value={profile.degree || ""} onChange={(e) => update("degree", e.target.value)} />
                   </label>
                   <label>
+                    Секция
+                    <select
+                      value={profile.section_id ?? ""}
+                      onChange={(e) => update("section_id", e.target.value ? Number(e.target.value) : null)}
+                    >
+                      <option value="">Выберите секцию</option>
+                      {sections.map((section) => (
+                        <option key={section.id} value={section.id}>
+                          {section.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
                     Доклад
                     <input value={profile.talk_title || ""} onChange={(e) => update("talk_title", e.target.value)} />
                   </label>
@@ -229,6 +269,11 @@ export default function Dashboard() {
                     Телефон
                     <input value={profile.phone || ""} onChange={(e) => update("phone", e.target.value)} />
                   </label>
+                  {selectedSection ? (
+                    <p className="muted">
+                      Текущая секция: <strong>{selectedSection.title}</strong>
+                    </p>
+                  ) : null}
                   <button className="btn btn-primary" onClick={save} disabled={saving}>
                     {saving ? "Сохранение..." : "Сохранить изменения"}
                   </button>
