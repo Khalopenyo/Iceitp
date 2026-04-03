@@ -104,7 +104,9 @@ export default function Register() {
     section_id: "",
     talk_title: "",
     phone: "",
-    consent: false,
+    consent_personal_data: false,
+    consent_publication: false,
+    consent_version: "registration-consent-v1",
   });
 
   useEffect(() => {
@@ -136,7 +138,7 @@ export default function Register() {
       setToken(data.token);
       navigate("/dashboard");
     } catch (err) {
-      alert("Ошибка регистрации. Проверьте поля и согласие.");
+      alert(err.message || "Ошибка регистрации. Проверьте поля и согласие.");
     } finally {
       setLoading(false);
     }
@@ -268,18 +270,35 @@ export default function Register() {
           <>
             <label>
               Email
-              <input value={form.email} onChange={(e) => update("email", e.target.value)} required />
+              <input type="email" value={form.email} onChange={(e) => update("email", e.target.value)} required />
             </label>
             <label>
               Пароль
               <input type="password" value={form.password} onChange={(e) => update("password", e.target.value)} required />
             </label>
             <label className="checkbox">
-              <input type="checkbox" checked={form.consent} onChange={(e) => update("consent", e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={form.consent_personal_data}
+                onChange={(e) => update("consent_personal_data", e.target.checked)}
+              />
               <span>
-                Отправляя форму, я даю согласие на обработку и публикацию моих персональных данных и материалов
-                доклада в сборнике и на сайте конференции в соответствии с{" "}
-                <Link to="/personal-data">Политикой обработки персональных данных</Link>.
+                Я ознакомлен(а) с{" "}
+                <Link to="/personal-data">Политикой обработки персональных данных</Link> и даю согласие на
+                регистрацию, организацию участия, формирование программы, выпуск бейджа, сертификата и других
+                материалов конференции.
+              </span>
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={form.consent_publication}
+                onChange={(e) => update("consent_publication", e.target.checked)}
+              />
+              <span>
+                Я принимаю{" "}
+                <Link to="/consent-authors">согласие на публикацию материалов и сведений об авторе</Link> в
+                программе конференции, электронном сборнике трудов и на сайте конференции.
               </span>
             </label>
           </>
@@ -295,17 +314,17 @@ export default function Register() {
               type="button"
               className="btn btn-primary"
               onClick={() => setStep(step + 1)}
-              disabled={
-                (step === 1 && !form.full_name.trim()) ||
-                (step === 2 &&
-                  (!form.section_id || !form.talk_title.trim() || !(selectedSection && selectedSection.room)))
-              }
+              disabled={(step === 1 && !form.full_name.trim()) || (step === 2 && (!form.section_id || !form.talk_title.trim()))}
             >
               Далее
             </button>
           )}
           {step === 3 && (
-            <button className="btn btn-primary" type="submit" disabled={loading || !form.consent}>
+            <button
+              className="btn btn-primary"
+              type="submit"
+              disabled={loading || !form.consent_personal_data || !form.consent_publication}
+            >
               {loading ? "Отправка..." : "Зарегистрироваться"}
             </button>
           )}

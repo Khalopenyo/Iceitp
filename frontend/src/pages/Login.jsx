@@ -17,7 +17,7 @@ export default function Login() {
       setToken(data.token);
       navigate("/dashboard");
     } catch (err) {
-      alert("Неверные учетные данные");
+      alert(err.message || "Неверные учетные данные");
     } finally {
       setLoading(false);
     }
@@ -29,7 +29,7 @@ export default function Login() {
       <form className="form-grid" onSubmit={submit}>
         <label>
           Email
-          <input value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </label>
         <label>
           Пароль
