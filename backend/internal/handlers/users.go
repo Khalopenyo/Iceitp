@@ -94,6 +94,9 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		if err := tx.Where("user_id = ?", id).Delete(&models.ChatMessage{}).Error; err != nil {
 			return err
 		}
+		if err := tx.Where("user_id = ?", id).Delete(&models.ProgramAssignment{}).Error; err != nil {
+			return err
+		}
 		if err := tx.Where("user_id = ?", id).Delete(&models.CheckIn{}).Error; err != nil {
 			return err
 		}

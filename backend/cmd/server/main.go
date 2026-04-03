@@ -51,60 +51,7 @@ func seed(db *gorm.DB) {
 	syncSectionSeed(db)
 	syncConferenceSeed(db)
 	syncAntiplagiatSeed(db)
-
-	presetRooms := []models.Room{
-		{Name: "Хайпарк", Floor: 1},
-		{Name: "Актовый зал", Floor: 1},
-		{Name: "Аркейн", Floor: 1},
-		{Name: "Ученый совет", Floor: 1},
-		{Name: "Фуршет", Floor: 1},
-	}
-	presetRoomNames := make([]string, 0, len(presetRooms))
-	presetRoomSet := map[string]struct{}{}
-	for _, room := range presetRooms {
-		presetRoomNames = append(presetRoomNames, room.Name)
-		presetRoomSet[strings.ToLower(strings.TrimSpace(room.Name))] = struct{}{}
-	}
-
-	// Keep only preset room names.
-	if err := db.Where("name NOT IN ?", presetRoomNames).Delete(&models.Room{}).Error; err != nil {
-		log.Printf("seed rooms: failed to delete non-preset rooms: %v", err)
-	}
-
-	// Ensure all preset rooms exist.
-	for _, room := range presetRooms {
-		var existing models.Room
-		if err := db.Where("name = ?", room.Name).First(&existing).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				if err := db.Create(&room).Error; err != nil {
-					log.Printf("seed rooms: failed to create room %s: %v", room.Name, err)
-				}
-				continue
-			}
-			log.Printf("seed rooms: failed to query room %s: %v", room.Name, err)
-			continue
-		}
-		if existing.Floor != room.Floor {
-			if err := db.Model(&existing).Update("floor", room.Floor).Error; err != nil {
-				log.Printf("seed rooms: failed to update floor for %s: %v", room.Name, err)
-			}
-		}
-	}
-
-	// Keep section rooms aligned with the preset rooms.
-	var existingSections []models.Section
-	if err := db.Find(&existingSections).Error; err == nil {
-		for i, section := range existingSections {
-			_, ok := presetRoomSet[strings.ToLower(strings.TrimSpace(section.Room))]
-			if ok {
-				continue
-			}
-			targetRoom := presetRooms[i%len(presetRooms)].Name
-			if err := db.Model(&models.Section{}).Where("id = ?", section.ID).Update("room", targetRoom).Error; err != nil {
-				log.Printf("seed sections: failed to update section %d room: %v", section.ID, err)
-			}
-		}
-	}
+	ensureDefaultRooms(db)
 
 	// Ensure required map markers exist (do not overwrite user-edited coordinates).
 	markers := []models.MapMarker{
@@ -139,45 +86,40 @@ func syncSectionSeed(db *gorm.DB) {
 		return
 	}
 
-	switch {
-	case len(existingSections) == 0:
+	if len(existingSections) == 0 {
 		for _, section := range defaultSections {
 			if err := db.Create(&section).Error; err != nil {
 				log.Printf("seed sections: failed to create %s: %v", section.Title, err)
 			}
 		}
-	case hasLegacySectionTitles(existingSections):
-		for i, section := range defaultSections {
-			if i < len(existingSections) {
-				if err := db.Model(&models.Section{}).
-					Where("id = ?", existingSections[i].ID).
-					Updates(map[string]any{
-						"title":       section.Title,
-						"description": section.Description,
-						"room":        section.Room,
-						"start_at":    section.StartAt,
-						"end_at":      section.EndAt,
-						"capacity":    section.Capacity,
-					}).Error; err != nil {
-					log.Printf("seed sections: failed to update section %d: %v", existingSections[i].ID, err)
+		return
+	}
+}
+
+func ensureDefaultRooms(db *gorm.DB) {
+	defaultRooms := []models.Room{
+		{Name: "Хайпарк", Floor: 1},
+		{Name: "Актовый зал", Floor: 1},
+		{Name: "Аркейн", Floor: 1},
+		{Name: "Ученый совет", Floor: 1},
+		{Name: "Фуршет", Floor: 1},
+	}
+
+	for _, room := range defaultRooms {
+		var existing models.Room
+		if err := db.Where("name = ?", room.Name).First(&existing).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				if err := db.Create(&room).Error; err != nil {
+					log.Printf("seed rooms: failed to create room %s: %v", room.Name, err)
 				}
-				continue
+			} else {
+				log.Printf("seed rooms: failed to query room %s: %v", room.Name, err)
 			}
-			if err := db.Create(&section).Error; err != nil {
-				log.Printf("seed sections: failed to create %s: %v", section.Title, err)
-			}
+			continue
 		}
-	default:
-		existingTitles := make(map[string]struct{}, len(existingSections))
-		for _, section := range existingSections {
-			existingTitles[strings.ToLower(strings.TrimSpace(section.Title))] = struct{}{}
-		}
-		for _, section := range defaultSections {
-			if _, exists := existingTitles[strings.ToLower(strings.TrimSpace(section.Title))]; exists {
-				continue
-			}
-			if err := db.Create(&section).Error; err != nil {
-				log.Printf("seed sections: failed to append %s: %v", section.Title, err)
+		if existing.Floor != room.Floor {
+			if err := db.Model(&existing).Update("floor", room.Floor).Error; err != nil {
+				log.Printf("seed rooms: failed to update floor for %s: %v", room.Name, err)
 			}
 		}
 	}

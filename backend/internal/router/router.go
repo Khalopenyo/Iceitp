@@ -46,6 +46,7 @@ func Setup(db *gorm.DB, jwtSecret string, antiplagiatService *antiplagiat.Servic
 	mapMarkerHandler := &handlers.MapMarkerHandler{DB: db}
 	mapRouteHandler := &handlers.MapRouteHandler{DB: db}
 	conferenceHandler := &handlers.ConferenceHandler{DB: db}
+	programHandler := &handlers.ProgramHandler{DB: db}
 	checkInHandler := &handlers.CheckInHandler{DB: db, JWTSecret: jwtSecret}
 	submissionHandler := &handlers.SubmissionHandler{DB: db, Service: antiplagiatService}
 
@@ -98,6 +99,8 @@ func Setup(db *gorm.DB, jwtSecret string, antiplagiatService *antiplagiat.Servic
 	admin.PUT("/map/routes", mapRouteHandler.UpsertRoute)
 	admin.POST("/seed-demo", scheduleHandler.SeedDemo)
 	admin.GET("/schedule", scheduleHandler.AdminSchedule)
+	admin.GET("/program", programHandler.ListProgram)
+	admin.PUT("/program/:userID", programHandler.UpsertProgramAssignment)
 	admin.GET("/consents", consentHandler.ListConsents)
 	admin.GET("/feedback", feedbackHandler.ListFeedback)
 	admin.GET("/conference", conferenceHandler.GetConference)

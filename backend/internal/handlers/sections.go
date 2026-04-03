@@ -129,6 +129,9 @@ func (h *SectionHandler) DeleteSection(c *gin.Context) {
 		if err := tx.Model(&models.Profile{}).Where("section_id = ?", id).Update("section_id", nil).Error; err != nil {
 			return err
 		}
+		if err := tx.Model(&models.ProgramAssignment{}).Where("section_id = ?", id).Update("section_id", nil).Error; err != nil {
+			return err
+		}
 		if err := tx.Where("section_id = ?", id).Delete(&models.ChatMessage{}).Error; err != nil {
 			return err
 		}

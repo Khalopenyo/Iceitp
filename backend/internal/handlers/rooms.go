@@ -36,7 +36,13 @@ func (h *RoomHandler) CreateRoom(c *gin.Context) {
 
 func (h *RoomHandler) DeleteRoom(c *gin.Context) {
 	id := c.Param("id")
-	if err := h.DB.Delete(&models.Room{}, id).Error; err != nil {
+	err := h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.ProgramAssignment{}).Where("room_id = ?", id).Update("room_id", nil).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&models.Room{}, id).Error
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete room"})
 		return
 	}
