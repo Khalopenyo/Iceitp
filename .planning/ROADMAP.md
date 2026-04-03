@@ -43,7 +43,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Admin can assign or change the final room and time slot for a participant talk in the official program.
   3. Admin can store and maintain external join links for online sessions or participants where needed.
   4. Official program data and downstream program generation use admin-approved schedule records instead of raw participant profile data.
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
 
 ### Phase 3: Hybrid Schedule Experience
@@ -112,7 +112,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Registration & Consent | 3/3 | Complete | 2026-04-04 |
-| 2. Authoritative Program Management | 0/TBD | Not started | - |
+| 2. Authoritative Program Management | 0/3 | Ready to execute | - |
 | 3. Hybrid Schedule Experience | 0/TBD | Not started | - |
 | 4. Self-Service Account Recovery | 0/TBD | Not started | - |
 | 5. Conference Communication | 0/TBD | Not started | - |
