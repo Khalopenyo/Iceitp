@@ -29,8 +29,8 @@ type User struct {
 }
 
 type Profile struct {
-	ID           uint  `gorm:"primaryKey" json:"id"`
-	UserID       uint  `gorm:"uniqueIndex" json:"user_id"`
+	ID           uint   `gorm:"primaryKey" json:"id"`
+	UserID       uint   `gorm:"uniqueIndex" json:"user_id"`
 	FullName     string `gorm:"not null" json:"full_name"`
 	Organization string `json:"organization"`
 	Position     string `json:"position"`
@@ -39,5 +39,6 @@ type Profile struct {
 	SectionID    *uint  `json:"section_id"`
 	TalkTitle    string `json:"talk_title"`
 	Phone        string `json:"phone"`
-	ConsentGiven bool   `json:"consent_given"`
+	// ConsentGiven remains for compatibility with existing API consumers.
+	ConsentGiven bool `json:"consent_given"`
 }

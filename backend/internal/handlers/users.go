@@ -3,6 +3,7 @@ package handlers
 import (
 	"conferenceplatforma/internal/models"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -34,14 +35,21 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
-	profile.FullName = payload.FullName
-	profile.Organization = payload.Organization
-	profile.Position = payload.Position
-	profile.City = payload.City
-	profile.Degree = payload.Degree
+	if payload.SectionID != nil {
+		var section models.Section
+		if err := h.DB.First(&section, *payload.SectionID).Error; err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "selected section not found"})
+			return
+		}
+	}
+	profile.FullName = strings.TrimSpace(payload.FullName)
+	profile.Organization = strings.TrimSpace(payload.Organization)
+	profile.Position = strings.TrimSpace(payload.Position)
+	profile.City = strings.TrimSpace(payload.City)
+	profile.Degree = strings.TrimSpace(payload.Degree)
 	profile.SectionID = payload.SectionID
-	profile.TalkTitle = payload.TalkTitle
-	profile.Phone = payload.Phone
+	profile.TalkTitle = strings.TrimSpace(payload.TalkTitle)
+	profile.Phone = strings.TrimSpace(payload.Phone)
 	if err := h.DB.Save(&profile).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update profile"})
 		return
