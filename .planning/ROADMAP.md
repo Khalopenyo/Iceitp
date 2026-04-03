@@ -31,7 +31,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Participant can explicitly submit the required consent choices and the system records them as part of registration.
   3. Participant can register with email, password, attendance format, section choice, and talk title in one end-to-end flow.
   4. Participant can log in across sessions, return to the platform, and update saved personal and contact profile data.
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
 
 ### Phase 2: Authoritative Program Management
@@ -111,7 +111,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Registration & Consent | 0/TBD | Not started | - |
+| 1. Registration & Consent | 0/3 | Not started | - |
 | 2. Authoritative Program Management | 0/TBD | Not started | - |
 | 3. Hybrid Schedule Experience | 0/TBD | Not started | - |
 | 4. Self-Service Account Recovery | 0/TBD | Not started | - |
