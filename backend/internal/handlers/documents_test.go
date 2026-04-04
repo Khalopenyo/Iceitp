@@ -48,6 +48,10 @@ func newDocumentsTestRouter(db *gorm.DB) *gin.Engine {
 
 	handler := &DocumentHandler{DB: db, JWTSecret: "test-secret"}
 	router.GET("/api/documents/status", handler.DocumentStatus)
+	router.GET("/api/documents/program", handler.ProgramPDF)
+	router.GET("/api/documents/badge", handler.BadgePDF)
+	router.GET("/api/documents/certificate", handler.CertificatePDF)
+	router.GET("/api/documents/proceedings", handler.Proceedings)
 	return router
 }
 
@@ -174,5 +178,95 @@ func TestDocumentStatusBadgeAvailabilityByAttendanceMode(t *testing.T) {
 	}
 	if !strings.Contains(onlineResponse.Badge.Message, "только офлайн") {
 		t.Fatalf("unexpected online badge message %q", onlineResponse.Badge.Message)
+	}
+}
+
+func TestBadgePDFRejectsOnlineParticipant(t *testing.T) {
+	db := newDocumentsTestDB(t)
+	router := newDocumentsTestRouter(db)
+	section := seedSection(t, db, "Аудитория 403")
+	seedConferenceRecord(t, db, models.ConferenceStatusLive, "")
+	user := seedParticipant(t, db, "online-badge@example.com", models.UserTypeOnline, &section.ID, "Онлайн доклад")
+
+	recorder := performDocumentsRequest(t, router, "/api/documents/badge", user)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusConflict, recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "только офлайн") {
+		t.Fatalf("unexpected body %s", recorder.Body.String())
+	}
+}
+
+func TestCertificatePDFAllowsEligibleOnlineParticipant(t *testing.T) {
+	db := newDocumentsTestDB(t)
+	router := newDocumentsTestRouter(db)
+	section := seedSection(t, db, "Аудитория 404")
+	conf := seedConferenceRecord(t, db, models.ConferenceStatusLive, "")
+	user := seedParticipant(t, db, "online-certificate@example.com", models.UserTypeOnline, &section.ID, "Онлайн доклад")
+	startsAt := time.Date(2026, time.April, 24, 12, 0, 0, 0, time.UTC)
+	endsAt := startsAt.Add(30 * time.Minute)
+
+	if err := db.Create(&models.ProgramAssignment{
+		UserID:    user.ID,
+		UserType:  models.UserTypeOnline,
+		SectionID: &section.ID,
+		TalkTitle: "Утвержденный онлайн доклад",
+		StartsAt:  &startsAt,
+		EndsAt:    &endsAt,
+	}).Error; err != nil {
+		t.Fatalf("create assignment: %v", err)
+	}
+
+	first := performDocumentsRequest(t, router, "/api/documents/certificate", user)
+	if first.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, first.Code, first.Body.String())
+	}
+	if contentType := first.Header().Get("Content-Type"); !strings.Contains(contentType, "application/pdf") {
+		t.Fatalf("expected pdf content type, got %q", contentType)
+	}
+
+	second := performDocumentsRequest(t, router, "/api/documents/certificate", user)
+	if second.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, second.Code, second.Body.String())
+	}
+
+	var certs []models.Certificate
+	if err := db.Where("conference_id = ? AND user_id = ?", conf.ID, user.ID).Find(&certs).Error; err != nil {
+		t.Fatalf("load certificates: %v", err)
+	}
+	if len(certs) != 1 {
+		t.Fatalf("expected exactly one certificate row, got %d", len(certs))
+	}
+}
+
+func TestProceedingsEndpointBlocksBeforeConferenceFinish(t *testing.T) {
+	db := newDocumentsTestDB(t)
+	router := newDocumentsTestRouter(db)
+	section := seedSection(t, db, "Аудитория 405")
+	user := seedParticipant(t, db, "proceedings@example.com", models.UserTypeOffline, &section.ID, "Доклад")
+	seedConferenceRecord(t, db, models.ConferenceStatusLive, "https://example.com/proceedings.pdf")
+
+	recorder := performDocumentsRequest(t, router, "/api/documents/proceedings", user)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusConflict, recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "после завершения") {
+		t.Fatalf("unexpected body %s", recorder.Body.String())
+	}
+}
+
+func TestProgramPDFRejectsPendingPersonalProgram(t *testing.T) {
+	db := newDocumentsTestDB(t)
+	router := newDocumentsTestRouter(db)
+	section := seedSection(t, db, "Аудитория 406")
+	user := seedParticipant(t, db, "program-pending@example.com", models.UserTypeOffline, &section.ID, "Доклад")
+	seedConferenceRecord(t, db, models.ConferenceStatusLive, "")
+
+	recorder := performDocumentsRequest(t, router, "/api/documents/program?type=personal", user)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusConflict, recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "Официальная программа") {
+		t.Fatalf("unexpected body %s", recorder.Body.String())
 	}
 }

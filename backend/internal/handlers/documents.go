@@ -59,6 +59,12 @@ type documentStatusResponse struct {
 	Proceedings      documentStatusItem      `json:"proceedings"`
 }
 
+type documentRuntimeContext struct {
+	User   models.User
+	Conf   models.Conference
+	Status *documentStatusResponse
+}
+
 // loadProgramPDFView keeps ProgramPDF sourced from authoritative ProgramAssignment records.
 func loadProgramPDFView(db *gorm.DB, userID uint, rawMode string) (*programPDFView, error) {
 	view := &programPDFView{Mode: "personal"}
@@ -193,42 +199,74 @@ func loadDocumentStatus(db *gorm.DB, user models.User, conf models.Conference) (
 	return status, nil
 }
 
-func (h *DocumentHandler) DocumentStatus(c *gin.Context) {
-	userID := c.GetUint("user_id")
+func (h *DocumentHandler) loadDocumentRuntimeContext(userID uint) (*documentRuntimeContext, error) {
 	var user models.User
 	if err := h.DB.Preload("Profile").First(&user, userID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-		return
+		return nil, err
 	}
+
 	conf, err := h.getConference()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load conference"})
-		return
+		return nil, err
 	}
 
 	status, err := loadDocumentStatus(h.DB, user, *conf)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load document status"})
+		return nil, err
+	}
+
+	return &documentRuntimeContext{
+		User:   user,
+		Conf:   *conf,
+		Status: status,
+	}, nil
+}
+
+func writeBlockedDocumentError(c *gin.Context, item documentStatusItem) {
+	c.JSON(http.StatusConflict, gin.H{"error": item.Message})
+}
+
+func (h *DocumentHandler) DocumentStatus(c *gin.Context) {
+	context, err := h.loadDocumentRuntimeContext(c.GetUint("user_id"))
+	if err != nil {
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load document status"})
+		}
 		return
 	}
 
-	c.JSON(http.StatusOK, status)
+	c.JSON(http.StatusOK, context.Status)
 }
 
 func (h *DocumentHandler) ProgramPDF(c *gin.Context) {
-	userID := c.GetUint("user_id")
-	var user models.User
-	if err := h.DB.Preload("Profile").First(&user, userID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-		return
-	}
-	conf, err := h.getConference()
+	context, err := h.loadDocumentRuntimeContext(c.GetUint("user_id"))
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load conference"})
 		return
 	}
 
-	view, err := loadProgramPDFView(h.DB, userID, c.DefaultQuery("type", "personal"))
+	mode := strings.ToLower(strings.TrimSpace(c.DefaultQuery("type", "personal")))
+	switch mode {
+	case "full":
+		if !context.Status.FullProgram.Available {
+			writeBlockedDocumentError(c, context.Status.FullProgram)
+			return
+		}
+	default:
+		if !context.Status.PersonalProgram.Available {
+			writeBlockedDocumentError(c, context.Status.PersonalProgram)
+			return
+		}
+	}
+
+	view, err := loadProgramPDFView(h.DB, context.User.ID, mode)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load authoritative program"})
 		return
@@ -239,22 +277,16 @@ func (h *DocumentHandler) ProgramPDF(c *gin.Context) {
 	pdf.SetTitle("Program", false)
 	pdf.AddPage()
 	pdf.SetFont(fontFamily, "", 15)
-	pdf.MultiCell(0, 8, normalizeText(conf.Title), "", "L", false)
+	pdf.MultiCell(0, 8, normalizeText(context.Conf.Title), "", "L", false)
 	pdf.Ln(2)
 	pdf.SetFont(fontFamily, "", 11)
 	pdf.Cell(0, 7, fmt.Sprintf("Тип программы: %s", map[bool]string{true: "Полная", false: "Персональная"}[view.Mode == "full"]))
 	pdf.Ln(10)
 	if view.Mode == "personal" {
-		pdf.Cell(0, 7, fmt.Sprintf("Участник: %s", normalizeText(user.Profile.FullName)))
+		pdf.Cell(0, 7, fmt.Sprintf("Участник: %s", normalizeText(context.User.Profile.FullName)))
 		pdf.Ln(8)
 	}
 	if view.Mode == "personal" {
-		if view.StatusMessage != "" || view.PersonalEntry == nil {
-			pdf.Cell(0, 7, officialProgramPendingText)
-			writePDF(c, pdf, "program.pdf")
-			return
-		}
-
 		entry := *view.PersonalEntry
 		pdf.SetFont(fontFamily, "", 12)
 		pdf.MultiCell(0, 7, normalizeText(fallbackSectionTitle(entry.SectionTitle, valueOrZero(entry.SectionID))), "", "L", false)
@@ -271,7 +303,7 @@ func (h *DocumentHandler) ProgramPDF(c *gin.Context) {
 			"L",
 			false,
 		)
-		line := normalizeText(user.Profile.FullName)
+		line := normalizeText(context.User.Profile.FullName)
 		if entry.TalkTitle != "" {
 			line = fmt.Sprintf("%s — %s", line, normalizeText(entry.TalkTitle))
 		}
@@ -279,12 +311,6 @@ func (h *DocumentHandler) ProgramPDF(c *gin.Context) {
 		if entry.JoinURL != "" {
 			pdf.MultiCell(0, 6, fmt.Sprintf("Ссылка для подключения: %s", entry.JoinURL), "", "L", false)
 		}
-		writePDF(c, pdf, "program.pdf")
-		return
-	}
-
-	if view.StatusMessage != "" || len(view.Groups) == 0 {
-		pdf.Cell(0, 7, officialProgramPendingText)
 		writePDF(c, pdf, "program.pdf")
 		return
 	}
@@ -316,34 +342,38 @@ func (h *DocumentHandler) ProgramPDF(c *gin.Context) {
 }
 
 func (h *DocumentHandler) CertificatePDF(c *gin.Context) {
-	userID := c.GetUint("user_id")
-	var user models.User
-	if err := h.DB.Preload("Profile").First(&user, userID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-		return
-	}
-	conf, err := h.getConference()
+	context, err := h.loadDocumentRuntimeContext(c.GetUint("user_id"))
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load conference"})
 		return
 	}
-
-	var checkIn models.CheckIn
-	if err := h.DB.Where("conference_id = ? AND user_id = ?", conf.ID, userID).First(&checkIn).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "сертификат доступен после check-in"})
+	if !context.Status.Certificate.Available {
+		writeBlockedDocumentError(c, context.Status.Certificate)
 		return
 	}
 
-	cert, err := h.ensureCertificate(conf.ID, userID)
+	cert, err := h.ensureCertificate(context.Conf.ID, context.User.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to issue certificate"})
 		return
 	}
 
+	talkTitle := context.User.Profile.TalkTitle
 	var sectionTitle string
-	if user.Profile.SectionID != nil {
+	personalView, err := loadProgramPDFView(h.DB, context.User.ID, "personal")
+	if err == nil && personalView.PersonalEntry != nil {
+		if personalView.PersonalEntry.TalkTitle != "" {
+			talkTitle = personalView.PersonalEntry.TalkTitle
+		}
+		sectionTitle = fallbackSectionTitle(personalView.PersonalEntry.SectionTitle, valueOrZero(personalView.PersonalEntry.SectionID))
+	}
+	if sectionTitle == "" && context.User.Profile.SectionID != nil {
 		var sec models.Section
-		if err := h.DB.Select("id", "title").First(&sec, *user.Profile.SectionID).Error; err == nil {
+		if err := h.DB.Select("id", "title").First(&sec, *context.User.Profile.SectionID).Error; err == nil {
 			sectionTitle = sec.Title
 		}
 	}
@@ -359,15 +389,15 @@ func (h *DocumentHandler) CertificatePDF(c *gin.Context) {
 	pdf.MultiCell(
 		0,
 		12,
-		fmt.Sprintf("%s принял(а) участие в конференции \"%s\".", normalizeText(user.Profile.FullName), normalizeText(conf.Title)),
+		fmt.Sprintf("%s принял(а) участие в конференции \"%s\".", normalizeText(context.User.Profile.FullName), normalizeText(context.Conf.Title)),
 		"",
 		"L",
 		false,
 	)
 	pdf.Ln(12)
 	pdf.SetFont(fontFamily, "", 12)
-	if user.Profile.TalkTitle != "" {
-		pdf.MultiCell(0, 8, fmt.Sprintf("Тема доклада: %s", normalizeText(user.Profile.TalkTitle)), "", "L", false)
+	if talkTitle != "" {
+		pdf.MultiCell(0, 8, fmt.Sprintf("Тема доклада: %s", normalizeText(talkTitle)), "", "L", false)
 	}
 	if sectionTitle != "" {
 		pdf.MultiCell(0, 8, fmt.Sprintf("Секция: %s", normalizeText(sectionTitle)), "", "L", false)
@@ -378,19 +408,21 @@ func (h *DocumentHandler) CertificatePDF(c *gin.Context) {
 }
 
 func (h *DocumentHandler) BadgePDF(c *gin.Context) {
-	userID := c.GetUint("user_id")
-	var user models.User
-	if err := h.DB.Preload("Profile").First(&user, userID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-		return
-	}
-	conf, err := h.getConference()
+	context, err := h.loadDocumentRuntimeContext(c.GetUint("user_id"))
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load conference"})
 		return
 	}
+	if !context.Status.Badge.Available {
+		writeBlockedDocumentError(c, context.Status.Badge)
+		return
+	}
 
-	token, err := h.generateBadgeToken(user.ID, conf.ID)
+	token, err := h.generateBadgeToken(context.User.ID, context.Conf.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate badge token"})
 		return
@@ -401,12 +433,12 @@ func (h *DocumentHandler) BadgePDF(c *gin.Context) {
 	pdf.SetTitle("Badge", false)
 	pdf.AddPage()
 	pdf.SetFont(fontFamily, "", 16)
-	pdf.MultiCell(0, 8, normalizeText(conf.Title), "", "L", false)
+	pdf.MultiCell(0, 8, normalizeText(context.Conf.Title), "", "L", false)
 	pdf.Ln(12)
 	pdf.SetFont(fontFamily, "", 12)
-	pdf.Cell(0, 8, normalizeText(user.Profile.FullName))
+	pdf.Cell(0, 8, normalizeText(context.User.Profile.FullName))
 	pdf.Ln(6)
-	pdf.Cell(0, 8, user.Email)
+	pdf.Cell(0, 8, context.User.Email)
 	pdf.Ln(8)
 	qr, err := qrcode.Encode(token, qrcode.Medium, 120)
 	if err == nil {
@@ -417,22 +449,26 @@ func (h *DocumentHandler) BadgePDF(c *gin.Context) {
 }
 
 func (h *DocumentHandler) Proceedings(c *gin.Context) {
-	conf, err := h.getConference()
+	context, err := h.loadDocumentRuntimeContext(c.GetUint("user_id"))
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load conference"})
 		return
 	}
-	if conf.Status != models.ConferenceStatusFinished {
-		c.JSON(http.StatusForbidden, gin.H{"error": "сборник будет доступен после завершения конференции"})
-		return
-	}
-	if strings.TrimSpace(conf.ProceedingsURL) == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "сборник пока не загружен"})
+	if !context.Status.Proceedings.Available {
+		if context.Conf.Status == models.ConferenceStatusFinished && strings.TrimSpace(context.Conf.ProceedingsURL) == "" {
+			c.JSON(http.StatusNotFound, gin.H{"error": context.Status.Proceedings.Message})
+			return
+		}
+		writeBlockedDocumentError(c, context.Status.Proceedings)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"url":   strings.TrimSpace(conf.ProceedingsURL),
-		"title": conf.Title,
+		"url":   strings.TrimSpace(context.Conf.ProceedingsURL),
+		"title": context.Conf.Title,
 	})
 }
 
