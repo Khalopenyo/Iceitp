@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: milestone
-status: ready_to_complete_milestone
-stopped_at: Phase 7 executed and verified; milestone completion is next
-last_updated: "2026-04-04T10:45:19Z"
-last_activity: 2026-04-04 -- Phase 7 executed, verified, and marked complete
+milestone_name: Conference Operations Platform
+status: completed
+stopped_at: Milestone v1.0 archived; next step is gsd-new-milestone
+last_updated: "2026-04-04T12:16:52Z"
+last_activity: 2026-04-04 -- v1.0 archived and ready for next milestone planning
 progress:
   total_phases: 7
   completed_phases: 7
@@ -18,17 +18,18 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-02)
+See: .planning/PROJECT.md (updated 2026-04-04)
 
 **Core value:** Organizers can run the full participant journey for one scientific conference in one system with minimal manual coordination and document handling.
-**Current focus:** Milestone completion and wrap-up
+**Current focus:** Planning the next milestone
 
 ## Current Position
 
-Phase: 7 of 7 complete
-Plan: 21 of 21 total plans complete
-Status: Ready to complete milestone
-Last activity: 2026-04-04 -- Phase 7 executed, verified, and marked complete
+Milestone: `v1.0 Conference Operations Platform` archived
+Phase set: 7 of 7 complete
+Plan set: 21 of 21 complete
+Status: Completed
+Last activity: 2026-04-04 -- v1.0 archived and ready for next milestone planning
 
 Progress: [██████████] 100%
 
@@ -64,7 +65,7 @@ Progress: [██████████] 100%
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
+Recent shipped decisions:
 
 - Phase 1: Registration must capture consent, attendance format, section choice, and talk title inside the same onboarding flow.
 - Phase 1: Consent is now logged as two versioned audit records, separating operational personal-data processing from publication consent.
@@ -86,10 +87,11 @@ None yet.
 
 ### Blockers/Concerns
 
-- Large page components and missing automated browser tests still leave some regression risk across admin, dashboard, chat, and document flows.
+- No standalone `v1.0` milestone audit artifact exists yet.
+- Large page components and missing automated browser tests still leave regression risk across admin, dashboard, chat, and document flows.
 
 ## Session Continuity
 
 Last session: 2026-04-04 13:15 MSK
-Stopped at: Phase 7 executed and verified; milestone completion is next
+Stopped at: Milestone v1.0 archived; next step is `$gsd-new-milestone`
 Resume file: None
