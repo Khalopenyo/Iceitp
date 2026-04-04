@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Registration & Consent** - Complete legal onboarding and participant profile capture.
 - [x] **Phase 2: Authoritative Program Management** - Let organizers turn participant inputs into the official program.
 - [x] **Phase 3: Hybrid Schedule Experience** - Show the right schedule and navigation experience for online and offline attendees.
-- [ ] **Phase 4: Self-Service Account Recovery** - Restore account access without manual organizer intervention.
+- [x] **Phase 4: Self-Service Account Recovery** - Restore account access without manual organizer intervention.
 - [ ] **Phase 5: Conference Communication** - Support participant chat, attachments, and feedback loops.
 - [ ] **Phase 6: Participant Materials** - Deliver personalized conference documents and post-event materials.
 - [ ] **Phase 7: Branded Responsive Experience** - Apply conference identity and responsive behavior across public and user flows.
@@ -114,7 +114,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 1. Registration & Consent | 3/3 | Complete | 2026-04-04 |
 | 2. Authoritative Program Management | 3/3 | Complete | 2026-04-04 |
 | 3. Hybrid Schedule Experience | 3/3 | Complete | 2026-04-04 |
-| 4. Self-Service Account Recovery | 2/3 | In progress | - |
+| 4. Self-Service Account Recovery | 3/3 | Complete | 2026-04-04 |
 | 5. Conference Communication | 0/TBD | Not started | - |
 | 6. Participant Materials | 0/TBD | Not started | - |
 | 7. Branded Responsive Experience | 0/TBD | Not started | - |
