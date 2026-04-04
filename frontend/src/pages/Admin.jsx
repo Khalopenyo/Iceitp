@@ -128,6 +128,7 @@ export default function Admin() {
   const [users, setUsers] = useState([]);
   const [sections, setSections] = useState([]);
   const [consents, setConsents] = useState([]);
+  const [feedbackEntries, setFeedbackEntries] = useState([]);
   const [rooms, setRooms] = useState(defaultRooms);
   const [tab, setTab] = useState("users");
   const [showRoomMap, setShowRoomMap] = useState(false);
@@ -196,6 +197,7 @@ export default function Admin() {
     apiGet("/admin/users").then(setUsers).catch(handleForbidden);
     apiGet("/sections").then(setSections).catch(() => setSections([]));
     apiGet("/admin/consents").then(setConsents).catch(() => setConsents([]));
+    apiGet("/admin/feedback").then(setFeedbackEntries).catch(() => setFeedbackEntries([]));
     apiGet("/rooms").then(setRooms).catch(() => setRooms(defaultRooms));
     apiGet("/admin/conference")
       .then((conf) => {
@@ -482,6 +484,9 @@ export default function Admin() {
           <button className={`tab-btn ${tab === "consents" ? "active" : ""}`} onClick={() => setTab("consents")}>
             Согласия
           </button>
+          <button className={`tab-btn ${tab === "feedback" ? "active" : ""}`} onClick={() => setTab("feedback")}>
+            Отзывы
+          </button>
           <button className={`tab-btn ${tab === "tools" ? "active" : ""}`} onClick={() => setTab("tools")}>
             Инструменты
           </button>
@@ -654,6 +659,30 @@ export default function Admin() {
                 ))}
               </div>
               {consents.length === 0 && <p className="muted">Записей пока нет.</p>}
+            </div>
+          )}
+          {tab === "feedback" && (
+            <div className="card">
+              <h3>Отзывы участников</h3>
+              <p className="muted">Все отправленные отзывы и предложения по улучшению конференции.</p>
+              <div className="table compact">
+                {feedbackEntries.map((entry) => (
+                  <div key={entry.id} className="row">
+                    <div>
+                      <strong>{entry.user_name || entry.user_email || `Участник #${entry.user_id}`}</strong>
+                      <div className="muted">{entry.user_email || "Email не указан"}</div>
+                      <div className="muted">
+                        {entry.created_at ? new Date(entry.created_at).toLocaleString() : "Дата не указана"}
+                      </div>
+                      <p>{entry.comment}</p>
+                    </div>
+                    <div className="row-actions">
+                      <span className="pill">Оценка: {entry.rating}/5</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {feedbackEntries.length === 0 && <p className="muted">Отзывов пока нет.</p>}
             </div>
           )}
           {tab === "tools" && (
