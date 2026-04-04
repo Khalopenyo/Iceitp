@@ -132,33 +132,30 @@ func (h *ScheduleHandler) AdminSchedule(c *gin.Context) {
 
 func (h *ScheduleHandler) ParticipantSchedule(c *gin.Context) {
 	currentUserID := c.GetUint("user_id")
-	var sections []models.Section
-	if err := h.DB.Order("start_at asc").Find(&sections).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load sections"})
+	var user models.User
+	if err := h.DB.Preload("Profile").First(&user, currentUserID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
-	result := make([]SectionWithParticipants, 0, len(sections))
-	for _, section := range sections {
-		var users []models.User
-		h.DB.Preload("Profile").
-			Joins("JOIN profiles ON profiles.user_id = users.id").
-			Where("profiles.section_id = ?", section.ID).
-			Order("users.created_at asc").
-			Find(&users)
-		participants := make([]ParticipantInfo, 0, len(users))
-		for _, user := range users {
-			participants = append(participants, ParticipantInfo{
-				UserID:    user.ID,
-				FullName:  user.Profile.FullName,
-				TalkTitle: user.Profile.TalkTitle,
-			})
-		}
-		result = append(result, SectionWithParticipants{
-			Section:      section,
-			Participants: participants,
-		})
+
+	currentView, err := loadParticipantScheduleView(h.DB, user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load participant schedule"})
+		return
 	}
-	c.JSON(http.StatusOK, gin.H{"current_user_id": currentUserID, "items": result})
+
+	entries, err := loadAuthoritativeProgramEntries(h.DB, authoritativeProgramFilter{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load authoritative venue schedule"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"current_user_id":   currentUserID,
+		"current_user_type": currentView.UserType,
+		"assignment_status": currentView.AssignmentStatus,
+		"items":             buildRoomScheduleGroups(entries),
+	})
 }
 
 func (h *ScheduleHandler) UserSchedule(c *gin.Context) {
@@ -169,16 +166,16 @@ func (h *ScheduleHandler) UserSchedule(c *gin.Context) {
 		return
 	}
 
-	var section *models.Section
-	if user.Profile.SectionID != nil {
-		var sec models.Section
-		if err := h.DB.First(&sec, *user.Profile.SectionID).Error; err == nil {
-			section = &sec
-		}
+	scheduleView, err := loadParticipantScheduleView(h.DB, user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load participant schedule"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"user":    user,
-		"section": section,
+		"user":              user,
+		"assignment_status": scheduleView.AssignmentStatus,
+		"current_user_type": scheduleView.UserType,
+		"schedule":          scheduleView,
 	})
 }

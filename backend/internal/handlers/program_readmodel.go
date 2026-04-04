@@ -22,6 +22,7 @@ type authoritativeProgramEntry struct {
 	SectionTitle string
 	RoomID       *uint
 	RoomName     string
+	RoomFloor    int
 	TalkTitle    string
 	StartsAt     *time.Time
 	EndsAt       *time.Time
@@ -33,6 +34,42 @@ type authoritativeProgramSectionGroup struct {
 	SectionTitle string
 	Entries      []authoritativeProgramEntry
 }
+
+type participantScheduleView struct {
+	UserID           uint            `json:"user_id"`
+	FullName         string          `json:"full_name"`
+	UserType         models.UserType `json:"user_type"`
+	AssignmentStatus string          `json:"assignment_status"`
+	SectionID        *uint           `json:"section_id,omitempty"`
+	SectionTitle     string          `json:"section_title,omitempty"`
+	RoomID           *uint           `json:"room_id,omitempty"`
+	RoomName         string          `json:"room_name,omitempty"`
+	RoomFloor        int             `json:"room_floor,omitempty"`
+	TalkTitle        string          `json:"talk_title,omitempty"`
+	StartsAt         *time.Time      `json:"starts_at,omitempty"`
+	EndsAt           *time.Time      `json:"ends_at,omitempty"`
+	JoinURL          string          `json:"join_url,omitempty"`
+}
+
+type roomScheduleSession struct {
+	SectionID    *uint             `json:"section_id,omitempty"`
+	SectionTitle string            `json:"section_title"`
+	StartsAt     *time.Time        `json:"starts_at,omitempty"`
+	EndsAt       *time.Time        `json:"ends_at,omitempty"`
+	Participants []ParticipantInfo `json:"participants"`
+}
+
+type roomScheduleGroup struct {
+	RoomID    uint                  `json:"room_id"`
+	RoomName  string                `json:"room_name"`
+	RoomFloor int                   `json:"room_floor"`
+	Sessions  []roomScheduleSession `json:"sessions"`
+}
+
+const (
+	assignmentStatusPending  = "pending"
+	assignmentStatusApproved = "approved"
+)
 
 func loadAuthoritativeProgramEntries(db *gorm.DB, filter authoritativeProgramFilter) ([]authoritativeProgramEntry, error) {
 	query := db.Preload("User.Profile").Preload("Section").Preload("Room").Order("updated_at desc, id desc")
@@ -63,6 +100,7 @@ func loadAuthoritativeProgramEntries(db *gorm.DB, filter authoritativeProgramFil
 		}
 		if assignment.RoomID != nil && assignment.Room.ID == *assignment.RoomID {
 			entry.RoomName = assignment.Room.Name
+			entry.RoomFloor = assignment.Room.Floor
 		}
 		entries = append(entries, entry)
 	}
@@ -175,6 +213,136 @@ func buildAdminScheduleFromAssignments(entries []authoritativeProgramEntry) []Se
 	}
 
 	return result
+}
+
+func loadParticipantScheduleView(db *gorm.DB, user models.User) (*participantScheduleView, error) {
+	view := &participantScheduleView{
+		UserID:           user.ID,
+		FullName:         user.Profile.FullName,
+		UserType:         user.UserType,
+		AssignmentStatus: assignmentStatusPending,
+	}
+
+	entries, err := loadAuthoritativeProgramEntries(db, authoritativeProgramFilter{UserID: &user.ID})
+	if err != nil {
+		return nil, err
+	}
+	if len(entries) == 0 {
+		return view, nil
+	}
+
+	entry := entries[0]
+	view.UserType = entry.UserType
+	view.AssignmentStatus = assignmentStatusApproved
+	view.SectionID = entry.SectionID
+	view.SectionTitle = fallbackSectionTitle(entry.SectionTitle, valueOrZero(entry.SectionID))
+	view.RoomID = entry.RoomID
+	view.RoomName = entry.RoomName
+	view.RoomFloor = entry.RoomFloor
+	view.TalkTitle = entry.TalkTitle
+	view.StartsAt = entry.StartsAt
+	view.EndsAt = entry.EndsAt
+	view.JoinURL = entry.JoinURL
+
+	return view, nil
+}
+
+func buildRoomScheduleGroups(entries []authoritativeProgramEntry) []roomScheduleGroup {
+	type sessionKey struct {
+		roomID       uint
+		sectionID    uint
+		sectionTitle string
+		startsAt     string
+		endsAt       string
+	}
+
+	roomGroups := make(map[uint]*roomScheduleGroup)
+	sessionIndex := make(map[sessionKey]int)
+
+	for _, entry := range entries {
+		if entry.UserType != models.UserTypeOffline || entry.RoomID == nil {
+			continue
+		}
+
+		group, ok := roomGroups[*entry.RoomID]
+		if !ok {
+			group = &roomScheduleGroup{
+				RoomID:    *entry.RoomID,
+				RoomName:  entry.RoomName,
+				RoomFloor: entry.RoomFloor,
+				Sessions:  []roomScheduleSession{},
+			}
+			roomGroups[*entry.RoomID] = group
+		}
+
+		key := sessionKey{
+			roomID:       *entry.RoomID,
+			sectionID:    valueOrZero(entry.SectionID),
+			sectionTitle: fallbackSectionTitle(entry.SectionTitle, valueOrZero(entry.SectionID)),
+			startsAt:     formatOptionalTimeKey(entry.StartsAt),
+			endsAt:       formatOptionalTimeKey(entry.EndsAt),
+		}
+		sessionPos, ok := sessionIndex[key]
+		if !ok {
+			group.Sessions = append(group.Sessions, roomScheduleSession{
+				SectionID:    entry.SectionID,
+				SectionTitle: key.sectionTitle,
+				StartsAt:     entry.StartsAt,
+				EndsAt:       entry.EndsAt,
+				Participants: []ParticipantInfo{},
+			})
+			sessionPos = len(group.Sessions) - 1
+			sessionIndex[key] = sessionPos
+		}
+
+		group.Sessions[sessionPos].Participants = append(group.Sessions[sessionPos].Participants, ParticipantInfo{
+			UserID:    entry.UserID,
+			FullName:  entry.FullName,
+			TalkTitle: entry.TalkTitle,
+			UserType:  entry.UserType,
+			RoomName:  entry.RoomName,
+			StartsAt:  entry.StartsAt,
+			EndsAt:    entry.EndsAt,
+			JoinURL:   entry.JoinURL,
+		})
+	}
+
+	result := make([]roomScheduleGroup, 0, len(roomGroups))
+	for _, group := range roomGroups {
+		sort.Slice(group.Sessions, func(i, j int) bool {
+			left := group.Sessions[i]
+			right := group.Sessions[j]
+			if compareOptionalTime(left.StartsAt, right.StartsAt) != 0 {
+				return compareOptionalTime(left.StartsAt, right.StartsAt) < 0
+			}
+			if compareOptionalTime(left.EndsAt, right.EndsAt) != 0 {
+				return compareOptionalTime(left.EndsAt, right.EndsAt) < 0
+			}
+			return left.SectionTitle < right.SectionTitle
+		})
+		for i := range group.Sessions {
+			sort.Slice(group.Sessions[i].Participants, func(left, right int) bool {
+				return group.Sessions[i].Participants[left].FullName < group.Sessions[i].Participants[right].FullName
+			})
+		}
+		result = append(result, *group)
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].RoomFloor != result[j].RoomFloor {
+			return result[i].RoomFloor < result[j].RoomFloor
+		}
+		return result[i].RoomName < result[j].RoomName
+	})
+
+	return result
+}
+
+func formatOptionalTimeKey(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339)
 }
 
 func formatProgramTimeRange(startsAt, endsAt *time.Time) string {
