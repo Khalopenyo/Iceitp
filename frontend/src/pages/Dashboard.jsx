@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { apiGet, apiPost, apiPostForm, apiPut } from "../lib/api.js";
 import { setUser } from "../lib/auth.js";
 import { getSessionStatus } from "../lib/sessionStatus.js";
@@ -136,9 +137,21 @@ export default function Dashboard() {
   }
 
   const update = (field, value) => setProfile((prev) => ({ ...prev, [field]: value }));
-  const sectionStatus = data?.section ? getSessionStatus(data.section, nowTs) : "unknown";
-  const startTime = data?.section ? formatTimeOnly(data.section.start_at) : "Не указано";
-  const endTime = data?.section ? formatTimeOnly(data.section.end_at) : "Не указано";
+  const assignmentStatus = data?.assignment_status || "pending";
+  const currentUserType = data?.current_user_type || data?.user?.user_type || "offline";
+  const schedulePlacement = data?.schedule || null;
+  const scheduleStatus =
+    assignmentStatus === "approved"
+      ? getSessionStatus(
+          {
+            start_at: schedulePlacement?.starts_at,
+            end_at: schedulePlacement?.ends_at,
+          },
+          nowTs
+        )
+      : "unknown";
+  const startTime = assignmentStatus === "approved" ? formatTimeOnly(schedulePlacement?.starts_at) : "Не указано";
+  const endTime = assignmentStatus === "approved" ? formatTimeOnly(schedulePlacement?.ends_at) : "Не указано";
   const selectedSection = sections.find((section) => String(section.id) === String(profile?.section_id));
 
   const save = async () => {
@@ -284,16 +297,16 @@ export default function Dashboard() {
           {tab === "schedule" && (
             <div className="card">
               <h3>Моя секция и расписание</h3>
-              {data.section ? (
+              {assignmentStatus === "approved" ? (
                 <div className="session-item highlighted">
                   <div className="session-head">
-                    <div className="session-title">{data.section.title}</div>
-                    {sectionStatus === "current" && <span className="pill pill-current">Текущая сессия</span>}
+                    <div className="session-title">{schedulePlacement?.section_title || "Секция не указана"}</div>
+                    {scheduleStatus === "current" && <span className="pill pill-current">Текущая сессия</span>}
                   </div>
                   <div className="schedule-row-grid">
                     <div className="schedule-field">
                       <span className="schedule-label">Имя спикера</span>
-                      <strong>{profile?.full_name || "Не указано"}</strong>
+                      <strong>{schedulePlacement?.full_name || profile?.full_name || "Не указано"}</strong>
                     </div>
                     <div className="schedule-field">
                       <span className="schedule-label">Время начала</span>
@@ -305,13 +318,43 @@ export default function Dashboard() {
                     </div>
                     <div className="schedule-field schedule-field-wide">
                       <span className="schedule-label">Тема</span>
-                      <span>{profile?.talk_title || "Без темы"}</span>
+                      <span>{schedulePlacement?.talk_title || "Без темы"}</span>
                     </div>
                   </div>
-                  <div className="session-room">Зал: {data.section.room || "Без аудитории"}</div>
+                  {currentUserType === "online" ? (
+                    <>
+                      <div className="session-room">Формат: онлайн-участие</div>
+                      {schedulePlacement?.join_url ? (
+                        <div className="form-actions">
+                          <button className="btn btn-primary" onClick={() => openExternal(schedulePlacement.join_url)}>
+                            Подключиться к видеоконференции
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="muted">Оргкомитет еще не добавил ссылку для подключения.</p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="session-room">Аудитория: {schedulePlacement?.room_name || "Без аудитории"}</div>
+                      <p className="muted">Этаж: {schedulePlacement?.room_floor || "Не указан"}</p>
+                      <div className="form-actions">
+                        <Link className="btn btn-ghost" to="/map">
+                          Открыть карту площадки
+                        </Link>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
-                <p>Секция не назначена. Выберите секцию в профиле.</p>
+                <div className="session-item">
+                  <div className="session-head">
+                    <div className="session-title">Официальная программа еще не утверждена</div>
+                  </div>
+                  <p className="muted">
+                    Оргкомитет еще не назначил итоговые время, формат участия и площадку. Проверьте вкладку позже.
+                  </p>
+                </div>
               )}
             </div>
           )}
