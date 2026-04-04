@@ -3,6 +3,7 @@
 
 # Environment variables (содержат секреты)
 .env
+.env.production
 
 # macOS
 .DS_Store

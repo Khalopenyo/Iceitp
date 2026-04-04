@@ -1,0 +1,96 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: conf
+      POSTGRES_PASSWORD: confpass
+      POSTGRES_DB: confdb
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U conf -d confdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://conf:confpass@db:5432/confdb?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      PORT: 8080
+      GIN_MODE: ${GIN_MODE:-release}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL is required}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      PASSWORD_RESET_TTL: ${PASSWORD_RESET_TTL:-2h}
+      ANTIPLAGIAT_SITE_URL: ${ANTIPLAGIAT_SITE_URL:-}
+      ANTIPLAGIAT_WSDL_URL: ${ANTIPLAGIAT_WSDL_URL:-}
+      ANTIPLAGIAT_API_LOGIN: ${ANTIPLAGIAT_API_LOGIN:-}
+      ANTIPLAGIAT_API_PASSWORD: ${ANTIPLAGIAT_API_PASSWORD:-}
+      ANTIPLAGIAT_ENABLED: ${ANTIPLAGIAT_ENABLED:-}
+      ANTIPLAGIAT_BOOTSTRAP_TEST_CONFIG: ${ANTIPLAGIAT_BOOTSTRAP_TEST_CONFIG:-false}
+    expose:
+      - "8080"
+    volumes:
+      - submission-data:/app/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    command: ["worker"]
+    environment:
+      DATABASE_URL: postgres://conf:confpass@db:5432/confdb?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      GIN_MODE: ${GIN_MODE:-release}
+      ANTIPLAGIAT_SITE_URL: ${ANTIPLAGIAT_SITE_URL:-}
+      ANTIPLAGIAT_WSDL_URL: ${ANTIPLAGIAT_WSDL_URL:-}
+      ANTIPLAGIAT_API_LOGIN: ${ANTIPLAGIAT_API_LOGIN:-}
+      ANTIPLAGIAT_API_PASSWORD: ${ANTIPLAGIAT_API_PASSWORD:-}
+      ANTIPLAGIAT_ENABLED: ${ANTIPLAGIAT_ENABLED:-}
+      ANTIPLAGIAT_BOOTSTRAP_TEST_CONFIG: ${ANTIPLAGIAT_BOOTSTRAP_TEST_CONFIG:-false}
+      ANTIPLAGIAT_WORKER_CONCURRENCY: ${ANTIPLAGIAT_WORKER_CONCURRENCY:-1}
+      ANTIPLAGIAT_WORKER_ID: ${ANTIPLAGIAT_WORKER_ID:-conferenceplatforma-antiplagiat}
+    volumes:
+      - submission-data:/app/storage
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db-data:
+  submission-data:
