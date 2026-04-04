@@ -81,6 +81,7 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 	protected.POST("/feedback", feedbackHandler.CreateFeedback)
 	protected.GET("/chat", chatHandler.ListMessages)
 	protected.POST("/chat", chatHandler.PostMessage)
+	protected.GET("/chat/attachments/:id", chatHandler.DownloadAttachment)
 	protected.PATCH("/chat/:id", chatHandler.UpdateMessage)
 	protected.DELETE("/chat/:id", chatHandler.DeleteMessage)
 	protected.GET("/documents/program", docHandler.ProgramPDF)

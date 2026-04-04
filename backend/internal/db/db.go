@@ -30,6 +30,7 @@ func Connect(databaseURL string) *gorm.DB {
 		&models.MapRoute{},
 		&models.Feedback{},
 		&models.ChatMessage{},
+		&models.ChatAttachment{},
 	); err != nil {
 		log.Fatalf("failed to migrate: %v", err)
 	}

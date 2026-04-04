@@ -4,7 +4,11 @@ import (
 	"conferenceplatforma/internal/models"
 	"errors"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,16 +20,38 @@ import (
 )
 
 const (
-	maxChatMessages      = 150
-	maxChatMessageLength = 2000
+	maxChatMessages           = 150
+	maxChatMessageLength      = 2000
+	defaultChatAttachmentMax  = 5
+	defaultChatAttachmentSize = 10 * 1024 * 1024
+	defaultChatAttachmentRoot = "storage/chat"
 )
 
 type ChatHandler struct {
-	DB *gorm.DB
+	DB                       *gorm.DB
+	StorageRoot              string
+	MaxAttachmentSizeBytes   int64
+	MaxAttachmentsPerMessage int
 }
 
 var errUserHasNoSection = errors.New("user has no section")
 var errInvalidChatScope = errors.New("invalid chat scope")
+var errUnauthorizedChatAttachment = errors.New("unauthorized chat attachment")
+
+var allowedChatAttachmentExtensions = map[string]struct{}{
+	".csv":  {},
+	".doc":  {},
+	".docx": {},
+	".jpeg": {},
+	".jpg":  {},
+	".pdf":  {},
+	".png":  {},
+	".ppt":  {},
+	".pptx": {},
+	".txt":  {},
+	".xls":  {},
+	".xlsx": {},
+}
 
 type chatChannelResponse struct {
 	Scope         string     `json:"scope"`
@@ -38,19 +64,28 @@ type chatChannelResponse struct {
 	LastMessageAt *time.Time `json:"last_message_at,omitempty"`
 }
 
+type chatAttachmentResponse struct {
+	ID          uint   `json:"id"`
+	FileName    string `json:"file_name"`
+	ContentType string `json:"content_type"`
+	FileSize    int64  `json:"file_size"`
+	DownloadURL string `json:"download_url"`
+}
+
 type chatMessageResponse struct {
-	ID        uint       `json:"id"`
-	Scope     string     `json:"scope"`
-	SectionID *uint      `json:"section_id,omitempty"`
-	UserID    uint       `json:"user_id"`
-	UserName  string     `json:"user_name"`
-	UserMeta  string     `json:"user_meta,omitempty"`
-	Content   string     `json:"content"`
-	CreatedAt time.Time  `json:"created_at"`
-	EditedAt  *time.Time `json:"edited_at,omitempty"`
-	IsOwn     bool       `json:"is_own"`
-	CanEdit   bool       `json:"can_edit"`
-	CanDelete bool       `json:"can_delete"`
+	ID          uint                     `json:"id"`
+	Scope       string                   `json:"scope"`
+	SectionID   *uint                    `json:"section_id,omitempty"`
+	UserID      uint                     `json:"user_id"`
+	UserName    string                   `json:"user_name"`
+	UserMeta    string                   `json:"user_meta,omitempty"`
+	Content     string                   `json:"content"`
+	Attachments []chatAttachmentResponse `json:"attachments"`
+	CreatedAt   time.Time                `json:"created_at"`
+	EditedAt    *time.Time               `json:"edited_at,omitempty"`
+	IsOwn       bool                     `json:"is_own"`
+	CanEdit     bool                     `json:"can_edit"`
+	CanDelete   bool                     `json:"can_delete"`
 }
 
 type chatListResponse struct {
@@ -68,8 +103,10 @@ type chatMessagePayload struct {
 
 func (h *ChatHandler) PostMessage(c *gin.Context) {
 	userID := c.GetUint("user_id")
-	var payload chatMessagePayload
-	if err := c.ShouldBindJSON(&payload); err != nil {
+	role := h.currentRole(c)
+
+	payload, files, err := h.parseMessageSubmission(c)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
@@ -81,12 +118,8 @@ func (h *ChatHandler) PostMessage(c *gin.Context) {
 	}
 
 	content := strings.TrimSpace(payload.Content)
-	if content == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "message cannot be empty"})
-		return
-	}
-	if utf8.RuneCountInString(content) > maxChatMessageLength {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "message is too long"})
+	if err := validateChatContent(content, len(files) > 0); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -100,12 +133,34 @@ func (h *ChatHandler) PostMessage(c *gin.Context) {
 		msg.SectionID = &sectionID
 	}
 
-	if err := h.DB.Create(&msg).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save message"})
+	var attachments []models.ChatAttachment
+	var storedPaths []string
+	if err := h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&msg).Error; err != nil {
+			return err
+		}
+		attachments, storedPaths, err = h.storeChatAttachments(files, channel, section, msg.ID)
+		if err != nil {
+			return err
+		}
+		if len(attachments) == 0 {
+			return nil
+		}
+		return tx.Create(&attachments).Error
+	}); err != nil {
+		for _, path := range storedPaths {
+			_ = removeFileQuietly(path)
+		}
+		if errors.Is(err, errInvalidChatScope) || errors.Is(err, errUserHasNoSection) {
+			h.writeScopeError(c, err)
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	item, err := h.buildMessageResponse(msg, userID, h.currentRole(c))
+	msg.Attachments = attachments
+	item, err := h.buildMessageResponse(msg, userID, role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load message"})
 		return
@@ -185,12 +240,8 @@ func (h *ChatHandler) UpdateMessage(c *gin.Context) {
 	}
 
 	content := strings.TrimSpace(payload.Content)
-	if content == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "message cannot be empty"})
-		return
-	}
-	if utf8.RuneCountInString(content) > maxChatMessageLength {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "message is too long"})
+	if err := validateChatContent(content, false); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -218,7 +269,7 @@ func (h *ChatHandler) DeleteMessage(c *gin.Context) {
 	}
 
 	var msg models.ChatMessage
-	if err := h.DB.First(&msg, uint(messageID)).Error; err != nil {
+	if err := h.DB.Preload("Attachments").First(&msg, uint(messageID)).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "message not found"})
 			return
@@ -231,11 +282,67 @@ func (h *ChatHandler) DeleteMessage(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "you cannot delete this message"})
 		return
 	}
-	if err := h.DB.Delete(&msg).Error; err != nil {
+
+	paths := make([]string, 0, len(msg.Attachments))
+	for _, attachment := range msg.Attachments {
+		paths = append(paths, attachment.FilePath)
+	}
+	if err := h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("message_id = ?", msg.ID).Delete(&models.ChatAttachment{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&msg).Error
+	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete message"})
 		return
 	}
+	for _, path := range paths {
+		_ = removeFileQuietly(path)
+	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (h *ChatHandler) DownloadAttachment(c *gin.Context) {
+	userID := c.GetUint("user_id")
+	role := h.currentRole(c)
+	attachmentID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid attachment id"})
+		return
+	}
+
+	var attachment models.ChatAttachment
+	if err := h.DB.Preload("Message").First(&attachment, uint(attachmentID)).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "attachment not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load attachment"})
+		return
+	}
+
+	if err := h.authorizeAttachmentAccess(userID, role, attachment.Message); err != nil {
+		if errors.Is(err, errUnauthorizedChatAttachment) || errors.Is(err, errUserHasNoSection) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify attachment access"})
+		return
+	}
+
+	if _, err := os.Stat(attachment.FilePath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "attachment file not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load attachment file"})
+		return
+	}
+
+	if strings.TrimSpace(attachment.ContentType) != "" {
+		c.Header("Content-Type", attachment.ContentType)
+	}
+	c.FileAttachment(attachment.FilePath, attachment.FileName)
 }
 
 func (h *ChatHandler) resolveRequestedChannel(userID uint, rawScope string) (models.ChatChannel, *models.Section, error) {
@@ -333,7 +440,10 @@ func (h *ChatHandler) buildChannelResponses(userID uint) ([]chatChannelResponse,
 }
 
 func (h *ChatHandler) loadMessages(channel models.ChatChannel, section *models.Section) ([]models.ChatMessage, error) {
-	query := h.DB.Model(&models.ChatMessage{})
+	query := h.DB.Model(&models.ChatMessage{}).
+		Preload("Attachments", func(db *gorm.DB) *gorm.DB {
+			return db.Order("id asc")
+		})
 	switch channel {
 	case models.ChatChannelConference:
 		query = query.Where("channel = ?", models.ChatChannelConference)
@@ -418,18 +528,19 @@ func (h *ChatHandler) buildMessageResponses(msgs []models.ChatMessage, currentUs
 
 		isOwn := msg.UserID == currentUserID
 		items = append(items, chatMessageResponse{
-			ID:        msg.ID,
-			Scope:     string(msg.Channel),
-			SectionID: msg.SectionID,
-			UserID:    msg.UserID,
-			UserName:  userName,
-			UserMeta:  buildChatUserMeta(profile),
-			Content:   msg.Content,
-			CreatedAt: msg.CreatedAt,
-			EditedAt:  editedAt,
-			IsOwn:     isOwn,
-			CanEdit:   isOwn,
-			CanDelete: isOwn || role == models.RoleAdmin || role == models.RoleOrg,
+			ID:          msg.ID,
+			Scope:       string(msg.Channel),
+			SectionID:   msg.SectionID,
+			UserID:      msg.UserID,
+			UserName:    userName,
+			UserMeta:    buildChatUserMeta(profile),
+			Content:     msg.Content,
+			Attachments: buildChatAttachmentResponses(msg.Attachments),
+			CreatedAt:   msg.CreatedAt,
+			EditedAt:    editedAt,
+			IsOwn:       isOwn,
+			CanEdit:     isOwn,
+			CanDelete:   isOwn || role == models.RoleAdmin || role == models.RoleOrg,
 		})
 	}
 
@@ -437,11 +548,189 @@ func (h *ChatHandler) buildMessageResponses(msgs []models.ChatMessage, currentUs
 }
 
 func (h *ChatHandler) buildMessageResponse(msg models.ChatMessage, currentUserID uint, role models.Role) (chatMessageResponse, error) {
+	var loaded models.ChatMessage
+	if err := h.DB.Preload("Attachments", func(db *gorm.DB) *gorm.DB {
+		return db.Order("id asc")
+	}).First(&loaded, msg.ID).Error; err == nil {
+		msg = loaded
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return chatMessageResponse{}, err
+	}
+
 	items, err := h.buildMessageResponses([]models.ChatMessage{msg}, currentUserID, role)
 	if err != nil {
 		return chatMessageResponse{}, err
 	}
 	return items[0], nil
+}
+
+func (h *ChatHandler) parseMessageSubmission(c *gin.Context) (chatMessagePayload, []*multipart.FileHeader, error) {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(c.ContentType())), "multipart/form-data") {
+		return h.parseMultipartMessageSubmission(c)
+	}
+
+	var payload chatMessagePayload
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		return chatMessagePayload{}, nil, err
+	}
+	return payload, nil, nil
+}
+
+func (h *ChatHandler) parseMultipartMessageSubmission(c *gin.Context) (chatMessagePayload, []*multipart.FileHeader, error) {
+	form, err := c.MultipartForm()
+	if err != nil {
+		return chatMessagePayload{}, nil, err
+	}
+	files := form.File["files"]
+	if len(files) > h.maxAttachmentsPerMessage() {
+		return chatMessagePayload{}, nil, fmt.Errorf("too many attachments")
+	}
+	return chatMessagePayload{
+		Scope:   c.PostForm("scope"),
+		Content: c.PostForm("content"),
+	}, files, nil
+}
+
+func (h *ChatHandler) storeChatAttachments(
+	fileHeaders []*multipart.FileHeader,
+	channel models.ChatChannel,
+	section *models.Section,
+	messageID uint,
+) ([]models.ChatAttachment, []string, error) {
+	if len(fileHeaders) == 0 {
+		return nil, nil, nil
+	}
+
+	attachments := make([]models.ChatAttachment, 0, len(fileHeaders))
+	storedPaths := make([]string, 0, len(fileHeaders))
+	for _, fileHeader := range fileHeaders {
+		attachment, err := h.saveChatAttachment(fileHeader, channel, section, messageID)
+		if err != nil {
+			return nil, storedPaths, err
+		}
+		attachments = append(attachments, attachment)
+		storedPaths = append(storedPaths, attachment.FilePath)
+	}
+	return attachments, storedPaths, nil
+}
+
+func (h *ChatHandler) saveChatAttachment(
+	fileHeader *multipart.FileHeader,
+	channel models.ChatChannel,
+	section *models.Section,
+	messageID uint,
+) (models.ChatAttachment, error) {
+	if fileHeader == nil {
+		return models.ChatAttachment{}, errors.New("attachment is required")
+	}
+	if fileHeader.Size <= 0 {
+		return models.ChatAttachment{}, errors.New("attachment cannot be empty")
+	}
+	if fileHeader.Size > h.maxAttachmentSizeBytes() {
+		return models.ChatAttachment{}, errors.New("attachment is too large")
+	}
+
+	fileName := sanitizeChatAttachmentFileName(fileHeader.Filename)
+	ext := strings.ToLower(filepath.Ext(fileName))
+	if _, ok := allowedChatAttachmentExtensions[ext]; !ok {
+		return models.ChatAttachment{}, errors.New("attachment type is not allowed")
+	}
+
+	src, err := fileHeader.Open()
+	if err != nil {
+		return models.ChatAttachment{}, err
+	}
+	defer src.Close()
+
+	header := make([]byte, 512)
+	readBytes, err := src.Read(header)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return models.ChatAttachment{}, err
+	}
+	contentType := http.DetectContentType(header[:readBytes])
+	if _, err := src.Seek(0, io.SeekStart); err != nil {
+		return models.ChatAttachment{}, err
+	}
+
+	targetPath, err := h.chatAttachmentStoragePath(channel, section, messageID, fileName)
+	if err != nil {
+		return models.ChatAttachment{}, err
+	}
+	dst, err := os.Create(targetPath)
+	if err != nil {
+		return models.ChatAttachment{}, err
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, src); err != nil {
+		_ = removeFileQuietly(targetPath)
+		return models.ChatAttachment{}, err
+	}
+
+	return models.ChatAttachment{
+		MessageID:   messageID,
+		FileName:    fileName,
+		FilePath:    targetPath,
+		ContentType: contentType,
+		FileSize:    fileHeader.Size,
+	}, nil
+}
+
+func (h *ChatHandler) chatAttachmentStoragePath(
+	channel models.ChatChannel,
+	section *models.Section,
+	messageID uint,
+	fileName string,
+) (string, error) {
+	root := h.storageRoot()
+	scopeDir := string(channel)
+	if channel == models.ChatChannelSection && section != nil {
+		scopeDir = filepath.Join(scopeDir, fmt.Sprintf("section-%d", section.ID))
+	}
+	targetDir := filepath.Join(root, scopeDir)
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return "", err
+	}
+	storedName := fmt.Sprintf("%d-%d-%s", messageID, time.Now().UnixNano(), fileName)
+	return filepath.Join(targetDir, storedName), nil
+}
+
+func (h *ChatHandler) authorizeAttachmentAccess(userID uint, role models.Role, message models.ChatMessage) error {
+	if message.Channel == models.ChatChannelConference {
+		return nil
+	}
+	if role == models.RoleAdmin || role == models.RoleOrg {
+		return nil
+	}
+	section, err := h.resolveSectionByUser(userID)
+	if err != nil {
+		return err
+	}
+	if message.SectionID == nil || section.ID != *message.SectionID {
+		return errUnauthorizedChatAttachment
+	}
+	return nil
+}
+
+func (h *ChatHandler) storageRoot() string {
+	if strings.TrimSpace(h.StorageRoot) == "" {
+		return defaultChatAttachmentRoot
+	}
+	return strings.TrimSpace(h.StorageRoot)
+}
+
+func (h *ChatHandler) maxAttachmentSizeBytes() int64 {
+	if h.MaxAttachmentSizeBytes <= 0 {
+		return defaultChatAttachmentSize
+	}
+	return h.MaxAttachmentSizeBytes
+}
+
+func (h *ChatHandler) maxAttachmentsPerMessage() int {
+	if h.MaxAttachmentsPerMessage <= 0 {
+		return defaultChatAttachmentMax
+	}
+	return h.MaxAttachmentsPerMessage
 }
 
 func (h *ChatHandler) currentRole(c *gin.Context) models.Role {
@@ -470,6 +759,44 @@ func parseChatChannel(raw string) (models.ChatChannel, error) {
 	default:
 		return "", errInvalidChatScope
 	}
+}
+
+func validateChatContent(content string, hasFiles bool) error {
+	if content == "" && !hasFiles {
+		return errors.New("message cannot be empty")
+	}
+	if utf8.RuneCountInString(content) > maxChatMessageLength {
+		return errors.New("message is too long")
+	}
+	return nil
+}
+
+func sanitizeChatAttachmentFileName(fileName string) string {
+	fileName = strings.TrimSpace(filepath.Base(fileName))
+	fileName = strings.ReplaceAll(fileName, " ", "-")
+	fileName = strings.ReplaceAll(fileName, "/", "-")
+	fileName = strings.ReplaceAll(fileName, "\\", "-")
+	if fileName == "" || fileName == "." {
+		return "attachment.txt"
+	}
+	return fileName
+}
+
+func buildChatAttachmentResponses(attachments []models.ChatAttachment) []chatAttachmentResponse {
+	if len(attachments) == 0 {
+		return []chatAttachmentResponse{}
+	}
+	items := make([]chatAttachmentResponse, 0, len(attachments))
+	for _, attachment := range attachments {
+		items = append(items, chatAttachmentResponse{
+			ID:          attachment.ID,
+			FileName:    attachment.FileName,
+			ContentType: attachment.ContentType,
+			FileSize:    attachment.FileSize,
+			DownloadURL: fmt.Sprintf("/api/chat/attachments/%d", attachment.ID),
+		})
+	}
+	return items
 }
 
 func buildChatUserMeta(profile models.Profile) string {
