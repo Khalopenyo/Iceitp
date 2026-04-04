@@ -20,9 +20,14 @@ type SectionWithParticipants struct {
 }
 
 type ParticipantInfo struct {
-	UserID    uint   `json:"user_id"`
-	FullName  string `json:"full_name"`
-	TalkTitle string `json:"talk_title"`
+	UserID    uint            `json:"user_id"`
+	FullName  string          `json:"full_name"`
+	TalkTitle string          `json:"talk_title"`
+	UserType  models.UserType `json:"user_type,omitempty"`
+	RoomName  string          `json:"room_name,omitempty"`
+	StartsAt  *time.Time      `json:"starts_at,omitempty"`
+	EndsAt    *time.Time      `json:"ends_at,omitempty"`
+	JoinURL   string          `json:"join_url,omitempty"`
 }
 
 func (h *ScheduleHandler) SeedDemo(c *gin.Context) {
@@ -117,33 +122,12 @@ func (h *ScheduleHandler) SeedDemo(c *gin.Context) {
 }
 
 func (h *ScheduleHandler) AdminSchedule(c *gin.Context) {
-	var sections []models.Section
-	if err := h.DB.Order("start_at asc").Find(&sections).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load sections"})
+	entries, err := loadAuthoritativeProgramEntries(h.DB, authoritativeProgramFilter{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load authoritative schedule"})
 		return
 	}
-	result := make([]SectionWithParticipants, 0, len(sections))
-	for _, section := range sections {
-		var users []models.User
-		h.DB.Preload("Profile").
-			Joins("JOIN profiles ON profiles.user_id = users.id").
-			Where("profiles.section_id = ?", section.ID).
-			Order("users.created_at asc").
-			Find(&users)
-		participants := make([]ParticipantInfo, 0, len(users))
-		for _, user := range users {
-			participants = append(participants, ParticipantInfo{
-				UserID:    user.ID,
-				FullName:  user.Profile.FullName,
-				TalkTitle: user.Profile.TalkTitle,
-			})
-		}
-		result = append(result, SectionWithParticipants{
-			Section:      section,
-			Participants: participants,
-		})
-	}
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, buildAdminScheduleFromAssignments(entries))
 }
 
 func (h *ScheduleHandler) ParticipantSchedule(c *gin.Context) {

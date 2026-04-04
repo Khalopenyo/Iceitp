@@ -24,6 +24,48 @@ type DocumentHandler struct {
 	JWTSecret string
 }
 
+const officialProgramPendingText = "Официальная программа еще не утверждена."
+
+type programPDFView struct {
+	Mode          string
+	PersonalEntry *authoritativeProgramEntry
+	Groups        []authoritativeProgramSectionGroup
+	StatusMessage string
+}
+
+// loadProgramPDFView keeps ProgramPDF sourced from authoritative ProgramAssignment records.
+func loadProgramPDFView(db *gorm.DB, userID uint, rawMode string) (*programPDFView, error) {
+	view := &programPDFView{Mode: "personal"}
+	if strings.EqualFold(strings.TrimSpace(rawMode), "full") {
+		view.Mode = "full"
+	}
+
+	entries, err := loadAuthoritativeProgramEntries(db, authoritativeProgramFilter{})
+	if view.Mode == "personal" {
+		entries, err = loadAuthoritativeProgramEntries(db, authoritativeProgramFilter{UserID: &userID})
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if view.Mode == "personal" {
+		if len(entries) == 0 {
+			view.StatusMessage = officialProgramPendingText
+			return view, nil
+		}
+
+		entry := entries[0]
+		view.PersonalEntry = &entry
+		return view, nil
+	}
+
+	view.Groups = groupAuthoritativeEntriesBySection(entries)
+	if len(view.Groups) == 0 {
+		view.StatusMessage = officialProgramPendingText
+	}
+	return view, nil
+}
+
 func (h *DocumentHandler) ProgramPDF(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	var user models.User
@@ -37,27 +79,9 @@ func (h *DocumentHandler) ProgramPDF(c *gin.Context) {
 		return
 	}
 
-	mode := strings.ToLower(strings.TrimSpace(c.DefaultQuery("type", "personal")))
-	var sections []models.Section
-	switch mode {
-	case "full":
-		if err := h.DB.Order("start_at asc, id asc").Find(&sections).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load sections"})
-			return
-		}
-	default:
-		mode = "personal"
-		if user.Profile.SectionID != nil {
-			var sec models.Section
-			if err := h.DB.First(&sec, *user.Profile.SectionID).Error; err == nil {
-				sections = append(sections, sec)
-			}
-		}
-	}
-
-	participantsBySection, err := h.loadParticipantsBySection(sections)
+	view, err := loadProgramPDFView(h.DB, userID, c.DefaultQuery("type", "personal"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load participants"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load authoritative program"})
 		return
 	}
 
@@ -69,53 +93,71 @@ func (h *DocumentHandler) ProgramPDF(c *gin.Context) {
 	pdf.MultiCell(0, 8, normalizeText(conf.Title), "", "L", false)
 	pdf.Ln(2)
 	pdf.SetFont(fontFamily, "", 11)
-	pdf.Cell(0, 7, fmt.Sprintf("Тип программы: %s", map[bool]string{true: "Полная", false: "Персональная"}[mode == "full"]))
+	pdf.Cell(0, 7, fmt.Sprintf("Тип программы: %s", map[bool]string{true: "Полная", false: "Персональная"}[view.Mode == "full"]))
 	pdf.Ln(10)
-	if mode == "personal" {
+	if view.Mode == "personal" {
 		pdf.Cell(0, 7, fmt.Sprintf("Участник: %s", normalizeText(user.Profile.FullName)))
 		pdf.Ln(8)
 	}
-	if len(sections) == 0 {
-		pdf.Cell(0, 7, "Секции пока не назначены.")
-		writePDF(c, pdf, "program.pdf")
-		return
-	}
+	if view.Mode == "personal" {
+		if view.StatusMessage != "" || view.PersonalEntry == nil {
+			pdf.Cell(0, 7, officialProgramPendingText)
+			writePDF(c, pdf, "program.pdf")
+			return
+		}
 
-	for _, section := range sections {
+		entry := *view.PersonalEntry
 		pdf.SetFont(fontFamily, "", 12)
-		pdf.MultiCell(0, 7, normalizeText(section.Title), "", "L", false)
-
+		pdf.MultiCell(0, 7, normalizeText(fallbackSectionTitle(entry.SectionTitle, valueOrZero(entry.SectionID))), "", "L", false)
 		pdf.SetFont(fontFamily, "", 10)
-		room := section.Room
+		room := entry.RoomName
 		if room == "" {
 			room = "Без аудитории"
 		}
-		room = normalizeText(room)
 		pdf.MultiCell(
 			0,
 			6,
-			fmt.Sprintf(
-				"Локация: %s | Время: %s - %s",
-				room,
-				section.StartAt.Format("02.01.2006 15:04"),
-				section.EndAt.Format("15:04"),
-			),
+			fmt.Sprintf("Локация: %s | Время: %s", normalizeText(room), formatProgramTimeRange(entry.StartsAt, entry.EndsAt)),
 			"",
 			"L",
 			false,
 		)
-
-		participants := participantsBySection[section.ID]
-		if len(participants) == 0 {
-			pdf.Cell(0, 6, "Докладчики не назначены.")
-			pdf.Ln(8)
-			continue
+		line := normalizeText(user.Profile.FullName)
+		if entry.TalkTitle != "" {
+			line = fmt.Sprintf("%s — %s", line, normalizeText(entry.TalkTitle))
 		}
+		pdf.MultiCell(0, 6, line, "", "L", false)
+		if entry.JoinURL != "" {
+			pdf.MultiCell(0, 6, fmt.Sprintf("Ссылка для подключения: %s", entry.JoinURL), "", "L", false)
+		}
+		writePDF(c, pdf, "program.pdf")
+		return
+	}
 
-		for i, p := range participants {
-			line := fmt.Sprintf("%d. %s", i+1, normalizeText(p.FullName))
-			if p.TalkTitle != "" {
-				line = fmt.Sprintf("%s — %s", line, normalizeText(p.TalkTitle))
+	if view.StatusMessage != "" || len(view.Groups) == 0 {
+		pdf.Cell(0, 7, officialProgramPendingText)
+		writePDF(c, pdf, "program.pdf")
+		return
+	}
+
+	for _, group := range view.Groups {
+		pdf.SetFont(fontFamily, "", 12)
+		pdf.MultiCell(0, 7, normalizeText(group.SectionTitle), "", "L", false)
+		pdf.SetFont(fontFamily, "", 10)
+		for i, entry := range group.Entries {
+			room := entry.RoomName
+			if room == "" {
+				room = "Без аудитории"
+			}
+			line := fmt.Sprintf(
+				"%d. %s | %s | %s",
+				i+1,
+				formatProgramTimeRange(entry.StartsAt, entry.EndsAt),
+				normalizeText(room),
+				normalizeText(entry.FullName),
+			)
+			if entry.TalkTitle != "" {
+				line = fmt.Sprintf("%s — %s", line, normalizeText(entry.TalkTitle))
 			}
 			pdf.MultiCell(0, 6, line, "", "L", false)
 		}
@@ -292,41 +334,6 @@ func (h *DocumentHandler) getConference() (*models.Conference, error) {
 	return &conf, nil
 }
 
-type programParticipant struct {
-	SectionID uint
-	FullName  string
-	TalkTitle string
-}
-
-func (h *DocumentHandler) loadParticipantsBySection(sections []models.Section) (map[uint][]programParticipant, error) {
-	result := make(map[uint][]programParticipant, len(sections))
-	if len(sections) == 0 {
-		return result, nil
-	}
-
-	sectionIDs := make([]uint, 0, len(sections))
-	for _, section := range sections {
-		sectionIDs = append(sectionIDs, section.ID)
-		result[section.ID] = []programParticipant{}
-	}
-
-	var profiles []models.Profile
-	if err := h.DB.Where("section_id IN ?", sectionIDs).Order("id asc").Find(&profiles).Error; err != nil {
-		return nil, err
-	}
-	for _, profile := range profiles {
-		if profile.SectionID == nil {
-			continue
-		}
-		result[*profile.SectionID] = append(result[*profile.SectionID], programParticipant{
-			SectionID: *profile.SectionID,
-			FullName:  profile.FullName,
-			TalkTitle: profile.TalkTitle,
-		})
-	}
-	return result, nil
-}
-
 func (h *DocumentHandler) generateBadgeToken(userID, conferenceID uint) (string, error) {
 	claims := jwt.MapClaims{
 		"type":          "badge",
@@ -409,6 +416,13 @@ func firstExistingFile(paths []string) string {
 		}
 	}
 	return ""
+}
+
+func valueOrZero(value *uint) uint {
+	if value == nil {
+		return 0
+	}
+	return *value
 }
 
 func normalizeText(input string) string {
