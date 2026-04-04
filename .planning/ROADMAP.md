@@ -114,7 +114,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 1. Registration & Consent | 3/3 | Complete | 2026-04-04 |
 | 2. Authoritative Program Management | 3/3 | Complete | 2026-04-04 |
 | 3. Hybrid Schedule Experience | 3/3 | Complete | 2026-04-04 |
-| 4. Self-Service Account Recovery | 1/3 | In progress | - |
+| 4. Self-Service Account Recovery | 2/3 | In progress | - |
 | 5. Conference Communication | 0/TBD | Not started | - |
 | 6. Participant Materials | 0/TBD | Not started | - |
 | 7. Branded Responsive Experience | 0/TBD | Not started | - |
