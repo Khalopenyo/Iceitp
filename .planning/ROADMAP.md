@@ -55,7 +55,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Offline participant can see assigned room and location details for their sessions.
   3. Offline participant can navigate sessions through a dynamic list or map-based venue view.
   4. Online participant can access an external join link without being pushed through venue-specific room or map flows.
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
 
 ### Phase 4: Self-Service Account Recovery
@@ -113,7 +113,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 |-------|----------------|--------|-----------|
 | 1. Registration & Consent | 3/3 | Complete | 2026-04-04 |
 | 2. Authoritative Program Management | 3/3 | Complete | 2026-04-04 |
-| 3. Hybrid Schedule Experience | 0/TBD | Not started | - |
+| 3. Hybrid Schedule Experience | 0/3 | Ready to execute | - |
 | 4. Self-Service Account Recovery | 0/TBD | Not started | - |
 | 5. Conference Communication | 0/TBD | Not started | - |
 | 6. Participant Materials | 0/TBD | Not started | - |
