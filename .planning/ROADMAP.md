@@ -90,7 +90,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Offline participant can download a QR badge PDF for onsite registration.
   3. Eligible participant can download a certificate in PDF format when participation conditions are met.
   4. Participant can access conference proceedings after the event is completed.
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
 
 ### Phase 7: Branded Responsive Experience
@@ -116,5 +116,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 3. Hybrid Schedule Experience | 3/3 | Complete | 2026-04-04 |
 | 4. Self-Service Account Recovery | 3/3 | Complete | 2026-04-04 |
 | 5. Conference Communication | 3/3 | Complete | 2026-04-04 |
-| 6. Participant Materials | 0/TBD | Not started | - |
+| 6. Participant Materials | 0/3 | Ready to execute | - |
 | 7. Branded Responsive Experience | 0/TBD | Not started | - |

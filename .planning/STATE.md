@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: ready_to_plan
-stopped_at: Phase 5 executed and verified; Phase 6 planning is next
-last_updated: "2026-04-04T01:54:47Z"
-last_activity: 2026-04-04 -- Phase 5 executed, verified, and marked complete
+status: ready_to_execute
+stopped_at: Phase 6 planned with 3 executable plans in 2 waves
+last_updated: "2026-04-04T02:03:36Z"
+last_activity: 2026-04-04 -- Phase 6 planned with 3 executable plans in 2 waves
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 15
+  total_plans: 18
   completed_plans: 15
   percent: 71
 ---
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 ## Current Position
 
 Phase: 6 of 7 (Participant Materials)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-04-04 -- Phase 5 executed, verified, and marked complete
+Plan: 0 of 3 in current phase
+Status: Ready to execute
+Last activity: 2026-04-04 -- Phase 6 planned with 3 executable plans in 2 waves
 
 Progress: [███████░░░] 71%
 
@@ -71,6 +71,7 @@ Recent decisions affecting current work:
 - Phase 4: Account recovery now uses emailed opaque reset links with trusted APP_BASE_URL routing and generic outward responses.
 - Phase 5: Conference communication should keep the current text-chat ergonomics while adding only safe allowlisted attachments and organizer-readable feedback.
 - Phase 5: Feedback is organizer-reviewable inside the existing admin shell, while participant submission stays a lightweight authenticated form with inline status.
+- Phase 6: Participant materials should expose explicit readiness and attendance-aware rules before the UI attempts any download.
 - Phase 7: Branding and responsive cleanup are a dedicated finish phase spanning public pages and authenticated flows.
 
 ### Pending Todos
@@ -83,6 +84,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-04 04:54 MSK
-Stopped at: Phase 5 executed and verified; Phase 6 planning is next
+Last session: 2026-04-04 05:03 MSK
+Stopped at: Phase 6 planned with 3 executable plans in 2 waves
 Resume file: None
