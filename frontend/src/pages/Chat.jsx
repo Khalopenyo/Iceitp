@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { apiDelete, apiGet, apiPatch, apiPost } from "../lib/api.js";
-import { getUser } from "../lib/auth.js";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm } from "../lib/api.js";
+import { getToken, getUser } from "../lib/auth.js";
 
 const CHAT_SCOPE_CONFERENCE = "conference";
 const CHAT_SCOPE_SECTION = "section";
@@ -8,6 +8,9 @@ const CHAT_POLL_INTERVAL_MS = 8000;
 const CHAT_DRAFT_PREFIX = "conf_chat_draft_";
 const CHAT_SEEN_PREFIX = "conf_chat_seen_";
 const CHAT_LAST_SCOPE_KEY = "conf_chat_last_scope";
+const CHAT_ATTACHMENT_ACCEPT = ".csv,.doc,.docx,.jpeg,.jpg,.pdf,.png,.ppt,.pptx,.txt,.xls,.xlsx";
+const rawApiBaseUrl = typeof import.meta.env.VITE_API_URL === "string" ? import.meta.env.VITE_API_URL.trim() : "";
+const apiBaseUrl = rawApiBaseUrl.replace(/\/+$/, "");
 
 function getDraftKey(scope) {
   return `${CHAT_DRAFT_PREFIX}${scope}`;
@@ -113,7 +116,8 @@ function filterMessages(messages, query) {
   if (!normalizedQuery) return messages;
 
   return messages.filter((message) => {
-    const haystack = [message.user_name, message.user_meta, message.content].join(" ").toLowerCase();
+    const attachmentNames = (message.attachments || []).map((attachment) => attachment.file_name || "").join(" ");
+    const haystack = [message.user_name, message.user_meta, message.content, attachmentNames].join(" ").toLowerCase();
     return haystack.includes(normalizedQuery);
   });
 }
@@ -124,16 +128,30 @@ function getChannelInputPlaceholder(channel) {
   return "Напишите сообщение в общий чат конференции";
 }
 
+function formatFileSize(size) {
+  if (!Number.isFinite(size) || size <= 0) return "Файл";
+  if (size < 1024) return `${size} Б`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} КБ`;
+  return `${(size / (1024 * 1024)).toFixed(1)} МБ`;
+}
+
+function buildAttachmentUrl(downloadUrl) {
+  if (!downloadUrl) return "";
+  return apiBaseUrl ? `${apiBaseUrl}${downloadUrl}` : downloadUrl;
+}
+
 export default function Chat() {
   const user = getUser();
   const initialScope = getInitialScope(user);
   const listRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const [activeScope, setActiveScope] = useState(initialScope);
   const [channels, setChannels] = useState([]);
   const [currentChannel, setCurrentChannel] = useState(null);
   const [messages, setMessages] = useState([]);
   const [content, setContent] = useState(() => getDraft(initialScope));
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -208,6 +226,10 @@ export default function Chat() {
     setEditingContent("");
     setCurrentChannel(nextChannel);
     setMessages([]);
+    setSelectedFiles([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const handleComposerChange = (event) => {
@@ -219,24 +241,51 @@ export default function Chat() {
   const handleSend = async (event) => {
     event.preventDefault();
     const trimmed = content.trim();
-    if (!trimmed || !currentChannel?.available) return;
+    if ((!trimmed && selectedFiles.length === 0) || !currentChannel?.available) return;
 
     setSending(true);
     setError("");
     try {
-      await apiPost("/chat", {
-        scope: activeScope,
-        content: trimmed,
-      });
+      if (selectedFiles.length > 0) {
+        const formData = new FormData();
+        formData.append("scope", activeScope);
+        formData.append("content", trimmed);
+        selectedFiles.forEach((file) => formData.append("files", file));
+        await apiPostForm("/chat", formData);
+      } else {
+        await apiPost("/chat", {
+          scope: activeScope,
+          content: trimmed,
+        });
+      }
 
       setContent("");
       setDraft(activeScope, "");
+      setSelectedFiles([]);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
       setSyncing(true);
       setRefreshVersion((value) => value + 1);
     } catch (err) {
       setError(err.message || "Не удалось отправить сообщение");
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleFileChange = (event) => {
+    const nextFiles = Array.from(event.target.files || []);
+    setSelectedFiles(nextFiles);
+  };
+
+  const removeSelectedFile = (indexToRemove) => {
+    setSelectedFiles((prev) => prev.filter((_, index) => index !== indexToRemove));
+    const remainingFiles = selectedFiles.filter((_, index) => index !== indexToRemove);
+    if (fileInputRef.current) {
+      const transfer = new DataTransfer();
+      remainingFiles.forEach((file) => transfer.items.add(file));
+      fileInputRef.current.files = transfer.files;
     }
   };
 
@@ -288,6 +337,38 @@ export default function Chat() {
     if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
     event.currentTarget.form?.requestSubmit();
+  };
+
+  const handleDownloadAttachment = async (attachment) => {
+    const token = getToken();
+    if (!token) {
+      window.location.href = "/login";
+      return;
+    }
+
+    try {
+      const res = await fetch(buildAttachmentUrl(attachment.download_url), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      if (!res.ok) {
+        throw new Error("Не удалось скачать вложение");
+      }
+      const blob = await res.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = attachment.file_name || "attachment";
+      link.click();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      setError(err.message || "Не удалось скачать вложение");
+    }
   };
 
   const canCompose = Boolean(currentChannel?.available) && !sending;
@@ -448,7 +529,28 @@ export default function Chat() {
                             </div>
                           </div>
                         ) : (
-                          <p className="chat-bubble-text">{message.content}</p>
+                          <>
+                            {message.content ? <p className="chat-bubble-text">{message.content}</p> : null}
+                            {message.attachments?.length ? (
+                              <div className="chat-attachment-list">
+                                {message.attachments.map((attachment) => (
+                                  <div key={attachment.id} className="chat-attachment-item">
+                                    <div>
+                                      <strong>{attachment.file_name}</strong>
+                                      <div className="muted">{formatFileSize(attachment.file_size)}</div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="chat-action-link"
+                                      onClick={() => handleDownloadAttachment(attachment)}
+                                    >
+                                      Скачать
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </>
                         )}
                       </div>
                     </article>
@@ -463,6 +565,36 @@ export default function Chat() {
               <strong>{currentChannel?.title || "Сообщение"}</strong>
               <span>Enter отправляет, Shift+Enter переносит строку</span>
             </div>
+            <label className="muted">
+              <span>Вложения</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={CHAT_ATTACHMENT_ACCEPT}
+                onChange={handleFileChange}
+                disabled={!canCompose}
+              />
+            </label>
+            {selectedFiles.length ? (
+              <div className="chat-selected-files">
+                {selectedFiles.map((file, index) => (
+                  <div key={`${file.name}-${index}`} className="chat-attachment-item">
+                    <div>
+                      <strong>{file.name}</strong>
+                      <div className="muted">{formatFileSize(file.size)}</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="chat-action-link danger"
+                      onClick={() => removeSelectedFile(index)}
+                    >
+                      Убрать
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <textarea
               value={content}
               onChange={handleComposerChange}
@@ -473,8 +605,15 @@ export default function Chat() {
               disabled={!canCompose}
             />
             <div className="chat-composer-foot">
-              <span>{content.trim().length}/2000</span>
-              <button className="btn btn-primary" type="submit" disabled={!canCompose || !content.trim()}>
+              <span>
+                {content.trim().length}/2000
+                {selectedFiles.length ? ` · файлов: ${selectedFiles.length}` : ""}
+              </span>
+              <button
+                className="btn btn-primary"
+                type="submit"
+                disabled={!canCompose || (!content.trim() && selectedFiles.length === 0)}
+              >
                 {sending ? "Отправка..." : "Отправить"}
               </button>
             </div>
