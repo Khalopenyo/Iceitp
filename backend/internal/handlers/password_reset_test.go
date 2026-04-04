@@ -40,6 +40,8 @@ func newPasswordResetTestRouter(db *gorm.DB, sender *passwordResetSenderStub, no
 		},
 	}
 	router.POST("/forgot-password", handler.ForgotPassword)
+	router.POST("/reset-password", handler.ResetPassword)
+	router.POST("/login", handler.Login)
 	return router
 }
 
@@ -88,6 +90,22 @@ func extractResetToken(t *testing.T, rawURL string) string {
 		t.Fatalf("reset url does not contain token: %s", rawURL)
 	}
 	return token
+}
+
+func requestPasswordResetToken(t *testing.T, router *gin.Engine, sender *passwordResetSenderStub, email string) string {
+	t.Helper()
+
+	sender.messages = nil
+	recorder := performJSONRequest(t, router, http.MethodPost, "/forgot-password", map[string]any{
+		"email": email,
+	})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, recorder.Code, recorder.Body.String())
+	}
+	if len(sender.messages) != 1 {
+		t.Fatalf("expected 1 reset email, got %d", len(sender.messages))
+	}
+	return extractResetToken(t, sender.messages[0].ResetURL)
 }
 
 func TestForgotPasswordReturnsUniformResponse(t *testing.T) {
@@ -154,5 +172,109 @@ func TestForgotPasswordCreatesResetTokenForExistingUser(t *testing.T) {
 	rawToken := extractResetToken(t, sender.messages[0].ResetURL)
 	if hashPasswordResetToken(rawToken) != tokens[0].TokenHash {
 		t.Fatalf("expected raw token from email to match stored hash")
+	}
+}
+
+func TestResetPasswordAllowsLoginWithNewPassword(t *testing.T) {
+	db := newAuthTestDB(t)
+	if err := db.AutoMigrate(&models.PasswordResetToken{}); err != nil {
+		t.Fatalf("auto migrate password reset token: %v", err)
+	}
+	now := time.Date(2026, time.April, 4, 10, 0, 0, 0, time.UTC)
+	sender := &passwordResetSenderStub{}
+	router := newPasswordResetTestRouter(db, sender, now)
+	user := seedLoginUser(t, db, "recover@example.com", "secret123")
+	rawToken := requestPasswordResetToken(t, router, sender, user.Email)
+
+	reset := performJSONRequest(t, router, http.MethodPost, "/reset-password", map[string]any{
+		"token":            rawToken,
+		"password":         "newsecret123",
+		"password_confirm": "newsecret123",
+	})
+	if reset.Code != http.StatusOK {
+		t.Fatalf("expected reset status %d, got %d: %s", http.StatusOK, reset.Code, reset.Body.String())
+	}
+
+	reused := performJSONRequest(t, router, http.MethodPost, "/reset-password", map[string]any{
+		"token":            rawToken,
+		"password":         "anothersecret123",
+		"password_confirm": "anothersecret123",
+	})
+	if reused.Code != http.StatusBadRequest {
+		t.Fatalf("expected reused token status %d, got %d: %s", http.StatusBadRequest, reused.Code, reused.Body.String())
+	}
+
+	login := performJSONRequest(t, router, http.MethodPost, "/login", map[string]any{
+		"email":    user.Email,
+		"password": "newsecret123",
+	})
+	if login.Code != http.StatusOK {
+		t.Fatalf("expected login status %d, got %d: %s", http.StatusOK, login.Code, login.Body.String())
+	}
+
+	oldPassword := performJSONRequest(t, router, http.MethodPost, "/login", map[string]any{
+		"email":    user.Email,
+		"password": "secret123",
+	})
+	if oldPassword.Code != http.StatusUnauthorized {
+		t.Fatalf("expected old password status %d, got %d: %s", http.StatusUnauthorized, oldPassword.Code, oldPassword.Body.String())
+	}
+
+	var token models.PasswordResetToken
+	if err := db.Where("user_id = ?", user.ID).First(&token).Error; err != nil {
+		t.Fatalf("load reset token: %v", err)
+	}
+	if token.UsedAt == nil {
+		t.Fatalf("expected reset token to be consumed")
+	}
+}
+
+func TestResetPasswordRejectsUsedOrExpiredToken(t *testing.T) {
+	db := newAuthTestDB(t)
+	if err := db.AutoMigrate(&models.PasswordResetToken{}); err != nil {
+		t.Fatalf("auto migrate password reset token: %v", err)
+	}
+	now := time.Date(2026, time.April, 4, 11, 0, 0, 0, time.UTC)
+	sender := &passwordResetSenderStub{}
+	router := newPasswordResetTestRouter(db, sender, now)
+	user := seedLoginUser(t, db, "invalid@example.com", "secret123")
+
+	usedAt := now.Add(-10 * time.Minute)
+	usedRaw := "used-reset-token"
+	expiredRaw := "expired-reset-token"
+	tokens := []models.PasswordResetToken{
+		{
+			UserID:    user.ID,
+			TokenHash: hashPasswordResetToken(usedRaw),
+			ExpiresAt: now.Add(30 * time.Minute),
+			UsedAt:    &usedAt,
+		},
+		{
+			UserID:    user.ID,
+			TokenHash: hashPasswordResetToken(expiredRaw),
+			ExpiresAt: now.Add(-1 * time.Minute),
+		},
+	}
+	if err := db.Create(&tokens).Error; err != nil {
+		t.Fatalf("create reset tokens: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name  string
+		token string
+	}{
+		{name: "used token", token: usedRaw},
+		{name: "expired token", token: expiredRaw},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := performJSONRequest(t, router, http.MethodPost, "/reset-password", map[string]any{
+				"token":            tc.token,
+				"password":         "newsecret123",
+				"password_confirm": "newsecret123",
+			})
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("expected status %d, got %d: %s", http.StatusBadRequest, recorder.Code, recorder.Body.String())
+			}
+		})
 	}
 }

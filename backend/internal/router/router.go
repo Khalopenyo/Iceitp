@@ -64,6 +64,7 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 	api.POST("/auth/register", authHandler.Register)
 	api.POST("/auth/login", authHandler.Login)
 	api.POST("/auth/forgot-password", authHandler.ForgotPassword)
+	api.POST("/auth/reset-password", authHandler.ResetPassword)
 	api.GET("/sections", sectionHandler.ListSections)
 	api.GET("/rooms", roomHandler.ListRooms)
 	api.GET("/map/markers", mapMarkerHandler.ListMarkers)
