@@ -26,11 +26,37 @@ type DocumentHandler struct {
 
 const officialProgramPendingText = "Официальная программа еще не утверждена."
 
+const (
+	documentStatusAvailable     = "available"
+	documentStatusBlocked       = "blocked"
+	documentStatusNotApplicable = "not_applicable"
+)
+
 type programPDFView struct {
 	Mode          string
 	PersonalEntry *authoritativeProgramEntry
 	Groups        []authoritativeProgramSectionGroup
 	StatusMessage string
+}
+
+type documentStatusItem struct {
+	Status    string `json:"status"`
+	Available bool   `json:"available"`
+	Message   string `json:"message,omitempty"`
+	Filename  string `json:"filename,omitempty"`
+	URL       string `json:"url,omitempty"`
+}
+
+type documentStatusResponse struct {
+	CurrentUserType  models.UserType         `json:"current_user_type"`
+	ConferenceID     uint                    `json:"conference_id"`
+	ConferenceTitle  string                  `json:"conference_title"`
+	ConferenceStatus models.ConferenceStatus `json:"conference_status"`
+	PersonalProgram  documentStatusItem      `json:"personal_program"`
+	FullProgram      documentStatusItem      `json:"full_program"`
+	Badge            documentStatusItem      `json:"badge"`
+	Certificate      documentStatusItem      `json:"certificate"`
+	Proceedings      documentStatusItem      `json:"proceedings"`
 }
 
 // loadProgramPDFView keeps ProgramPDF sourced from authoritative ProgramAssignment records.
@@ -64,6 +90,129 @@ func loadProgramPDFView(db *gorm.DB, userID uint, rawMode string) (*programPDFVi
 		view.StatusMessage = officialProgramPendingText
 	}
 	return view, nil
+}
+
+func availableDocumentStatus(filename, message string) documentStatusItem {
+	return documentStatusItem{
+		Status:    documentStatusAvailable,
+		Available: true,
+		Message:   message,
+		Filename:  filename,
+	}
+}
+
+func blockedDocumentStatus(filename, message string) documentStatusItem {
+	return documentStatusItem{
+		Status:    documentStatusBlocked,
+		Available: false,
+		Message:   message,
+		Filename:  filename,
+	}
+}
+
+func notApplicableDocumentStatus(filename, message string) documentStatusItem {
+	return documentStatusItem{
+		Status:    documentStatusNotApplicable,
+		Available: false,
+		Message:   message,
+		Filename:  filename,
+	}
+}
+
+func loadDocumentStatus(db *gorm.DB, user models.User, conf models.Conference) (*documentStatusResponse, error) {
+	scheduleView, err := loadParticipantScheduleView(db, user)
+	if err != nil {
+		return nil, err
+	}
+
+	personalView, err := loadProgramPDFView(db, user.ID, "personal")
+	if err != nil {
+		return nil, err
+	}
+	fullView, err := loadProgramPDFView(db, user.ID, "full")
+	if err != nil {
+		return nil, err
+	}
+
+	effectiveUserType := user.UserType
+	if scheduleView != nil && scheduleView.UserType != "" {
+		effectiveUserType = scheduleView.UserType
+	}
+
+	status := &documentStatusResponse{
+		CurrentUserType:  effectiveUserType,
+		ConferenceID:     conf.ID,
+		ConferenceTitle:  conf.Title,
+		ConferenceStatus: conf.Status,
+		PersonalProgram:  availableDocumentStatus("program-personal.pdf", "Персональная программа готова к скачиванию."),
+		FullProgram:      availableDocumentStatus("program-full.pdf", "Полная программа готова к скачиванию."),
+		Badge:            availableDocumentStatus("badge.pdf", "QR-бейдж готов к скачиванию."),
+		Certificate:      availableDocumentStatus("certificate.pdf", "Сертификат готов к скачиванию."),
+		Proceedings:      availableDocumentStatus("", "Сборник трудов доступен для открытия."),
+	}
+
+	if personalView.StatusMessage != "" || personalView.PersonalEntry == nil {
+		status.PersonalProgram = blockedDocumentStatus("program-personal.pdf", officialProgramPendingText)
+	}
+
+	if fullView.StatusMessage != "" || len(fullView.Groups) == 0 {
+		status.FullProgram = blockedDocumentStatus("program-full.pdf", officialProgramPendingText)
+	}
+
+	if effectiveUserType == models.UserTypeOnline {
+		status.Badge = notApplicableDocumentStatus("badge.pdf", "QR-бейдж нужен только офлайн-участникам для регистрации на площадке.")
+	}
+
+	var checkIn models.CheckIn
+	hasCheckIn := db.Where("conference_id = ? AND user_id = ?", conf.ID, user.ID).First(&checkIn).Error == nil
+
+	switch effectiveUserType {
+	case models.UserTypeOffline:
+		if !hasCheckIn {
+			status.Certificate = blockedDocumentStatus("certificate.pdf", "Сертификат станет доступен после check-in на площадке.")
+		}
+	default:
+		if scheduleView == nil || scheduleView.AssignmentStatus != assignmentStatusApproved || conf.Status == models.ConferenceStatusDraft {
+			status.Certificate = blockedDocumentStatus(
+				"certificate.pdf",
+				"Сертификат для онлайн-участника станет доступен после публикации официальной программы и начала конференции.",
+			)
+		}
+	}
+
+	proceedingsURL := strings.TrimSpace(conf.ProceedingsURL)
+	if conf.Status != models.ConferenceStatusFinished {
+		status.Proceedings = blockedDocumentStatus("", "Сборник будет доступен после завершения конференции.")
+	} else if proceedingsURL == "" {
+		status.Proceedings = blockedDocumentStatus("", "Оргкомитет еще не загрузил сборник трудов.")
+	} else {
+		status.Proceedings = availableDocumentStatus("", "Сборник трудов доступен для открытия.")
+		status.Proceedings.URL = proceedingsURL
+	}
+
+	return status, nil
+}
+
+func (h *DocumentHandler) DocumentStatus(c *gin.Context) {
+	userID := c.GetUint("user_id")
+	var user models.User
+	if err := h.DB.Preload("Profile").First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+	conf, err := h.getConference()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load conference"})
+		return
+	}
+
+	status, err := loadDocumentStatus(h.DB, user, *conf)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load document status"})
+		return
+	}
+
+	c.JSON(http.StatusOK, status)
 }
 
 func (h *DocumentHandler) ProgramPDF(c *gin.Context) {
