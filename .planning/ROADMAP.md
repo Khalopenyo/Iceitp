@@ -66,7 +66,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. User can request a password reset by email and sees a uniform response that does not reveal account existence.
   2. User can open a valid reset link and set a new password successfully.
   3. User can sign in with the new password and the reset link no longer works after use.
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
 
 ### Phase 5: Conference Communication
@@ -114,7 +114,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 1. Registration & Consent | 3/3 | Complete | 2026-04-04 |
 | 2. Authoritative Program Management | 3/3 | Complete | 2026-04-04 |
 | 3. Hybrid Schedule Experience | 3/3 | Complete | 2026-04-04 |
-| 4. Self-Service Account Recovery | 0/TBD | Not started | - |
+| 4. Self-Service Account Recovery | 0/3 | Ready to execute | - |
 | 5. Conference Communication | 0/TBD | Not started | - |
 | 6. Participant Materials | 0/TBD | Not started | - |
 | 7. Branded Responsive Experience | 0/TBD | Not started | - |
