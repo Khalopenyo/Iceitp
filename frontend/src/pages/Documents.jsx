@@ -1,70 +1,167 @@
+import { useEffect, useState } from "react";
 import { apiGet } from "../lib/api.js";
 
-async function download(path, filename) {
+const materialCards = [
+  {
+    key: "personal_program",
+    title: "Моя программа",
+    description: "Персональная PDF-программа на основе утвержденного места в сетке конференции.",
+    actionLabel: "Скачать PDF",
+    filename: "program-personal.pdf",
+    path: "/documents/program?type=personal",
+    mode: "download",
+  },
+  {
+    key: "full_program",
+    title: "Полная программа",
+    description: "Общая PDF-программа конференции с утвержденными секциями и докладами.",
+    actionLabel: "Скачать PDF",
+    filename: "program-full.pdf",
+    path: "/documents/program?type=full",
+    mode: "download",
+  },
+  {
+    key: "badge",
+    title: "Бейдж с QR",
+    description: "Используется для быстрой регистрации на площадке и check-in.",
+    actionLabel: "Скачать PDF",
+    filename: "badge.pdf",
+    path: "/documents/badge",
+    mode: "download",
+  },
+  {
+    key: "certificate",
+    title: "Сертификат участника",
+    description: "Подтверждение участия после выполнения условий допуска к выдаче сертификата.",
+    actionLabel: "Скачать PDF",
+    filename: "certificate.pdf",
+    path: "/documents/certificate",
+    mode: "download",
+  },
+  {
+    key: "proceedings",
+    title: "Сборник трудов",
+    description: "Публикуется после завершения конференции и открытия доступа оргкомитетом.",
+    actionLabel: "Открыть сборник",
+    filename: "",
+    path: "/documents/proceedings",
+    mode: "external",
+  },
+];
+
+async function downloadPdf(path, filename) {
   const res = await apiGet(path);
   const blob = await res.blob();
   const url = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
   window.URL.revokeObjectURL(url);
 }
 
 export default function Documents() {
-  const downloadProceedings = async () => {
-    try {
-      const data = await apiGet("/documents/proceedings");
-      if (!data?.url) {
-        alert("Сборник пока недоступен");
-        return;
+  const [materials, setMaterials] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState("");
+  const [busyKey, setBusyKey] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    const loadMaterials = async () => {
+      setLoading(true);
+      setPageError("");
+      try {
+        const response = await apiGet("/documents/status");
+        if (!active) return;
+        setMaterials(response);
+      } catch (err) {
+        if (!active) return;
+        setPageError(err.message || "Не удалось загрузить статусы документов.");
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
-      window.open(data.url, "_blank", "noopener,noreferrer");
+    };
+
+    loadMaterials();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleAction = async (card) => {
+    const material = materials?.[card.key];
+    if (!material?.available) return;
+
+    setBusyKey(card.key);
+    setStatusMessage("");
+    setErrorMessage("");
+    try {
+      if (card.mode === "external") {
+        const targetUrl = material.url || (await apiGet(card.path))?.url;
+        if (!targetUrl) {
+          throw new Error("Сборник пока недоступен.");
+        }
+        window.open(targetUrl, "_blank", "noopener,noreferrer");
+        setStatusMessage("Сборник открыт в новой вкладке.");
+      } else {
+        await downloadPdf(card.path, card.filename);
+        setStatusMessage(`Документ "${card.title}" подготовлен для скачивания.`);
+      }
     } catch (err) {
-      alert(err.message || "Сборник пока недоступен");
+      setErrorMessage(err.message || "Не удалось выполнить действие с документом.");
+    } finally {
+      setBusyKey("");
     }
   };
 
   return (
     <section className="panel">
       <h2>Документы конференции</h2>
+      <p className="muted">
+        Здесь отображаются только актуальные материалы по вашему статусу участия и состоянию конференции.
+      </p>
+
+      {loading ? <p className="muted">Загрузка статусов документов...</p> : null}
+      {pageError ? <p className="muted">{pageError}</p> : null}
+      {statusMessage ? <p className="muted">{statusMessage}</p> : null}
+      {errorMessage ? <p className="muted">{errorMessage}</p> : null}
+
       <div className="doc-grid">
-        <div className="doc-card">
-          <h3>Программа</h3>
-          <p>Персональная или полная программа конференции.</p>
-          <div className="form-actions">
-            <button
-              className="btn btn-primary"
-              onClick={() => download("/documents/program?type=personal", "program-personal.pdf")}
-            >
-              Моя программа
-            </button>
-            <button className="btn btn-ghost" onClick={() => download("/documents/program?type=full", "program-full.pdf")}>
-              Полная программа
-            </button>
-          </div>
-        </div>
-        <div className="doc-card">
-          <h3>Бейдж с QR</h3>
-          <p>Для быстрой регистрации на площадке (QR для check-in).</p>
-          <button className="btn btn-primary" onClick={() => download("/documents/badge", "badge.pdf")}>
-            Скачать PDF
-          </button>
-        </div>
-        <div className="doc-card">
-          <h3>Сертификат участника</h3>
-          <p>Подтверждение участия после check-in на площадке.</p>
-          <button className="btn btn-primary" onClick={() => download("/documents/certificate", "certificate.pdf")}>
-            Скачать PDF
-          </button>
-        </div>
-        <div className="doc-card">
-          <h3>Сборник трудов</h3>
-          <p>Доступен после завершения конференции.</p>
-          <button className="btn btn-ghost" onClick={downloadProceedings}>
-            Открыть сборник
-          </button>
-        </div>
+        {materialCards.map((card) => {
+          const material = materials?.[card.key];
+          const isAvailable = Boolean(material?.available);
+          const isBusy = busyKey === card.key;
+          const buttonLabel = isBusy ? "Подготовка..." : card.actionLabel;
+
+          return (
+            <div key={card.key} className="doc-card">
+              <h3>{card.title}</h3>
+              <p>{card.description}</p>
+              <p className="muted">{material?.message || "Статус документа будет доступен после загрузки страницы."}</p>
+              <div className="form-actions">
+                <button
+                  className={isAvailable ? "btn btn-primary" : "btn btn-ghost"}
+                  onClick={() => handleAction(card)}
+                  disabled={loading || !isAvailable || isBusy}
+                >
+                  {buttonLabel}
+                </button>
+              </div>
+              {material?.status === "not_applicable" ? (
+                <p className="muted">Материал не применяется к вашему формату участия.</p>
+              ) : null}
+              {material && !material.available && material.status !== "not_applicable" ? (
+                <p className="muted">Документ станет доступен автоматически, когда будут выполнены условия публикации.</p>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
     </section>
   );
