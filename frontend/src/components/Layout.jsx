@@ -6,10 +6,14 @@ import { apiGet } from "../lib/api.js";
 export default function Layout() {
   const navigate = useNavigate();
   const [user, setUserState] = useState(getUser());
+  const [scheduleMeta, setScheduleMeta] = useState(null);
   const token = getToken();
 
   useEffect(() => {
-    if (!token) return;
+    if (!token) {
+      setScheduleMeta(null);
+      return;
+    }
     apiGet("/me")
       .then((data) => {
         setUser(data);
@@ -18,14 +22,28 @@ export default function Layout() {
       .catch(() => {
         clearToken();
         setUserState(null);
+        setScheduleMeta(null);
       });
+
+    apiGet("/schedule")
+      .then((data) => {
+        setScheduleMeta({
+          assignmentStatus: data?.assignment_status || "pending",
+          currentUserType: data?.current_user_type || "",
+        });
+      })
+      .catch(() => setScheduleMeta(null));
   }, [token]);
 
   const logout = () => {
     clearToken();
     setUserState(null);
+    setScheduleMeta(null);
     navigate("/");
   };
+
+  const isPrivileged = !!user && ["admin", "org"].includes(user.role);
+  const showMapLink = isPrivileged || (!!user && scheduleMeta && scheduleMeta.currentUserType !== "online");
 
   return (
     <div className="app">
@@ -47,7 +65,7 @@ export default function Layout() {
               </NavLink>
               <NavLink to="/dashboard">Кабинет</NavLink>
               <NavLink to="/documents">Документы</NavLink>
-              <NavLink to="/map">Карта</NavLink>
+              {showMapLink && <NavLink to="/map">Карта</NavLink>}
               <NavLink to="/feedback">Отзывы</NavLink>
               <NavLink to="/chat">Чат</NavLink>
               {["admin", "org"].includes(user.role) && <NavLink to="/admin">Админка</NavLink>}
