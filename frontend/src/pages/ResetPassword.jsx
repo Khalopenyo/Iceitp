@@ -43,7 +43,7 @@ export default function ResetPassword() {
     return (
       <section className="panel narrow">
         <h2>Неверная ссылка</h2>
-        <p className="muted">Токен восстановления не найден. Запросите новую ссылку.</p>
+        <p className="form-status error">Токен восстановления не найден. Запросите новую ссылку.</p>
         <div className="form-actions">
           <Link className="btn btn-primary" to="/forgot-password">
             Запросить новую ссылку
@@ -69,7 +69,7 @@ export default function ResetPassword() {
           Повторите пароль
           <input type="password" value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} required />
         </label>
-        {error ? <p className="muted">{error}</p> : null}
+        {error ? <p className="form-status error">{error}</p> : null}
         <button className="btn btn-primary" type="submit" disabled={loading}>
           {loading ? "Сохранение..." : "Сохранить пароль"}
         </button>

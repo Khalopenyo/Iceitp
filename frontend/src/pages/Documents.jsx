@@ -127,10 +127,10 @@ export default function Documents() {
         Здесь отображаются только актуальные материалы по вашему статусу участия и состоянию конференции.
       </p>
 
-      {loading ? <p className="muted">Загрузка статусов документов...</p> : null}
-      {pageError ? <p className="muted">{pageError}</p> : null}
-      {statusMessage ? <p className="muted">{statusMessage}</p> : null}
-      {errorMessage ? <p className="muted">{errorMessage}</p> : null}
+      {loading ? <p className="form-status info">Загрузка статусов документов...</p> : null}
+      {pageError ? <p className="form-status error">{pageError}</p> : null}
+      {statusMessage ? <p className="form-status success">{statusMessage}</p> : null}
+      {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
 
       <div className="doc-grid">
         {materialCards.map((card) => {

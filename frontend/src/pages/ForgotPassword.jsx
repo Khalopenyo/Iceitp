@@ -32,7 +32,7 @@ export default function ForgotPassword() {
 
       {submitted ? (
         <>
-          <p>{genericSuccessMessage}</p>
+          <p className="form-status success">{genericSuccessMessage}</p>
           <div className="form-actions">
             <Link className="btn btn-primary" to="/login">
               Вернуться ко входу
@@ -55,7 +55,7 @@ export default function ForgotPassword() {
             Email
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </label>
-          {error ? <p className="muted">{error}</p> : null}
+          {error ? <p className="form-status error">{error}</p> : null}
           <button className="btn btn-primary" type="submit" disabled={loading}>
             {loading ? "Отправка..." : "Получить ссылку"}
           </button>

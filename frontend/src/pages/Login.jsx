@@ -9,17 +9,19 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const statusMessage = typeof location.state?.message === "string" ? location.state.message : "";
 
   const submit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setErrorMessage("");
     try {
       const data = await apiPost("/auth/login", { email, password });
       setToken(data.token);
       navigate("/dashboard");
     } catch (err) {
-      alert(err.message || "Неверные учетные данные");
+      setErrorMessage(err.message || "Неверные учетные данные");
     } finally {
       setLoading(false);
     }
@@ -28,7 +30,8 @@ export default function Login() {
   return (
     <section className="panel narrow">
       <h2>Вход в систему</h2>
-      {statusMessage ? <p className="muted">{statusMessage}</p> : null}
+      {statusMessage ? <p className="form-status success">{statusMessage}</p> : null}
+      {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
       <form className="form-grid" onSubmit={submit}>
         <label>
           Email

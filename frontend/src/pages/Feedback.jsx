@@ -62,8 +62,8 @@ export default function Feedback() {
         <button className="btn btn-primary" type="submit" disabled={loading}>
           {loading ? "Отправка..." : "Отправить отзыв"}
         </button>
-        {statusMessage ? <p className="muted">{statusMessage}</p> : null}
-        {errorMessage ? <p className="muted">{errorMessage}</p> : null}
+        {statusMessage ? <p className="form-status success">{statusMessage}</p> : null}
+        {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
       </form>
     </section>
   );

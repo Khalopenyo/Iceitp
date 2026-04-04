@@ -8,6 +8,7 @@ export default function Register() {
   const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
+  const [errorMessage, setErrorMessage] = useState("");
   const degreeOptions = ["Кандидат наук", "Доктор наук", "Доцент", "Профессор"];
   const cityOptions = [
     "Москва",
@@ -115,7 +116,10 @@ export default function Register() {
       .catch(() => setSections([]));
   }, []);
 
-  const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
+  const update = (field, value) => {
+    setErrorMessage("");
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const selectedSection = useMemo(
     () => sections.find((s) => String(s.id) === String(form.section_id)),
@@ -125,10 +129,11 @@ export default function Register() {
   const submit = async (e) => {
     e.preventDefault();
     if (!form.section_id) {
-      alert("Выберите секцию.");
+      setErrorMessage("Выберите секцию конференции перед отправкой анкеты.");
       return;
     }
     setLoading(true);
+    setErrorMessage("");
     try {
       const payload = {
         ...form,
@@ -138,7 +143,7 @@ export default function Register() {
       setToken(data.token);
       navigate("/dashboard");
     } catch (err) {
-      alert(err.message || "Ошибка регистрации. Проверьте поля и согласие.");
+      setErrorMessage(err.message || "Ошибка регистрации. Проверьте поля и обязательные согласия.");
     } finally {
       setLoading(false);
     }
@@ -153,6 +158,7 @@ export default function Register() {
         <div className={`step ${step === 3 ? "active" : ""}`}>3. Доступ</div>
       </div>
       <form className="form-grid" onSubmit={submit}>
+        {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
         {step === 1 && (
           <>
             <label>
@@ -313,7 +319,10 @@ export default function Register() {
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => setStep(step + 1)}
+              onClick={() => {
+                setErrorMessage("");
+                setStep(step + 1);
+              }}
               disabled={(step === 1 && !form.full_name.trim()) || (step === 2 && (!form.section_id || !form.talk_title.trim()))}
             >
               Далее

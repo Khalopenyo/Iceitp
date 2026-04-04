@@ -80,7 +80,7 @@ export default function CampusMap() {
 
   if (isOnlineParticipant) {
     return (
-      <section className="panel">
+      <section className="panel map-page">
         <h2>Карта аудиторий</h2>
         <div className="card">
           <h3>Карта не требуется для онлайн-участия</h3>
@@ -99,7 +99,7 @@ export default function CampusMap() {
   }
 
   return (
-    <section className="panel">
+    <section className="panel map-page">
       <h2>Карта аудиторий</h2>
       <p className="muted">
         {hasMultipleFloors

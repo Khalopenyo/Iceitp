@@ -61,6 +61,8 @@ export default function Dashboard() {
   const [profile, setProfile] = useState(null);
   const [sections, setSections] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [profileStatusMessage, setProfileStatusMessage] = useState("");
+  const [profileErrorMessage, setProfileErrorMessage] = useState("");
   const [tab, setTab] = useState("profile");
   const [nowTs, setNowTs] = useState(() => Date.now());
   const [submissions, setSubmissions] = useState(defaultSubmissionState);
@@ -156,6 +158,8 @@ export default function Dashboard() {
 
   const save = async () => {
     setSaving(true);
+    setProfileStatusMessage("");
+    setProfileErrorMessage("");
     try {
       await apiPut("/me/profile", {
         ...profile,
@@ -165,9 +169,9 @@ export default function Dashboard() {
       setUser(freshUser);
       setData(freshSchedule);
       setProfile(freshSchedule.user.profile);
-      alert("Профиль обновлен");
+      setProfileStatusMessage("Профиль обновлен. Новые данные сохранены в личном кабинете.");
     } catch (err) {
-      alert(err.message || "Не удалось сохранить профиль");
+      setProfileErrorMessage(err.message || "Не удалось сохранить профиль");
     } finally {
       setSaving(false);
     }
@@ -235,6 +239,8 @@ export default function Dashboard() {
           {tab === "profile" && (
             <div className="card">
               <h3>Профиль участника</h3>
+              {profileStatusMessage ? <p className="form-status success">{profileStatusMessage}</p> : null}
+              {profileErrorMessage ? <p className="form-status error">{profileErrorMessage}</p> : null}
               {profile && (
                 <div className="form-grid">
                   <label>

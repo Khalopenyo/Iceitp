@@ -1,5 +1,12 @@
-import { Link } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 import { getToken } from "../lib/auth.js";
+import {
+  formatConferenceDateRange,
+  getConferenceDescription,
+  getConferenceStatusLabel,
+  getConferenceSupportEmail,
+  getConferenceTitle,
+} from "../lib/conference.js";
 
 const conferenceSessions = [
   {
@@ -105,8 +112,40 @@ const coordinator = {
 };
 
 export default function Welcome() {
+  const outletContext = useOutletContext() || {};
+  const conference = outletContext.conference || null;
   const isAuthorized = Boolean(getToken());
   const ctaTarget = isAuthorized ? "/dashboard" : "/register";
+  const heroTitle = getConferenceTitle(conference);
+  const conferenceDescription = getConferenceDescription(conference);
+  const conferenceSupportEmail = outletContext.conferenceSupportEmail || getConferenceSupportEmail(conference);
+  const conferenceDateLabel =
+    outletContext.conferenceDateLabel || formatConferenceDateRange(conference?.starts_at, conference?.ends_at);
+  const conferenceStatusLabel =
+    outletContext.conferenceStatusLabel || getConferenceStatusLabel(conference?.status);
+  const heroSubtitle = [conferenceDateLabel || "24-25 апреля 2026", "Офлайн в Грозном и онлайн-подключение"]
+    .filter(Boolean)
+    .join(" | ");
+  const publicInfoCards = [
+    {
+      eyebrow: "Университет",
+      title: "ГГНТУ",
+      text:
+        "Грозненский государственный нефтяной технический университет выступает основной офлайн-площадкой конференции и точкой сборки очной программы, секций и check-in.",
+    },
+    {
+      eyebrow: "Институт",
+      title: "ИЦЭиТП",
+      text:
+        "ИЦЭиТП отвечает за содержательный контур цифровой повестки конференции, координацию коммуникации с участниками и сбор материалов в единой платформе.",
+    },
+    {
+      eyebrow: "Конференция",
+      title: heroTitle,
+      text: conferenceDescription,
+      meta: [conferenceDateLabel, conferenceStatusLabel, `Поддержка: ${conferenceSupportEmail}`].filter(Boolean),
+    },
+  ];
 
   return (
     <section className="hero landing-page">
@@ -123,20 +162,18 @@ export default function Welcome() {
 
         <div className="hero-copy">
           <p className="hero-overline">Всероссийская научно-практическая конференция с международным участием</p>
-          <h1>ЦИФРОВАЯ РЕВОЛЮЦИЯ: ТОЧКИ СОЦИАЛЬНО-ЭКОНОМИЧЕСКОГО РОСТА</h1>
-          <p className="hero-subtitle">24-25 апреля 2026 г. | Офлайн (Грозный, ГГНТУ) и Онлайн.</p>
-          <p className="hero-description">
-            Площадка для тех, кто хочет говорить о цифровой трансформации экономики предметно: с позиции науки,
-            бизнеса, образования и государственного управления.
-          </p>
+          <h1>{heroTitle}</h1>
+          <p className="hero-subtitle">{heroSubtitle}</p>
+          <p className="hero-description">{conferenceDescription}</p>
           <div className="hero-detail-pills">
+            {conferenceStatusLabel ? <span>{conferenceStatusLabel}</span> : null}
             <span>5 тематических сессий</span>
             <span>РИНЦ / eLIBRARY</span>
             <span>Лучшие статьи для ВАК (К-3)</span>
           </div>
           <div className="hero-actions">
             <Link className="btn btn-primary" to={ctaTarget}>
-              Подать заявку до 20 апреля
+              {isAuthorized ? "Открыть личный кабинет" : "Подать заявку"}
             </Link>
           </div>
         </div>
@@ -156,7 +193,34 @@ export default function Welcome() {
         </div>
       </div>
 
-      <section id="about" className="landing-section section-intro">
+      <section className="landing-section reveal">
+        <div className="section-heading">
+          <div className="badge">Публичная информация</div>
+          <h2>Университет, институт и конференция в одном контуре</h2>
+          <p>
+            Платформа сразу показывает, кто проводит конференцию, где проходит очная часть и через какой единый
+            цифровой контур участник идет от регистрации до материалов.
+          </p>
+        </div>
+        <div className="public-info-grid stagger-children">
+          {publicInfoCards.map((card) => (
+            <article key={card.eyebrow} className="public-info-card">
+              <span className="public-info-eyebrow">{card.eyebrow}</span>
+              <h3>{card.title}</h3>
+              <p>{card.text}</p>
+              {card.meta?.length ? (
+                <div className="public-info-meta">
+                  {card.meta.map((item) => (
+                    <span key={item}>{item}</span>
+                  ))}
+                </div>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section id="about" className="landing-section section-intro reveal">
         <div className="section-heading">
           <div className="badge">О конференции</div>
           <h2>Кому и зачем это нужно</h2>
@@ -182,7 +246,7 @@ export default function Welcome() {
         </div>
       </section>
 
-      <section id="sections" className="landing-section">
+      <section id="sections" className="landing-section reveal">
         <div className="section-heading">
           <div className="badge">Секции</div>
           <h2>Пять сессий для маршрутизации регистрации</h2>
@@ -191,7 +255,7 @@ export default function Welcome() {
             заявки через личный кабинет.
           </p>
         </div>
-        <div className="session-grid">
+        <div className="session-grid stagger-children">
           {conferenceSessions.map((session) => (
             <article key={session.label} className="session-card">
               <div className="session-card-head">
@@ -205,7 +269,7 @@ export default function Welcome() {
         </div>
       </section>
 
-      <section className="landing-section">
+      <section className="landing-section reveal">
         <div className="section-heading">
           <div className="badge">Публикация и результаты</div>
           <h2>То, ради чего подают сильные материалы</h2>
@@ -214,7 +278,7 @@ export default function Welcome() {
             ручной переписки и разрозненных каналов.
           </p>
         </div>
-        <div className="results-grid">
+        <div className="results-grid stagger-children">
           {conferenceResults.map((item) => (
             <article key={item.title} className="result-card">
               <h3>{item.title}</h3>
@@ -224,7 +288,7 @@ export default function Welcome() {
         </div>
       </section>
 
-      <section className="landing-section">
+      <section className="landing-section reveal">
         <div className="section-heading">
           <div className="badge">Важные даты</div>
           <h2>Календарь участия</h2>
@@ -244,7 +308,7 @@ export default function Welcome() {
         </div>
       </section>
 
-      <section className="landing-section organizers-section">
+      <section className="landing-section organizers-section reveal">
         <div className="section-heading">
           <div className="badge">Организаторы и контакты</div>
           <h2>Кто проводит конференцию</h2>
@@ -269,6 +333,9 @@ export default function Welcome() {
             <div className="contact-list">
               <a href={`tel:${coordinator.phone.replace(/\D+/g, "")}`}>{coordinator.phone}</a>
               <a href={`mailto:${coordinator.email}`}>{coordinator.email}</a>
+              {conferenceSupportEmail && conferenceSupportEmail !== coordinator.email ? (
+                <a href={`mailto:${conferenceSupportEmail}`}>Поддержка платформы: {conferenceSupportEmail}</a>
+              ) : null}
             </div>
           </aside>
         </div>

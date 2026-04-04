@@ -535,7 +535,7 @@ export default function Chat() {
                               <div className="chat-attachment-list">
                                 {message.attachments.map((attachment) => (
                                   <div key={attachment.id} className="chat-attachment-item">
-                                    <div>
+                                    <div className="chat-attachment-meta">
                                       <strong>{attachment.file_name}</strong>
                                       <div className="muted">{formatFileSize(attachment.file_size)}</div>
                                     </div>
@@ -565,7 +565,7 @@ export default function Chat() {
               <strong>{currentChannel?.title || "Сообщение"}</strong>
               <span>Enter отправляет, Shift+Enter переносит строку</span>
             </div>
-            <label className="muted">
+            <label className="chat-file-input muted">
               <span>Вложения</span>
               <input
                 ref={fileInputRef}
@@ -580,7 +580,7 @@ export default function Chat() {
               <div className="chat-selected-files">
                 {selectedFiles.map((file, index) => (
                   <div key={`${file.name}-${index}`} className="chat-attachment-item">
-                    <div>
+                    <div className="chat-attachment-meta">
                       <strong>{file.name}</strong>
                       <div className="muted">{formatFileSize(file.size)}</div>
                     </div>

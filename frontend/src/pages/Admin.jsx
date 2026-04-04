@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { apiDelete, apiGet, apiPost, apiPut } from "../lib/api.js";
 import AdminProgramTab from "../components/admin/AdminProgramTab.jsx";
 import { defaultRooms } from "../data/rooms.js";
+import { notifyConferenceUpdated } from "../lib/conference.js";
 
 const toInputDateTime = (value) => {
   if (!value) return "";
@@ -171,6 +172,8 @@ export default function Admin() {
   const [checkinToken, setCheckinToken] = useState("");
   const [verifyingCheckin, setVerifyingCheckin] = useState(false);
   const [checkinResult, setCheckinResult] = useState(null);
+  const [adminStatusMessage, setAdminStatusMessage] = useState("");
+  const [adminErrorMessage, setAdminErrorMessage] = useState("");
   const [sectionForm, setSectionForm] = useState({
     title: "",
     description: "",
@@ -254,6 +257,16 @@ export default function Admin() {
     loadOnMount();
   }, []);
 
+  const setAdminStatus = (message) => {
+    setAdminErrorMessage("");
+    setAdminStatusMessage(message);
+  };
+
+  const setAdminError = (message) => {
+    setAdminStatusMessage("");
+    setAdminErrorMessage(message);
+  };
+
   const createSection = async (e) => {
     e.preventDefault();
     try {
@@ -264,6 +277,7 @@ export default function Admin() {
         end_at: sectionForm.end_at ? new Date(sectionForm.end_at).toISOString() : undefined,
       });
       setSectionForm({ title: "", description: "", room: "", capacity: 10, start_at: "", end_at: "" });
+      setAdminStatus("Секция добавлена в программу конференции.");
       load();
     } catch {
       handleForbidden();
@@ -275,7 +289,7 @@ export default function Admin() {
   const seedDemo = async () => {
     try {
       await apiPost("/admin/seed-demo", {});
-      alert("Тестовые данные созданы");
+      setAdminStatus("Тестовые данные созданы.");
       load();
     } catch {
       handleForbidden();
@@ -319,6 +333,7 @@ export default function Admin() {
     try {
       await apiPost("/admin/rooms", { name, floor });
       setRoomForm({ floor, name: "" });
+      setAdminStatus(`Аудитория "${name}" добавлена.`);
       load();
     } catch {
       handleForbidden();
@@ -328,10 +343,11 @@ export default function Admin() {
   const saveConference = async (e) => {
     e.preventDefault();
     if (!conferenceForm.title.trim()) {
-      alert("Укажите название конференции");
+      setAdminError("Укажите название конференции.");
       return;
     }
     setSavingConference(true);
+    setAdminErrorMessage("");
     try {
       await apiPut("/admin/conference", {
         title: conferenceForm.title,
@@ -342,7 +358,8 @@ export default function Admin() {
         proceedings_url: conferenceForm.proceedings_url,
         support_email: conferenceForm.support_email,
       });
-      alert("Параметры конференции сохранены");
+      notifyConferenceUpdated();
+      setAdminStatus("Параметры конференции сохранены.");
       load();
     } catch {
       handleForbidden();
@@ -366,11 +383,12 @@ export default function Admin() {
   const saveAntiplagiat = async (e) => {
     e.preventDefault();
     if (!antiplagiatForm.site_url.trim() || !antiplagiatForm.wsdl_url.trim() || !antiplagiatForm.api_login.trim()) {
-      alert("Укажите адрес кабинета, WSDL и API-логин");
+      setAdminError("Укажите адрес кабинета, WSDL и API-логин.");
       return;
     }
     setSavingAntiplagiat(true);
     setAntiplagiatPing("");
+    setAdminErrorMessage("");
     try {
       const saved = await apiPut("/admin/antiplagiat/config", {
         site_url: antiplagiatForm.site_url,
@@ -408,9 +426,9 @@ export default function Admin() {
         },
       }));
       await loadAntiplagiatServices();
-      alert("Настройки Антиплагиата сохранены");
+      setAdminStatus("Настройки Антиплагиата сохранены.");
     } catch (err) {
-      alert(err.message || "Не удалось сохранить настройки Антиплагиата");
+      setAdminError(err.message || "Не удалось сохранить настройки Антиплагиата");
     } finally {
       setSavingAntiplagiat(false);
     }
@@ -436,13 +454,14 @@ export default function Admin() {
     if (!token) return;
     setVerifyingCheckin(true);
     setCheckinResult(null);
+    setAdminErrorMessage("");
     try {
       const data = await apiPost("/admin/checkin/verify", { token });
       setCheckinResult(data);
-      alert(data.already_checked_in ? "Участник уже отмечен" : "Check-in выполнен");
+      setAdminStatus(data.already_checked_in ? "Участник уже отмечен." : "Check-in выполнен.");
       setCheckinToken("");
     } catch (err) {
-      alert(err.message || "Не удалось выполнить check-in");
+      setAdminError(err.message || "Не удалось выполнить check-in");
     } finally {
       setVerifyingCheckin(false);
     }
@@ -467,6 +486,8 @@ export default function Admin() {
   return (
     <section className="panel">
       <h2>Администрирование</h2>
+      {adminStatusMessage ? <p className="form-status success">{adminStatusMessage}</p> : null}
+      {adminErrorMessage ? <p className="form-status error">{adminErrorMessage}</p> : null}
       <div className="dashboard-layout">
         <aside className="dashboard-tabs">
           <button className={`tab-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>
