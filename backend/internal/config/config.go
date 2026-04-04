@@ -2,18 +2,34 @@ package config
 
 import (
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
-	DatabaseURL    string
-	JWTSecret      string
-	Port           string
-	CORSOrigins    []string
-	TrustedProxies []string
+	DatabaseURL      string
+	JWTSecret        string
+	Port             string
+	CORSOrigins      []string
+	TrustedProxies   []string
+	AppBaseURL       string
+	SMTPHost         string
+	SMTPPort         int
+	SMTPUsername     string
+	SMTPPassword     string
+	SMTPFrom         string
+	PasswordResetTTL time.Duration
 }
+
+const (
+	defaultAppBaseURL       = "http://localhost:5173"
+	defaultSMTPPort         = 587
+	defaultPasswordResetTTL = 2 * time.Hour
+)
 
 func loadDotEnv() {
 	// Minimal .env loader for local development.
@@ -67,11 +83,18 @@ func loadDotEnv() {
 func Load() Config {
 	loadDotEnv()
 	cfg := Config{
-		DatabaseURL:    os.Getenv("DATABASE_URL"),
-		JWTSecret:      os.Getenv("JWT_SECRET"),
-		Port:           os.Getenv("PORT"),
-		CORSOrigins:    splitEnvList(os.Getenv("CORS_ORIGINS")),
-		TrustedProxies: splitEnvList(os.Getenv("TRUSTED_PROXIES")),
+		DatabaseURL:      os.Getenv("DATABASE_URL"),
+		JWTSecret:        os.Getenv("JWT_SECRET"),
+		Port:             os.Getenv("PORT"),
+		CORSOrigins:      splitEnvList(os.Getenv("CORS_ORIGINS")),
+		TrustedProxies:   splitEnvList(os.Getenv("TRUSTED_PROXIES")),
+		AppBaseURL:       loadAppBaseURL(),
+		SMTPHost:         strings.TrimSpace(os.Getenv("SMTP_HOST")),
+		SMTPPort:         envInt("SMTP_PORT", defaultSMTPPort),
+		SMTPUsername:     strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
+		SMTPPassword:     os.Getenv("SMTP_PASSWORD"),
+		SMTPFrom:         strings.TrimSpace(os.Getenv("SMTP_FROM")),
+		PasswordResetTTL: envDuration("PASSWORD_RESET_TTL", defaultPasswordResetTTL),
 	}
 	if cfg.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL is required")
@@ -83,6 +106,45 @@ func Load() Config {
 		cfg.Port = "8080"
 	}
 	return cfg
+}
+
+func loadAppBaseURL() string {
+	value := strings.TrimSpace(os.Getenv("APP_BASE_URL"))
+	if value == "" {
+		return defaultAppBaseURL
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		log.Fatal("APP_BASE_URL must be an absolute URL")
+	}
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	parsed.Path = strings.TrimSuffix(parsed.Path, "/")
+	return parsed.String()
+}
+
+func envInt(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
+}
+
+func envDuration(key string, fallback time.Duration) time.Duration {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(value)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }
 
 func splitEnvList(value string) []string {

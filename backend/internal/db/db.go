@@ -16,6 +16,7 @@ func Connect(databaseURL string) *gorm.DB {
 	if err := db.AutoMigrate(
 		&models.User{},
 		&models.Profile{},
+		&models.PasswordResetToken{},
 		&models.ProgramAssignment{},
 		&models.AntiplagiatConfig{},
 		&models.ArticleSubmission{},

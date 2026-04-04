@@ -3,7 +3,9 @@ package router
 import (
 	"conferenceplatforma/internal/antiplagiat"
 	"conferenceplatforma/internal/auth"
+	"conferenceplatforma/internal/config"
 	"conferenceplatforma/internal/handlers"
+	"conferenceplatforma/internal/mail"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -11,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func Setup(db *gorm.DB, jwtSecret string, antiplagiatService *antiplagiat.Service, corsOrigins []string, trustedProxies []string) *gin.Engine {
+func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Service) *gin.Engine {
 	r := gin.Default()
 	corsConfig := cors.Config{
 		AllowOrigins:     []string{"*"},
@@ -21,33 +23,39 @@ func Setup(db *gorm.DB, jwtSecret string, antiplagiatService *antiplagiat.Servic
 		AllowCredentials: false,
 		MaxAge:           12 * time.Hour,
 	}
-	if len(corsOrigins) == 1 && corsOrigins[0] == "*" {
+	if len(cfg.CORSOrigins) == 1 && cfg.CORSOrigins[0] == "*" {
 		corsConfig.AllowAllOrigins = true
 		corsConfig.AllowOrigins = nil
-	} else if len(corsOrigins) > 0 {
-		corsConfig.AllowOrigins = corsOrigins
+	} else if len(cfg.CORSOrigins) > 0 {
+		corsConfig.AllowOrigins = cfg.CORSOrigins
 	}
 	r.Use(cors.New(corsConfig))
-	if len(trustedProxies) == 0 {
+	if len(cfg.TrustedProxies) == 0 {
 		_ = r.SetTrustedProxies(nil)
 	} else {
-		_ = r.SetTrustedProxies(trustedProxies)
+		_ = r.SetTrustedProxies(cfg.TrustedProxies)
 	}
 
-	authHandler := &handlers.AuthHandler{DB: db, JWTSecret: jwtSecret}
+	authHandler := &handlers.AuthHandler{
+		DB:               db,
+		JWTSecret:        cfg.JWTSecret,
+		AppBaseURL:       cfg.AppBaseURL,
+		PasswordResetTTL: cfg.PasswordResetTTL,
+		MailSender:       mail.NewPasswordResetSender(cfg),
+	}
 	userHandler := &handlers.UserHandler{DB: db}
 	sectionHandler := &handlers.SectionHandler{DB: db}
 	scheduleHandler := &handlers.ScheduleHandler{DB: db}
 	feedbackHandler := &handlers.FeedbackHandler{DB: db}
 	chatHandler := &handlers.ChatHandler{DB: db}
-	docHandler := &handlers.DocumentHandler{DB: db, JWTSecret: jwtSecret}
+	docHandler := &handlers.DocumentHandler{DB: db, JWTSecret: cfg.JWTSecret}
 	consentHandler := &handlers.ConsentHandler{DB: db}
 	roomHandler := &handlers.RoomHandler{DB: db}
 	mapMarkerHandler := &handlers.MapMarkerHandler{DB: db}
 	mapRouteHandler := &handlers.MapRouteHandler{DB: db}
 	conferenceHandler := &handlers.ConferenceHandler{DB: db}
 	programHandler := &handlers.ProgramHandler{DB: db}
-	checkInHandler := &handlers.CheckInHandler{DB: db, JWTSecret: jwtSecret}
+	checkInHandler := &handlers.CheckInHandler{DB: db, JWTSecret: cfg.JWTSecret}
 	submissionHandler := &handlers.SubmissionHandler{DB: db, Service: antiplagiatService}
 
 	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
@@ -64,7 +72,7 @@ func Setup(db *gorm.DB, jwtSecret string, antiplagiatService *antiplagiat.Servic
 	api.GET("/certificates/:number", docHandler.VerifyCertificate)
 
 	protected := api.Group("")
-	protected.Use(auth.Middleware(jwtSecret))
+	protected.Use(auth.Middleware(cfg.JWTSecret))
 	protected.GET("/me", userHandler.Me)
 	protected.PUT("/me/profile", userHandler.UpdateProfile)
 	protected.GET("/schedule", scheduleHandler.UserSchedule)
@@ -85,7 +93,7 @@ func Setup(db *gorm.DB, jwtSecret string, antiplagiatService *antiplagiat.Servic
 	protected.POST("/submissions/:id/pdf", submissionHandler.RequestPDF)
 
 	admin := api.Group("/admin")
-	admin.Use(auth.Middleware(jwtSecret))
+	admin.Use(auth.Middleware(cfg.JWTSecret))
 	admin.Use(auth.RequireRole("admin", "org"))
 	admin.GET("/users", userHandler.ListUsers)
 	admin.PUT("/users/:id/role", userHandler.UpdateUserRole)

@@ -22,7 +22,7 @@ func main() {
 	seed(database)
 	antiplagiatService := antiplagiat.NewService(database)
 
-	r := router.Setup(database, cfg.JWTSecret, antiplagiatService, cfg.CORSOrigins, cfg.TrustedProxies)
+	r := router.Setup(database, cfg, antiplagiatService)
 	log.Printf("server running on :%s", cfg.Port)
 	if err := r.Run(":" + cfg.Port); err != nil {
 		log.Fatal(err)
