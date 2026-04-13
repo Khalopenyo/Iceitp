@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import PanoramaViewer from "../components/PanoramaViewer.jsx";
+import {
+  defaultPanoramaSceneId,
+  getPanoramaScene,
+  panoramaSceneList,
+  roomSceneMap,
+} from "../data/panoramaTour.js";
 import { apiGet } from "../lib/api.js";
 import { getSessionStatus, isCurrentSession } from "../lib/sessionStatus.js";
 
@@ -26,6 +33,8 @@ export default function CampusMap() {
   const [currentUserType, setCurrentUserType] = useState("");
   const [assignmentStatus, setAssignmentStatus] = useState("pending");
   const [selectedRoomId, setSelectedRoomId] = useState(null);
+  const [mapViewMode, setMapViewMode] = useState("schedule");
+  const [activeSceneId, setActiveSceneId] = useState(defaultPanoramaSceneId);
   const [nowTs, setNowTs] = useState(() => Date.now());
 
   useEffect(() => {
@@ -77,6 +86,18 @@ export default function CampusMap() {
   const roomSessions = selectedRoom?.sessions || [];
   const hasMultipleFloors = floors.length > 1;
   const isOnlineParticipant = currentUserType === "online";
+  const selectedRoomSceneId = useMemo(() => {
+    const normalizedRoomName = String(selectedRoom?.room_name || "")
+      .trim()
+      .toLowerCase();
+    return roomSceneMap[normalizedRoomName] || defaultPanoramaSceneId;
+  }, [selectedRoom]);
+  const activeScene = getPanoramaScene(activeSceneId);
+
+  const openPanoramaTour = (sceneId = defaultPanoramaSceneId) => {
+    setActiveSceneId(sceneId);
+    setMapViewMode("tour");
+  };
 
   if (isOnlineParticipant) {
     return (
@@ -102,10 +123,27 @@ export default function CampusMap() {
     <section className="panel map-page">
       <h2>Карта аудиторий</h2>
       <p className="muted">
-        {hasMultipleFloors
+        {mapViewMode === "tour"
+          ? "Откройте 360-маршрут и переключайтесь между точками обзора, чтобы заранее понять, как пройти по площадке."
+          : hasMultipleFloors
           ? "Выберите этаж и аудиторию, чтобы посмотреть официальные офлайн-сессии."
           : "Выберите аудиторию, чтобы посмотреть официальные офлайн-сессии."}
       </p>
+
+      <div className="map-view-switch" role="tablist" aria-label="Режим карты">
+        <button
+          className={`map-view-btn ${mapViewMode === "schedule" ? "active" : ""}`}
+          onClick={() => setMapViewMode("schedule")}
+        >
+          Аудитории
+        </button>
+        <button
+          className={`map-view-btn ${mapViewMode === "tour" ? "active" : ""}`}
+          onClick={() => openPanoramaTour(activeSceneId)}
+        >
+          360-маршрут
+        </button>
+      </div>
 
       {assignmentStatus !== "approved" ? (
         <div className="card">
@@ -115,7 +153,82 @@ export default function CampusMap() {
         </div>
       ) : null}
 
-      {!rooms.length ? (
+      {mapViewMode === "tour" ? (
+        <div className="map-tour-layout">
+          <div className="map-tour-sidebar">
+            <div className="card">
+              <h3>Точки маршрута</h3>
+              <p className="muted">
+                Выберите точку вручную или переходите по подсказкам прямо внутри панорамы.
+              </p>
+              <div className="tour-scene-list">
+                {panoramaSceneList.map((scene) => (
+                  <button
+                    key={scene.id}
+                    className={`tour-scene-btn ${activeScene.id === scene.id ? "active" : ""}`}
+                    onClick={() => setActiveSceneId(scene.id)}
+                  >
+                    <span className="tour-scene-title">{scene.shortTitle}</span>
+                    <span className="tour-scene-meta">{scene.title}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="panorama-shell">
+            <PanoramaViewer sceneId={activeScene.id} onSceneChange={setActiveSceneId} />
+          </div>
+
+          <div className="map-sidebar">
+            <div className="card panorama-card">
+              <h3>{activeScene.title}</h3>
+              <p className="muted">{activeScene.description}</p>
+              <div className="tour-scene-status">
+                <span className="pill">360° обзор</span>
+                <span className="muted">Текущая сцена: {activeScene.shortTitle}</span>
+              </div>
+              <div className="panorama-note">
+                <strong>Как пользоваться</strong>
+                <p className="muted">
+                  Зажмите мышь или палец, чтобы осмотреть помещение. Колесо мыши меняет масштаб. Кликайте по подписям
+                  внутри сцены, чтобы переходить между площадками.
+                </p>
+              </div>
+              {selectedRoom ? (
+                <div className="panorama-note">
+                  <strong>Связь с выбранной аудиторией</strong>
+                  <p className="muted">
+                    Сейчас в расписании выбрана аудитория <strong>{selectedRoom.room_name}</strong>. Для нее можно
+                    быстро открыть наиболее близкую сцену маршрута.
+                  </p>
+                  <div className="form-actions">
+                    <button className="btn btn-ghost" onClick={() => setActiveSceneId(selectedRoomSceneId)}>
+                      Открыть связанную сцену
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => setMapViewMode("schedule")}>
+                      Вернуться к списку аудиторий
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="panorama-note">
+                  <strong>Подсказка</strong>
+                  <p className="muted">
+                    Если вам сначала нужно найти официальную сессию и аудиторию, вернитесь во вкладку с карточками
+                    аудиторий, затем снова откройте 360-маршрут.
+                  </p>
+                  <div className="form-actions">
+                    <button className="btn btn-secondary" onClick={() => setMapViewMode("schedule")}>
+                      Показать аудитории
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : !rooms.length ? (
         <div className="card">
           <p className="muted">Офлайн-сессии с назначенными аудиториями пока не опубликованы.</p>
         </div>
@@ -163,6 +276,11 @@ export default function CampusMap() {
                 <>
                   <div className="room-detail">{selectedRoom.room_name}</div>
                   <p className="muted">Этаж {selectedRoom.room_floor || "Не указан"}</p>
+                  <div className="form-actions">
+                    <button className="btn btn-ghost" onClick={() => openPanoramaTour(selectedRoomSceneId)}>
+                      Открыть 360-маршрут
+                    </button>
+                  </div>
                   {roomSessions.length ? (
                     <div className="session-list">
                       {roomSessions.map((session, index) => {
