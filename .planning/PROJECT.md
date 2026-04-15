@@ -2,7 +2,7 @@
 
 ## What This Is
 
-ConferencePlatforma is a single-conference operations platform for scientific events. It now covers compliant participant onboarding, organizer-owned program assembly, attendance-aware schedule and venue access, in-platform communication, participant materials, and public/authenticated conference presentation in one web system.
+ConferencePlatforma is a single-conference operations platform for scientific events. It covers the participant journey from compliant registration through official scheduling, documents, venue guidance, communication, and operational check-in in one web system for organizers and attendees.
 
 ## Core Value
 
@@ -11,8 +11,19 @@ Organizers can run the full participant journey for one scientific conference in
 ## Current State
 
 - **Shipped milestone:** `v1.0 Conference Operations Platform` on `2026-04-04`
-- **What v1 now does:** explicit consent capture, registration/profile completion, organizer-approved program management, online/offline schedule branching, self-service password recovery, chat with allowlisted attachments, feedback collection, readiness-aware participant documents, and branded responsive public/authenticated pages
-- **Main residual risks:** no separate v1.0 milestone audit artifact yet, no automated browser or end-to-end coverage, and several large page components still carry maintenance risk
+- **Current milestone:** `v1.1 Rollout UX & Venue Operations`
+- **Why v1.1 exists:** real deployment work surfaced a new priority: make the live conference experience usable on phones and on site before expanding into broader platform features like notifications or moderation
+- **Main residual risks:** current rollout work started in code before planning caught up, mobile UX still needs component-level simplification on several screens, and browser/E2E coverage is still missing
+
+## Current Milestone: v1.1 Rollout UX & Venue Operations
+
+**Goal:** Make the live conference deployment comfortable on phones and on site by tightening participant document, QR, and 360 venue flows.
+
+**Target features:**
+- Compact mobile-first participant UX across landing, dashboard, documents, map, and dense authenticated surfaces
+- Public QR badge scan flow that resolves to a real page and marks attendance
+- Branded badge and certificate generation with reliable preview and download behavior
+- Simplified 360 venue navigation with named locations, labeled hotspots, and scene-to-scene transitions
 
 ## Requirements
 
@@ -29,45 +40,38 @@ Organizers can run the full participant journey for one scientific conference in
 
 ### Active
 
-- [ ] Participant and organizer notifications for schedule changes and conference reminders
-- [ ] Inline preview support for common chat attachment types
-- [ ] Organizer moderation or removal tools for chat attachments
-- [ ] Organizer export for consent and attendance audit data
-- [ ] Richer organizer-editable content blocks for public landing pages
-- [ ] Automated browser-level regression coverage for critical participant and admin journeys
+- [ ] Compact mobile-first participant UX across landing, dashboard, documents, map, and dense authenticated surfaces
+- [ ] Public QR badge scan flow that resolves to a shareable page and records attendance
+- [ ] Branded badge and certificate rendering with stable preview/download behavior
+- [ ] 360 venue navigation with named locations, readable hotspot labels, and scene-to-scene transitions
 
 ### Out of Scope
 
 - Multi-conference SaaS tenancy in the near term — the product is still optimized for one conference deployment
-- Built-in video conferencing inside the platform — online participants use external meeting links
-- Fully autonomous schedule generation without organizer correction — admin control over final placement remains required
-- Unrestricted executable or arbitrary file uploads — chat attachments stay on an explicit allowlist
+- Built-in video conferencing inside the platform — online participants continue using external meeting links
+- Schedule notifications and reminder campaigns in this milestone — rollout usability is a higher immediate priority than expansion features
+- Chat moderation/export tooling in this milestone — useful, but deferred until the participant-facing rollout is stable
+- SMS OTP / phone verification in this milestone — provider setup is still incomplete and not part of the current rollout hardening scope
+- Full browser/E2E automation in this milestone — still needed, but deferred behind production UX and on-site operations stabilization
 
 ## Context
 
 - The application remains a brownfield monorepo with `Go + Gin + GORM + Postgres` in `backend/` and `React + Vite` in `frontend/`.
-- Current tracked application source is roughly `16,730` lines across `78` Go, JS, JSX, and CSS files.
-- v1 shipped through one milestone spanning `7` phases, `21` plans, and `62` recorded tasks.
-- Official program, participant schedule, and program-derived documents now flow from admin-approved assignments instead of raw participant-entered data.
-- Shared conference identity now comes from `/api/conference`, which feeds both public and authenticated frontend surfaces.
-- Chat attachments currently use local filesystem storage behind authenticated download handlers, and account recovery depends on configured sender infrastructure.
-
-## Next Milestone Goals
-
-1. Add participant notifications for schedule changes and conference reminders.
-2. Add organizer moderation and export tooling around communication and consent data.
-3. Make public landing content more organizer-editable without code changes.
-4. Reduce regression risk with browser automation and further decomposition of oversized pages.
+- `v1.0` shipped through one milestone spanning `7` phases, `21` plans, and `62` recorded tasks.
+- Official program, participant schedule, and program-derived documents already flow from admin-approved assignments instead of raw participant-entered data.
+- The current local worktree already contains post-v1 implementation across QR check-in, badge/certificate rendering, 360 venue navigation, and mobile UI compaction; milestone planning is catching up to active work already in progress.
+- Shared conference identity continues to come from `/api/conference`, which feeds both public and authenticated frontend surfaces.
+- Chat attachments still use local filesystem storage behind authenticated download handlers, and account recovery still depends on configured sender infrastructure.
 
 ## Constraints
 
-- **Product scope:** Single conference deployment first; do not expand into multi-tenant SaaS without a deliberate milestone
+- **Product scope:** Single conference deployment first — real deployment fit matters more than broader platform expansion
 - **Tech stack:** Keep evolving the existing `Go/Gin/GORM/Postgres` backend and `React/Vite` frontend
-- **Participation model:** Online and offline attendees must continue to diverge cleanly in schedule and navigation UX
 - **Program data:** Organizers remain the final authority over sections, rooms, time slots, and online join links
-- **Documents:** Personalized outputs stay downloadable as PDF
-- **UX:** Core participant and organizer flows must stay usable on phone, tablet, and desktop
-- **Compliance:** Consent capture and auditability must remain explicit and defensible
+- **Documents:** Participant-facing badge, certificate, and schedule outputs must remain downloadable as PDF
+- **Mobile UX:** Primary participant actions must remain usable on common phone widths without oversized layout blocks
+- **Venue UX:** 360 navigation should prioritize simple named locations and transitions over dense map tooling on participant screens
+- **Compliance:** Consent capture and auditability must remain explicit and defensible even as QR and check-in flows evolve
 
 ## Key Decisions
 
@@ -82,10 +86,26 @@ Organizers can run the full participant journey for one scientific conference in
 | Keep chat attachments allowlisted and auth-gated | File exchange is needed, but unrestricted uploads are not acceptable | ✓ Shipped in v1.0 |
 | Drive shared branding from `/api/conference` | Public and authenticated UI should show one conference identity source | ✓ Shipped in v1.0 |
 | Prefer inline status feedback over browser alerts on primary flows | Users should stay in context during registration, documents, feedback, and admin actions | ✓ Shipped in v1.0 |
+| Prioritize rollout usability over broader feature expansion in v1.1 | Real deployment exposed immediate friction in mobile UX, venue guidance, and on-site check-in | — Active |
+| Badge QR should resolve to a real frontend page, not a raw token or admin-only flow | Scanned codes need a stable user-facing URL and direct attendance result | — Active |
+| Venue navigation should optimize for named 360 scenes and direct transitions | Participants need simple wayfinding on phones, not dense room-planning UI | — Active |
 
 ## Evolution
 
-This document evolves at milestone boundaries and major product direction changes. The next update should happen when the next milestone is defined and its new active requirements replace the archived v1 scope.
+This document evolves at milestone boundaries and major product direction changes.
+
+**After each phase transition:**
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone:**
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
 
 ---
-*Last updated: 2026-04-04 after v1.0 milestone archival*
+*Last updated: 2026-04-15 after starting milestone v1.1*

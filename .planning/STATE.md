@@ -1,85 +1,62 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: Conference Operations Platform
-status: completed
-stopped_at: Milestone v1.0 archived; next step is gsd-new-milestone
-last_updated: "2026-04-04T12:16:52Z"
-last_activity: 2026-04-04 -- v1.0 archived and ready for next milestone planning
+milestone: v1.1
+milestone_name: Rollout UX & Venue Operations
+status: active
+stopped_at: Next step is gsd-plan-phase 8
+last_updated: "2026-04-15T08:30:00Z"
+last_activity: 2026-04-15 -- v1.1 started and roadmap defined
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 21
-  completed_plans: 21
-  percent: 100
+  total_phases: 3
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-04)
+See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** Organizers can run the full participant journey for one scientific conference in one system with minimal manual coordination and document handling.
-**Current focus:** Planning the next milestone
+**Current focus:** Planning Phase 8 for badge, QR check-in, and document hardening
 
 ## Current Position
 
-Milestone: `v1.0 Conference Operations Platform` archived
-Phase set: 7 of 7 complete
-Plan set: 21 of 21 complete
-Status: Completed
-Last activity: 2026-04-04 -- v1.0 archived and ready for next milestone planning
+Milestone: `v1.1 Rollout UX & Venue Operations`
+Phase set: 0 of 3 complete
+Plan set: 0 planned
+Status: Ready to plan first phase
+Last activity: 2026-04-15 -- milestone started, requirements and roadmap defined
 
-Progress: [██████████] 100%
+Progress: [----------] 0%
 
 ## Performance Metrics
 
-**Velocity:**
+**Latest completed milestone:**
 
-- Total plans completed: 21
-- Average duration: 8 min
-- Total execution time: 2.8 hours
+- v1.0 Conference Operations Platform
+- 7 phases, 21 plans, 62 recorded tasks
+- Archived on 2026-04-04
 
-**By Phase:**
+**Current milestone setup:**
 
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 1. Registration & Consent | 3 | 39 min | 13 min |
-| 2. Authoritative Program Management | 3 | 38 min | 13 min |
-| 3. Hybrid Schedule Experience | 3 | 33 min | 11 min |
-| 4. Self-Service Account Recovery | 3 | 9 min | 3 min |
-| 5. Conference Communication | 3 | 15 min | 5 min |
-| 6. Participant Materials | 3 | 11 min | 4 min |
-| 7. Branded Responsive Experience | 3 | 24 min | 8 min |
-
-**Recent Trend:**
-
-- Last 5 plans: 06-02, 06-03, 07-01, 07-02, 07-03 completed
-- Trend: Stable
-
-*Updated after each plan completion*
+- Planned phases: 3
+- First phase to plan: 8
+- Work type: rollout hardening, venue navigation, and participant experience compaction
 
 ## Accumulated Context
 
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Recent shipped decisions:
+Recent active milestone decisions:
 
-- Phase 1: Registration must capture consent, attendance format, section choice, and talk title inside the same onboarding flow.
-- Phase 1: Consent is now logged as two versioned audit records, separating operational personal-data processing from publication consent.
-- Phase 2: Final program data stays admin-owned, with room/time placement and online join-link control separated from participant-entered data.
-- Phase 3: Participant schedule, dashboard, and venue navigation now consume authoritative approved placement with explicit pending state.
-- Phase 4: Account recovery now uses emailed opaque reset links with trusted APP_BASE_URL routing and generic outward responses.
-- Phase 5: Conference communication should keep the current text-chat ergonomics while adding only safe allowlisted attachments and organizer-readable feedback.
-- Phase 5: Feedback is organizer-reviewable inside the existing admin shell, while participant submission stays a lightweight authenticated form with inline status.
-- Phase 6: Participant materials should expose explicit readiness and attendance-aware rules before the UI attempts any download.
-- Phase 7: Branding and responsive cleanup are a dedicated finish phase spanning public pages and authenticated flows.
-- Phase 7: The existing `/api/conference` contract should become the shared frontend source for title, dates, description, and support details across public and authenticated pages.
-- Phase 7: Final responsive cleanup should prioritize required participant flows first, then dense authenticated surfaces such as chat, map, and admin tools.
-- Phase 7: Admin conference updates now refresh shared shell branding in-place through a frontend conference-update event.
-- Phase 7: Participant and admin success/error states should prefer inline feedback over browser alerts in the final UX pass.
+- v1.1 prioritizes live rollout usability over broader platform expansion such as notifications and moderation tooling.
+- Badge QR flows should resolve to shareable frontend URLs and produce a direct attendance result.
+- Venue navigation should optimize for named 360 scenes and transitions instead of dense room-planning UI on participant screens.
 
 ### Pending Todos
 
@@ -87,11 +64,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- No standalone `v1.0` milestone audit artifact exists yet.
-- Large page components and missing automated browser tests still leave regression risk across admin, dashboard, chat, and document flows.
+- Current local implementation already spans QR self-check-in, badge/certificate templating, 360 navigation, and mobile UI compaction; phase planning must reconcile ongoing code with planned scope before merge/deploy.
+- Mobile UX still appears too vertically heavy on some participant screens; remaining work likely requires screen-by-screen simplification, not only more CSS tweaks.
+- No standalone browser/E2E regression coverage exists yet for QR scan, documents preview, and mobile participant flows.
 
 ## Session Continuity
 
-Last session: 2026-04-04 13:15 MSK
-Stopped at: Milestone v1.0 archived; next step is `$gsd-new-milestone`
+Last session: 2026-04-15 MSK
+Stopped at: Next step is `$gsd-plan-phase 8`
 Resume file: None
