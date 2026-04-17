@@ -15,7 +15,7 @@ import (
 
 const (
 	defaultGreenSMSBaseURL      = "https://api3.greensms.ru"
-	defaultGreenSMSCodeTemplate = "Код входа в платформу конференции: %s"
+	defaultGreenSMSCodeTemplate = "Код подтверждения в платформе конференции: %s"
 )
 
 type AuthCodeMessage struct {

@@ -26,17 +26,19 @@ func newAuthTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite db: %v", err)
 	}
-	if err := db.AutoMigrate(&models.User{}, &models.Profile{}, &models.Section{}, &models.ConsentLog{}, &models.PhoneAuthCode{}); err != nil {
+	if err := db.AutoMigrate(&models.User{}, &models.Profile{}, &models.Section{}, &models.ConsentLog{}, &models.PhoneAuthCode{}, &models.RegistrationAttempt{}); err != nil {
 		t.Fatalf("auto migrate: %v", err)
 	}
 	return db
 }
 
-func newRegisterTestRouter(db *gorm.DB) *gin.Engine {
+func newRegisterTestRouter(db *gorm.DB, sender sms.AuthCodeSender) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	handler := &AuthHandler{DB: db, JWTSecret: "test-secret"}
-	router.POST("/register", handler.Register)
+	handler := &AuthHandler{DB: db, JWTSecret: "test-secret", AuthCodeSender: sender}
+	router.POST("/register", handler.RequestRegistrationCode)
+	router.POST("/register/request-code", handler.RequestRegistrationCode)
+	router.POST("/register/verify", handler.VerifyRegistrationCode)
 	return router
 }
 
@@ -131,10 +133,11 @@ func seedUserWithPhone(t *testing.T, db *gorm.DB, email, phone string) models.Us
 
 func TestRegisterAllowsSectionWithoutRoom(t *testing.T) {
 	db := newAuthTestDB(t)
-	router := newRegisterTestRouter(db)
+	sender := &stubAuthCodeSender{}
+	router := newRegisterTestRouter(db, sender)
 	section := seedSection(t, db, "")
 
-	recorder := performRegisterRequest(t, router, map[string]any{
+	requestRecorder := performRegisterRequest(t, router, map[string]any{
 		"email":                 "without-room@example.com",
 		"password":              "secret123",
 		"user_type":             models.UserTypeOffline,
@@ -151,8 +154,23 @@ func TestRegisterAllowsSectionWithoutRoom(t *testing.T) {
 		"consent_version":       "registration-consent-v1",
 	})
 
-	if recorder.Code != http.StatusCreated {
-		t.Fatalf("expected status %d, got %d: %s", http.StatusCreated, recorder.Code, recorder.Body.String())
+	if requestRecorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, requestRecorder.Code, requestRecorder.Body.String())
+	}
+
+	var requestResponse struct {
+		VerificationToken string `json:"verification_token"`
+	}
+	if err := json.Unmarshal(requestRecorder.Body.Bytes(), &requestResponse); err != nil {
+		t.Fatalf("unmarshal request response: %v", err)
+	}
+
+	verifyRecorder := performPhoneAuthRequest(t, router, "/register/verify", map[string]any{
+		"verification_token": requestResponse.VerificationToken,
+		"code":               sender.messages[0].Code,
+	})
+	if verifyRecorder.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusCreated, verifyRecorder.Code, verifyRecorder.Body.String())
 	}
 
 	var user models.User
@@ -169,7 +187,7 @@ func TestRegisterAllowsSectionWithoutRoom(t *testing.T) {
 
 func TestRegisterRequiresExplicitConsents(t *testing.T) {
 	db := newAuthTestDB(t)
-	router := newRegisterTestRouter(db)
+	router := newRegisterTestRouter(db, &stubAuthCodeSender{})
 	section := seedSection(t, db, "Аудитория 101")
 
 	testCases := []struct {
@@ -197,6 +215,7 @@ func TestRegisterRequiresExplicitConsents(t *testing.T) {
 				"full_name":             "Пользователь",
 				"section_id":            section.ID,
 				"talk_title":            "Тестовый доклад",
+				"phone":                 "+79990001122",
 				"consent_personal_data": tc.consentPersonalData,
 				"consent_publication":   tc.consentPublication,
 				"consent_version":       "registration-consent-v1",
@@ -211,23 +230,40 @@ func TestRegisterRequiresExplicitConsents(t *testing.T) {
 
 func TestRegisterLogsConsentVersion(t *testing.T) {
 	db := newAuthTestDB(t)
-	router := newRegisterTestRouter(db)
+	sender := &stubAuthCodeSender{}
+	router := newRegisterTestRouter(db, sender)
 	section := seedSection(t, db, "Аудитория 102")
 	version := "registration-consent-v2"
 
-	recorder := performRegisterRequest(t, router, map[string]any{
+	requestRecorder := performRegisterRequest(t, router, map[string]any{
 		"email":                 "consents@example.com",
 		"password":              "secret123",
 		"full_name":             "Мария Петрова",
 		"section_id":            section.ID,
 		"talk_title":            "Проверка версионного consent",
+		"phone":                 "+79990002233",
 		"consent_personal_data": true,
 		"consent_publication":   true,
 		"consent_version":       version,
 	})
 
-	if recorder.Code != http.StatusCreated {
-		t.Fatalf("expected status %d, got %d: %s", http.StatusCreated, recorder.Code, recorder.Body.String())
+	if requestRecorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, requestRecorder.Code, requestRecorder.Body.String())
+	}
+
+	var requestResponse struct {
+		VerificationToken string `json:"verification_token"`
+	}
+	if err := json.Unmarshal(requestRecorder.Body.Bytes(), &requestResponse); err != nil {
+		t.Fatalf("unmarshal request response: %v", err)
+	}
+
+	verifyRecorder := performPhoneAuthRequest(t, router, "/register/verify", map[string]any{
+		"verification_token": requestResponse.VerificationToken,
+		"code":               sender.messages[0].Code,
+	})
+	if verifyRecorder.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusCreated, verifyRecorder.Code, verifyRecorder.Body.String())
 	}
 
 	var logs []models.ConsentLog
@@ -256,7 +292,101 @@ func TestRegisterLogsConsentVersion(t *testing.T) {
 	}
 }
 
-func TestRequestPhoneCodeSendsVoiceMessage(t *testing.T) {
+func TestRegistrationRequestCodeCreatesPendingAttempt(t *testing.T) {
+	db := newAuthTestDB(t)
+	section := seedSection(t, db, "Аудитория 103")
+	sender := &stubAuthCodeSender{}
+	router := gin.New()
+	handler := &AuthHandler{DB: db, JWTSecret: "test-secret", AuthCodeSender: sender}
+	router.POST("/register/request-code", handler.RequestRegistrationCode)
+
+	recorder := performPhoneAuthRequest(t, router, "/register/request-code", map[string]any{
+		"email":                 "pending@example.com",
+		"password":              "secret123",
+		"user_type":             models.UserTypeOffline,
+		"full_name":             "Иван Иванов",
+		"organization":          "ВУЗ",
+		"position":              "Доцент",
+		"city":                  "Москва",
+		"degree":                "Кандидат наук",
+		"section_id":            section.ID,
+		"talk_title":            "SMS регистрация",
+		"phone":                 "+79998887766",
+		"consent_personal_data": true,
+		"consent_publication":   true,
+		"consent_version":       "registration-consent-v1",
+	})
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, recorder.Code, recorder.Body.String())
+	}
+	if len(sender.messages) != 1 {
+		t.Fatalf("expected 1 sms auth message, got %d", len(sender.messages))
+	}
+	var attempts []models.RegistrationAttempt
+	if err := db.Find(&attempts).Error; err != nil {
+		t.Fatalf("load registration attempts: %v", err)
+	}
+	if len(attempts) != 1 {
+		t.Fatalf("expected 1 registration attempt, got %d", len(attempts))
+	}
+}
+
+func TestRegistrationVerifyCreatesUser(t *testing.T) {
+	db := newAuthTestDB(t)
+	section := seedSection(t, db, "Аудитория 104")
+	sender := &stubAuthCodeSender{}
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler := &AuthHandler{DB: db, JWTSecret: "test-secret", AuthCodeSender: sender}
+	router.POST("/register/request-code", handler.RequestRegistrationCode)
+	router.POST("/register/verify", handler.VerifyRegistrationCode)
+
+	requestRecorder := performPhoneAuthRequest(t, router, "/register/request-code", map[string]any{
+		"email":                 "verify-registration@example.com",
+		"password":              "secret123",
+		"user_type":             models.UserTypeOffline,
+		"full_name":             "Петр Петров",
+		"organization":          "ВУЗ",
+		"position":              "Доцент",
+		"city":                  "Москва",
+		"degree":                "Кандидат наук",
+		"section_id":            section.ID,
+		"talk_title":            "Подтверждение регистрации",
+		"phone":                 "+79991112233",
+		"consent_personal_data": true,
+		"consent_publication":   true,
+		"consent_version":       "registration-consent-v1",
+	})
+	if requestRecorder.Code != http.StatusOK {
+		t.Fatalf("expected request status %d, got %d: %s", http.StatusOK, requestRecorder.Code, requestRecorder.Body.String())
+	}
+
+	var requestResponse struct {
+		VerificationToken string `json:"verification_token"`
+	}
+	if err := json.Unmarshal(requestRecorder.Body.Bytes(), &requestResponse); err != nil {
+		t.Fatalf("unmarshal request response: %v", err)
+	}
+
+	verifyRecorder := performPhoneAuthRequest(t, router, "/register/verify", map[string]any{
+		"verification_token": requestResponse.VerificationToken,
+		"code":               sender.messages[0].Code,
+	})
+	if verifyRecorder.Code != http.StatusCreated {
+		t.Fatalf("expected verify status %d, got %d: %s", http.StatusCreated, verifyRecorder.Code, verifyRecorder.Body.String())
+	}
+
+	var user models.User
+	if err := db.Preload("Profile").Where("email = ?", "verify-registration@example.com").First(&user).Error; err != nil {
+		t.Fatalf("expected registered user to be created: %v", err)
+	}
+	if user.Profile.Phone != "+79991112233" {
+		t.Fatalf("expected normalized phone to be stored, got %s", user.Profile.Phone)
+	}
+}
+
+func TestRequestPhoneCodeSendsSMSMessage(t *testing.T) {
 	db := newAuthTestDB(t)
 	sender := &stubAuthCodeSender{}
 	router := newPhoneAuthTestRouter(db, sender)

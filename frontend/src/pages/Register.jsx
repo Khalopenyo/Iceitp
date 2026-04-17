@@ -8,8 +8,13 @@ export default function Register() {
   const location = useLocation();
   const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [requestingCode, setRequestingCode] = useState(false);
   const [step, setStep] = useState(1);
   const [errorMessage, setErrorMessage] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [verificationToken, setVerificationToken] = useState("");
+  const [cooldown, setCooldown] = useState(0);
   const degreeOptions = ["Кандидат наук", "Доктор наук", "Доцент", "Профессор"];
   const cityOptions = [
     "Москва",
@@ -125,8 +130,21 @@ export default function Register() {
     }
   }, [location.search]);
 
+  useEffect(() => {
+    if (cooldown <= 0) {
+      return undefined;
+    }
+    const timer = window.setInterval(() => {
+      setCooldown((prev) => (prev > 1 ? prev - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldown]);
+
   const update = (field, value) => {
     setErrorMessage("");
+    setStatusMessage("");
+    setVerificationToken("");
+    setVerificationCode("");
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -135,27 +153,67 @@ export default function Register() {
     [sections, form.section_id]
   );
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const payload = useMemo(
+    () => ({
+      ...form,
+      section_id: form.section_id ? Number(form.section_id) : null,
+    }),
+    [form]
+  );
+
+  const requestCode = async (e) => {
+    if (e) {
+      e.preventDefault();
+    }
     if (!form.section_id) {
       setErrorMessage("Выберите секцию конференции перед отправкой анкеты.");
       return;
     }
+    setRequestingCode(true);
+    setErrorMessage("");
+    setStatusMessage("");
+    try {
+      const data = await apiPost("/auth/register/request-code", payload);
+      setVerificationToken(data.verification_token);
+      setVerificationCode("");
+      setCooldown(Number(data.cooldown_seconds) || 60);
+      setStatusMessage(data.message || "Код отправлен по SMS");
+      setStep(4);
+    } catch (err) {
+      setErrorMessage(err.message || "Не удалось отправить код подтверждения.");
+    } finally {
+      setRequestingCode(false);
+    }
+  };
+
+  const verifyCode = async (e) => {
+    e.preventDefault();
     setLoading(true);
     setErrorMessage("");
     try {
-      const payload = {
-        ...form,
-        section_id: form.section_id ? Number(form.section_id) : null,
-      };
-      const data = await apiPost("/auth/register", payload);
+      const data = await apiPost("/auth/register/verify", {
+        verification_token: verificationToken,
+        code: verificationCode,
+      });
       setToken(data.token);
       navigate("/dashboard");
     } catch (err) {
-      setErrorMessage(err.message || "Ошибка регистрации. Проверьте поля и обязательные согласия.");
+      setErrorMessage(err.message || "Не удалось подтвердить код.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = (e) => {
+    if (step === 4) {
+      verifyCode(e);
+      return;
+    }
+    if (step === 3) {
+      requestCode(e);
+      return;
+    }
+    e.preventDefault();
   };
 
   return (
@@ -165,9 +223,11 @@ export default function Register() {
         <div className={`step ${step === 1 ? "active" : ""}`}>1. Личные данные</div>
         <div className={`step ${step === 2 ? "active" : ""}`}>2. Участие</div>
         <div className={`step ${step === 3 ? "active" : ""}`}>3. Доступ</div>
+        <div className={`step ${step === 4 ? "active" : ""}`}>4. Подтверждение</div>
       </div>
-      <form className="form-grid" onSubmit={submit}>
+      <form className="form-grid" onSubmit={handleSubmit}>
         {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
+        {statusMessage ? <p className="form-status info">{statusMessage}</p> : null}
         {step === 1 && (
           <>
             <label>
@@ -318,9 +378,45 @@ export default function Register() {
             </label>
           </>
         )}
+        {step === 4 && (
+          <>
+            <p className="muted">
+              Мы отправили SMS-код на номер <strong>{form.phone}</strong>. Введите его, чтобы завершить регистрацию.
+            </p>
+            <label>
+              Код подтверждения
+              <input
+                value={verificationCode}
+                onChange={(e) => setVerificationCode(e.target.value)}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="5 цифр"
+                required
+              />
+            </label>
+            <div className="auth-inline-actions">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={requestCode}
+                disabled={requestingCode || cooldown > 0}
+              >
+                {requestingCode ? "Отправка..." : cooldown > 0 ? `Повтор через ${cooldown}с` : "Отправить код заново"}
+              </button>
+            </div>
+          </>
+        )}
         <div className="form-actions">
           {step > 1 && (
-            <button type="button" className="btn btn-ghost" onClick={() => setStep(step - 1)}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                setErrorMessage("");
+                setStatusMessage("");
+                setStep(step - 1);
+              }}
+            >
               Назад
             </button>
           )}
@@ -344,9 +440,14 @@ export default function Register() {
             <button
               className="btn btn-primary"
               type="submit"
-              disabled={loading || !form.consent_personal_data || !form.consent_publication}
+              disabled={requestingCode || !form.consent_personal_data || !form.consent_publication}
             >
-              {loading ? "Отправка..." : "Зарегистрироваться"}
+              {requestingCode ? "Отправка..." : "Получить код"}
+            </button>
+          )}
+          {step === 4 && (
+            <button className="btn btn-primary" type="submit" disabled={loading || !verificationCode.trim() || !verificationToken}>
+              {loading ? "Проверка..." : "Подтвердить и зарегистрироваться"}
             </button>
           )}
         </div>

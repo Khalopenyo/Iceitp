@@ -75,6 +75,11 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type VerifyRegistrationCodeRequest struct {
+	VerificationToken string `json:"verification_token"`
+	Code              string `json:"code"`
+}
+
 type RequestPhoneCodeRequest struct {
 	Phone string `json:"phone"`
 }
@@ -100,84 +105,272 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
-	req.Email = normalizeEmail(req.Email)
-	req.FullName = strings.TrimSpace(req.FullName)
-	req.Organization = strings.TrimSpace(req.Organization)
-	req.Position = strings.TrimSpace(req.Position)
-	req.City = strings.TrimSpace(req.City)
-	req.Degree = strings.TrimSpace(req.Degree)
-	req.TalkTitle = strings.TrimSpace(req.TalkTitle)
-	req.ConsentVersion = strings.TrimSpace(req.ConsentVersion)
-	if strings.TrimSpace(req.Phone) != "" {
-		phone, err := formatPhoneForStorage(req.Phone)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid phone"})
-			return
+	passwordHash, normalized, err := h.validateRegistrationRequest(req)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			status = http.StatusConflict
 		}
-		req.Phone = phone
-	}
-	if req.SectionID == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "section is required"})
-		return
-	}
-	if req.Email == "" || req.Password == "" || req.FullName == "" || req.TalkTitle == "" || req.ConsentVersion == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required fields or consent"})
-		return
-	}
-	password, err := validatePassword(req.Password)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	if !req.ConsentPersonalData || !req.ConsentPublication {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required fields or consent"})
-		return
-	}
-	if req.UserType == "" {
-		req.UserType = models.UserTypeOnline
-	}
-	if req.UserType != models.UserTypeOnline && req.UserType != models.UserTypeOffline {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user type"})
-		return
-	}
-	var section models.Section
-	if err := h.DB.First(&section, *req.SectionID).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "selected section not found"})
-		return
-	}
-	passwordHash, err := hashPassword(password)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
+		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 	user := models.User{
-		Email:        req.Email,
-		PasswordHash: string(passwordHash),
+		Email:        normalized.Email,
+		PasswordHash: passwordHash,
 		Role:         models.RoleParticipant,
-		UserType:     req.UserType,
+		UserType:     normalized.UserType,
 		Profile: models.Profile{
-			FullName:     req.FullName,
-			Organization: req.Organization,
-			Position:     req.Position,
-			City:         req.City,
-			Degree:       req.Degree,
-			SectionID:    req.SectionID,
-			TalkTitle:    req.TalkTitle,
-			Phone:        req.Phone,
-			ConsentGiven: req.ConsentPersonalData && req.ConsentPublication,
+			FullName:     normalized.FullName,
+			Organization: normalized.Organization,
+			Position:     normalized.Position,
+			City:         normalized.City,
+			Degree:       normalized.Degree,
+			SectionID:    normalized.SectionID,
+			TalkTitle:    normalized.TalkTitle,
+			Phone:        normalized.Phone,
+			ConsentGiven: normalized.ConsentPersonalData && normalized.ConsentPublication,
 		},
 	}
 	if err := h.DB.Create(&user).Error; err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "user already exists"})
 		return
 	}
-	h.logConsent(c, user.ID, req.ConsentVersion)
+	h.logConsent(c, user.ID, normalized.ConsentVersion)
 	token, err := auth.GenerateToken(user.ID, user.Role, h.JWTSecret)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"token": token})
+}
+
+func (h *AuthHandler) RequestRegistrationCode(c *gin.Context) {
+	var req RegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	passwordHash, normalized, err := h.validateRegistrationRequest(req)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			status = http.StatusConflict
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+
+	if _, err := h.findUserByPhone(h.DB.Preload("Profile"), strings.TrimPrefix(normalized.Phone, "+")); err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "user with this phone already exists"})
+		return
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) && !errors.Is(err, errAmbiguousPhone) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate phone"})
+		return
+	} else if errors.Is(err, errAmbiguousPhone) {
+		c.JSON(http.StatusConflict, gin.H{"error": "this phone is assigned to multiple accounts"})
+		return
+	}
+
+	now := h.currentTime()
+	var activeAttempt models.RegistrationAttempt
+	if err := h.DB.
+		Where("email = ? AND consumed_at IS NULL AND expires_at > ?", normalized.Email, now).
+		Order("sent_at desc").
+		First(&activeAttempt).Error; err == nil {
+		retryAfter := activeAttempt.SentAt.Add(h.phoneAuthResendCooldown()).Sub(now)
+		if retryAfter > 0 {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error":               "Повторную отправку пока нельзя запрашивать",
+				"retry_after_seconds": secondsCeil(retryAfter),
+			})
+			return
+		}
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to issue registration code"})
+		return
+	}
+
+	code, err := generateNumericAuthCode(phoneAuthCodeDigits)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate registration code"})
+		return
+	}
+	rawToken, err := generateRawPasswordResetToken()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate verification token"})
+		return
+	}
+
+	attempt := models.RegistrationAttempt{
+		TokenHash:           hashPasswordResetToken(rawToken),
+		Email:               normalized.Email,
+		PasswordHash:        passwordHash,
+		UserType:            normalized.UserType,
+		FullName:            normalized.FullName,
+		Organization:        normalized.Organization,
+		Position:            normalized.Position,
+		City:                normalized.City,
+		Degree:              normalized.Degree,
+		SectionID:           normalized.SectionID,
+		TalkTitle:           normalized.TalkTitle,
+		Phone:               normalized.Phone,
+		ConsentPersonalData: normalized.ConsentPersonalData,
+		ConsentPublication:  normalized.ConsentPublication,
+		ConsentVersion:      normalized.ConsentVersion,
+		CodeHash:            hashPhoneAuthCode(code),
+		ExpiresAt:           now.Add(h.phoneAuthCodeTTL()),
+		SentAt:              now,
+		RequestedIP:         c.ClientIP(),
+		RequestedUserAgent:  c.GetHeader("User-Agent"),
+	}
+
+	if err := h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("(email = ? OR phone = ?) AND consumed_at IS NULL", normalized.Email, normalized.Phone).Delete(&models.RegistrationAttempt{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&attempt).Error
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save registration verification"})
+		return
+	}
+
+	delivery, err := h.phoneAuthSender().SendAuthCode(c.Request.Context(), sms.AuthCodeMessage{
+		Phone: strings.TrimPrefix(normalized.Phone, "+"),
+		Code:  code,
+	})
+	if err != nil {
+		_ = h.DB.Delete(&models.RegistrationAttempt{}, attempt.ID).Error
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(delivery.RequestID) != "" {
+		_ = h.DB.Model(&models.RegistrationAttempt{}).Where("id = ?", attempt.ID).Update("provider_request_id", delivery.RequestID).Error
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":            "Код отправлен по SMS",
+		"verification_token": rawToken,
+		"cooldown_seconds":   int(h.phoneAuthResendCooldown() / time.Second),
+		"expires_in_seconds": int(h.phoneAuthCodeTTL() / time.Second),
+	})
+}
+
+func (h *AuthHandler) VerifyRegistrationCode(c *gin.Context) {
+	var req VerifyRegistrationCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	token := strings.TrimSpace(req.VerificationToken)
+	code := strings.TrimSpace(req.Code)
+	if token == "" || len(code) != phoneAuthCodeDigits {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid confirmation code"})
+		return
+	}
+
+	now := h.currentTime()
+	maxAttempts := h.phoneAuthMaxAttempts()
+	var jwtToken string
+
+	err := h.DB.Transaction(func(tx *gorm.DB) error {
+		var attempt models.RegistrationAttempt
+		if err := tx.Where("token_hash = ? AND consumed_at IS NULL", hashPasswordResetToken(token)).First(&attempt).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("invalid or expired confirmation code")
+			}
+			return err
+		}
+		if !attempt.ExpiresAt.After(now) {
+			return errors.New("invalid or expired confirmation code")
+		}
+		if attempt.VerifyAttempts >= maxAttempts {
+			return errors.New("too many confirmation attempts")
+		}
+		if attempt.CodeHash != hashPhoneAuthCode(code) {
+			updates := map[string]any{"verify_attempts": attempt.VerifyAttempts + 1}
+			if attempt.VerifyAttempts+1 >= maxAttempts {
+				updates["consumed_at"] = now
+			}
+			if err := tx.Model(&models.RegistrationAttempt{}).Where("id = ?", attempt.ID).Updates(updates).Error; err != nil {
+				return err
+			}
+			if attempt.VerifyAttempts+1 >= maxAttempts {
+				return errors.New("too many confirmation attempts")
+			}
+			return errors.New("invalid or expired confirmation code")
+		}
+
+		user := models.User{
+			Email:        attempt.Email,
+			PasswordHash: attempt.PasswordHash,
+			Role:         models.RoleParticipant,
+			UserType:     attempt.UserType,
+			Profile: models.Profile{
+				FullName:     attempt.FullName,
+				Organization: attempt.Organization,
+				Position:     attempt.Position,
+				City:         attempt.City,
+				Degree:       attempt.Degree,
+				SectionID:    attempt.SectionID,
+				TalkTitle:    attempt.TalkTitle,
+				Phone:        attempt.Phone,
+				ConsentGiven: attempt.ConsentPersonalData && attempt.ConsentPublication,
+			},
+		}
+		if err := tx.Create(&user).Error; err != nil {
+			return errors.New("user already exists")
+		}
+		if err := tx.Model(&models.RegistrationAttempt{}).
+			Where("email = ? AND consumed_at IS NULL", attempt.Email).
+			Update("consumed_at", now).Error; err != nil {
+			return err
+		}
+
+		consents := []models.ConsentLog{
+			{
+				UserID:         user.ID,
+				ConsentType:    models.ConsentTypePersonalData,
+				ConsentURL:     "/personal-data",
+				ConsentVersion: attempt.ConsentVersion,
+				IP:             attempt.RequestedIP,
+				UserAgent:      attempt.RequestedUserAgent,
+			},
+			{
+				UserID:         user.ID,
+				ConsentType:    models.ConsentTypePublication,
+				ConsentURL:     "/consent-authors",
+				ConsentVersion: attempt.ConsentVersion,
+				IP:             attempt.RequestedIP,
+				UserAgent:      attempt.RequestedUserAgent,
+			},
+		}
+		if err := tx.Create(&consents).Error; err != nil {
+			return err
+		}
+
+		issuedToken, err := auth.GenerateToken(user.ID, user.Role, h.JWTSecret)
+		if err != nil {
+			return err
+		}
+		jwtToken = issuedToken
+		return nil
+	})
+	if err != nil {
+		switch err.Error() {
+		case "invalid or expired confirmation code":
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case "too many confirmation attempts":
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many confirmation attempts"})
+		case "user already exists":
+			c.JSON(http.StatusConflict, gin.H{"error": "user already exists"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify registration"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"token": jwtToken})
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
@@ -498,6 +691,58 @@ func (h *AuthHandler) logConsent(c *gin.Context, userID uint, consentVersion str
 		},
 	}
 	_ = h.DB.Create(&consents).Error
+}
+
+func (h *AuthHandler) validateRegistrationRequest(req RegisterRequest) (string, RegisterRequest, error) {
+	req.Email = normalizeEmail(req.Email)
+	req.FullName = strings.TrimSpace(req.FullName)
+	req.Organization = strings.TrimSpace(req.Organization)
+	req.Position = strings.TrimSpace(req.Position)
+	req.City = strings.TrimSpace(req.City)
+	req.Degree = strings.TrimSpace(req.Degree)
+	req.TalkTitle = strings.TrimSpace(req.TalkTitle)
+	req.ConsentVersion = strings.TrimSpace(req.ConsentVersion)
+
+	phone, err := formatPhoneForStorage(req.Phone)
+	if err != nil {
+		return "", RegisterRequest{}, errors.New("invalid phone")
+	}
+	req.Phone = phone
+
+	if req.SectionID == nil {
+		return "", RegisterRequest{}, errors.New("section is required")
+	}
+	if req.Email == "" || req.Password == "" || req.FullName == "" || req.TalkTitle == "" || req.ConsentVersion == "" {
+		return "", RegisterRequest{}, errors.New("missing required fields or consent")
+	}
+	password, err := validatePassword(req.Password)
+	if err != nil {
+		return "", RegisterRequest{}, err
+	}
+	if !req.ConsentPersonalData || !req.ConsentPublication {
+		return "", RegisterRequest{}, errors.New("missing required fields or consent")
+	}
+	if req.UserType == "" {
+		req.UserType = models.UserTypeOnline
+	}
+	if req.UserType != models.UserTypeOnline && req.UserType != models.UserTypeOffline {
+		return "", RegisterRequest{}, errors.New("invalid user type")
+	}
+	var section models.Section
+	if err := h.DB.First(&section, *req.SectionID).Error; err != nil {
+		return "", RegisterRequest{}, errors.New("selected section not found")
+	}
+	if _, err := h.findUserByEmail(h.DB, req.Email); err == nil {
+		return "", RegisterRequest{}, errors.New("user already exists")
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", RegisterRequest{}, errors.New("failed to validate user")
+	}
+
+	passwordHash, err := hashPassword(password)
+	if err != nil {
+		return "", RegisterRequest{}, errors.New("failed to hash password")
+	}
+	return passwordHash, req, nil
 }
 
 func normalizeEmail(email string) string {

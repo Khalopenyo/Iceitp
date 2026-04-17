@@ -66,7 +66,9 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 
 	api := r.Group("/api")
-	api.POST("/auth/register", authHandler.Register)
+	api.POST("/auth/register", authHandler.RequestRegistrationCode)
+	api.POST("/auth/register/request-code", authHandler.RequestRegistrationCode)
+	api.POST("/auth/register/verify", authHandler.VerifyRegistrationCode)
 	api.POST("/auth/login", authHandler.Login)
 	api.POST("/auth/phone-code/request", authHandler.RequestPhoneCode)
 	api.POST("/auth/phone-code/verify", authHandler.VerifyPhoneCode)
