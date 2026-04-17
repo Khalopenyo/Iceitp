@@ -1,337 +1,51 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
 import PanoramaViewer from "../components/PanoramaViewer.jsx";
-import {
-  defaultPanoramaSceneId,
-  getPanoramaScene,
-  panoramaSceneList,
-  roomSceneMap,
-} from "../data/panoramaTour.js";
-import { apiGet } from "../lib/api.js";
-import { getSessionStatus, isCurrentSession } from "../lib/sessionStatus.js";
+import { defaultPanoramaSceneId, getPanoramaScene, panoramaSceneList } from "../data/panoramaTour.js";
 
-const formatTimeOnly = (value) => {
-  if (!value) return "Не указано";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Не указано";
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-};
-
-const sessionTimeState = (session, nowTs) =>
-  getSessionStatus(
-    {
-      start_at: session?.starts_at,
-      end_at: session?.ends_at,
-    },
-    nowTs
-  );
+const preferredSceneOrder = ["hall", "highpark", "kvazar", "domafrica", "narnia", "pulsar"];
 
 export default function CampusMap() {
-  const [activeFloor, setActiveFloor] = useState(1);
-  const [rooms, setRooms] = useState([]);
-  const [currentUserId, setCurrentUserId] = useState(null);
-  const [currentUserType, setCurrentUserType] = useState("");
-  const [assignmentStatus, setAssignmentStatus] = useState("pending");
-  const [selectedRoomId, setSelectedRoomId] = useState(null);
-  const [mapViewMode, setMapViewMode] = useState("schedule");
   const [activeSceneId, setActiveSceneId] = useState(defaultPanoramaSceneId);
-  const [nowTs, setNowTs] = useState(() => Date.now());
 
-  useEffect(() => {
-    apiGet("/schedule/with-participants")
-      .then((data) => {
-        const items = data?.items || [];
-        setRooms(items);
-        setCurrentUserId(data?.current_user_id ?? null);
-        setCurrentUserType(data?.current_user_type || "");
-        setAssignmentStatus(data?.assignment_status || "pending");
-        setSelectedRoomId((prev) => prev ?? items[0]?.room_id ?? null);
-      })
-      .catch(() => {
-        setRooms([]);
-        setCurrentUserId(null);
-        setCurrentUserType("");
-        setAssignmentStatus("pending");
-        setSelectedRoomId(null);
-      });
+  const visibleScenes = useMemo(() => {
+    const rank = new Map(preferredSceneOrder.map((sceneId, index) => [sceneId, index]));
+    return [...panoramaSceneList].sort((left, right) => {
+      const leftRank = rank.get(left.id) ?? Number.MAX_SAFE_INTEGER;
+      const rightRank = rank.get(right.id) ?? Number.MAX_SAFE_INTEGER;
+      return leftRank - rightRank;
+    });
   }, []);
 
-  useEffect(() => {
-    const timer = setInterval(() => setNowTs(Date.now()), 30000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const floors = useMemo(() => {
-    const unique = Array.from(new Set(rooms.map((room) => Number(room.room_floor) || 1)));
-    return unique.sort((a, b) => a - b);
-  }, [rooms]);
-
-  useEffect(() => {
-    if (!floors.length) return;
-    if (!floors.includes(activeFloor)) {
-      setActiveFloor(floors[0]);
-    }
-  }, [floors, activeFloor]);
-
-  const roomsOnFloor = useMemo(
-    () => rooms.filter((room) => (Number(room.room_floor) || 1) === activeFloor),
-    [rooms, activeFloor]
-  );
-
-  const selectedRoom = useMemo(
-    () => rooms.find((room) => room.room_id === selectedRoomId) || null,
-    [rooms, selectedRoomId]
-  );
-
-  const roomSessions = selectedRoom?.sessions || [];
-  const hasMultipleFloors = floors.length > 1;
-  const isOnlineParticipant = currentUserType === "online";
-  const selectedRoomSceneId = useMemo(() => {
-    const normalizedRoomName = String(selectedRoom?.room_name || "")
-      .trim()
-      .toLowerCase();
-    return roomSceneMap[normalizedRoomName] || defaultPanoramaSceneId;
-  }, [selectedRoom]);
   const activeScene = getPanoramaScene(activeSceneId);
 
-  const openPanoramaTour = (sceneId = defaultPanoramaSceneId) => {
-    setActiveSceneId(sceneId);
-    setMapViewMode("tour");
-  };
-
-  if (isOnlineParticipant) {
-    return (
-      <section className="panel map-page">
-        <h2>Карта аудиторий</h2>
-        <div className="card">
-          <h3>Карта не требуется для онлайн-участия</h3>
-          <p className="muted">
-            Для онлайн-участников основное действие находится во вкладке расписания личного кабинета: там публикуется
-            ссылка на подключение к видеоконференции.
-          </p>
-          <div className="form-actions">
-            <Link className="btn btn-primary" to="/dashboard">
-              Перейти в кабинет
-            </Link>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
   return (
-    <section className="panel map-page">
-      <h2>Карта аудиторий</h2>
-      <p className="muted">
-        {mapViewMode === "tour"
-          ? "Откройте 360-маршрут и переключайтесь между точками обзора, чтобы заранее понять, как пройти по площадке."
-          : hasMultipleFloors
-          ? "Выберите этаж и аудиторию, чтобы посмотреть официальные офлайн-сессии."
-          : "Выберите аудиторию, чтобы посмотреть официальные офлайн-сессии."}
-      </p>
+    <section className="panel map-page map-page-simple">
+      <h2>Карта 360</h2>
 
-      <div className="map-view-switch" role="tablist" aria-label="Режим карты">
-        <button
-          className={`map-view-btn ${mapViewMode === "schedule" ? "active" : ""}`}
-          onClick={() => setMapViewMode("schedule")}
-        >
-          Аудитории
-        </button>
-        <button
-          className={`map-view-btn ${mapViewMode === "tour" ? "active" : ""}`}
-          onClick={() => openPanoramaTour(activeSceneId)}
-        >
-          360-маршрут
-        </button>
-      </div>
-
-      {assignmentStatus !== "approved" ? (
-        <div className="card">
-          <p className="muted">
-            Ваше личное размещение еще не утверждено. Ниже показаны опубликованные офлайн-сессии по аудиториям.
-          </p>
-        </div>
-      ) : null}
-
-      {mapViewMode === "tour" ? (
-        <div className="map-tour-layout">
-          <div className="map-tour-sidebar">
-            <div className="card">
-              <h3>Точки маршрута</h3>
-              <p className="muted">
-                Выберите точку вручную или переходите по подсказкам прямо внутри панорамы.
-              </p>
-              <div className="tour-scene-list">
-                {panoramaSceneList.map((scene) => (
-                  <button
-                    key={scene.id}
-                    className={`tour-scene-btn ${activeScene.id === scene.id ? "active" : ""}`}
-                    onClick={() => setActiveSceneId(scene.id)}
-                  >
-                    <span className="tour-scene-title">{scene.shortTitle}</span>
-                    <span className="tour-scene-meta">{scene.title}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+      <div className="map-simple-layout">
+        <aside className="map-location-sidebar" aria-label="Список локаций">
+          <div className="map-location-list">
+            {visibleScenes.map((scene) => (
+              <button
+                key={scene.id}
+                className={`map-location-btn ${activeScene.id === scene.id ? "active" : ""}`}
+                onClick={() => setActiveSceneId(scene.id)}
+              >
+                {scene.title}
+              </button>
+            ))}
           </div>
+        </aside>
 
+        <div className="map-location-viewer">
+          <div className="map-location-toolbar">
+            <strong>{activeScene.title}</strong>
+          </div>
           <div className="panorama-shell">
             <PanoramaViewer sceneId={activeScene.id} onSceneChange={setActiveSceneId} />
           </div>
-
-          <div className="map-sidebar">
-            <div className="card panorama-card">
-              <h3>{activeScene.title}</h3>
-              <p className="muted">{activeScene.description}</p>
-              <div className="tour-scene-status">
-                <span className="pill">360° обзор</span>
-                <span className="muted">Текущая сцена: {activeScene.shortTitle}</span>
-              </div>
-              <div className="panorama-note">
-                <strong>Как пользоваться</strong>
-                <p className="muted">
-                  Зажмите мышь или палец, чтобы осмотреть помещение. Колесо мыши меняет масштаб. Кликайте по подписям
-                  внутри сцены, чтобы переходить между площадками.
-                </p>
-              </div>
-              {selectedRoom ? (
-                <div className="panorama-note">
-                  <strong>Связь с выбранной аудиторией</strong>
-                  <p className="muted">
-                    Сейчас в расписании выбрана аудитория <strong>{selectedRoom.room_name}</strong>. Для нее можно
-                    быстро открыть наиболее близкую сцену маршрута.
-                  </p>
-                  <div className="form-actions">
-                    <button className="btn btn-ghost" onClick={() => setActiveSceneId(selectedRoomSceneId)}>
-                      Открыть связанную сцену
-                    </button>
-                    <button className="btn btn-secondary" onClick={() => setMapViewMode("schedule")}>
-                      Вернуться к списку аудиторий
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="panorama-note">
-                  <strong>Подсказка</strong>
-                  <p className="muted">
-                    Если вам сначала нужно найти официальную сессию и аудиторию, вернитесь во вкладку с карточками
-                    аудиторий, затем снова откройте 360-маршрут.
-                  </p>
-                  <div className="form-actions">
-                    <button className="btn btn-secondary" onClick={() => setMapViewMode("schedule")}>
-                      Показать аудитории
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
-      ) : !rooms.length ? (
-        <div className="card">
-          <p className="muted">Офлайн-сессии с назначенными аудиториями пока не опубликованы.</p>
-        </div>
-      ) : (
-        <div className={`map-layout ${hasMultipleFloors ? "" : "no-floors"}`.trim()}>
-          {hasMultipleFloors && (
-            <div className="map-floors">
-              {floors.map((floor) => (
-                <button
-                  key={floor}
-                  className={`floor-tab ${activeFloor === floor ? "active" : ""}`}
-                  onClick={() => setActiveFloor(floor)}
-                >
-                  Этаж {floor}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="map-grid">
-            {roomsOnFloor.map((room) => {
-              const hasCurrentSession = room.sessions?.some((session) =>
-                isCurrentSession({ start_at: session.starts_at, end_at: session.ends_at }, nowTs)
-              );
-              return (
-                <button
-                  key={room.room_id}
-                  className={`room-card ${selectedRoomId === room.room_id ? "selected" : ""} busy`}
-                  onClick={() => setSelectedRoomId(room.room_id)}
-                >
-                  <div className="room-number single">{room.room_name}</div>
-                  <div className="room-label">Этаж {room.room_floor || "?"}</div>
-                  <span className={`room-tag ${hasCurrentSession ? "current" : ""}`}>
-                    {hasCurrentSession ? "Идет сейчас" : "Есть сессии"}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="map-sidebar">
-            <div className="card">
-              <h3>Аудитория</h3>
-              {selectedRoom ? (
-                <>
-                  <div className="room-detail">{selectedRoom.room_name}</div>
-                  <p className="muted">Этаж {selectedRoom.room_floor || "Не указан"}</p>
-                  <div className="form-actions">
-                    <button className="btn btn-ghost" onClick={() => openPanoramaTour(selectedRoomSceneId)}>
-                      Открыть 360-маршрут
-                    </button>
-                  </div>
-                  {roomSessions.length ? (
-                    <div className="session-list">
-                      {roomSessions.map((session, index) => {
-                        const scheduleStatus = sessionTimeState(session, nowTs);
-                        const startTime = formatTimeOnly(session.starts_at);
-                        const endTime = formatTimeOnly(session.ends_at);
-                        return (
-                          <div
-                            key={`${selectedRoom.room_id}-${session.section_id || index}-${session.starts_at || "no-time"}`}
-                            className={`session-item ${scheduleStatus === "current" ? "highlighted" : ""}`}
-                          >
-                            <div className="session-head">
-                              <div className="session-title">{session.section_title || "Секция не указана"}</div>
-                              {scheduleStatus === "current" && (
-                                <span className="pill pill-current">Текущая сессия</span>
-                              )}
-                            </div>
-                            <div className="session-meta-inline">
-                              <span>
-                                Время: {startTime} - {endTime}
-                              </span>
-                            </div>
-                            <div className="speaker-list-compact">
-                              {session.participants.map((participant) => (
-                                <div
-                                  key={participant.user_id}
-                                  className={`speaker-row-compact ${participant.user_id === currentUserId ? "me" : ""}`}
-                                >
-                                  <div className="speaker-row-main">
-                                    <strong>{participant.full_name || "Не указано"}</strong>
-                                    {participant.user_id === currentUserId && <span className="pill">Это вы</span>}
-                                  </div>
-                                  <div className="speaker-row-topic">{participant.talk_title || "Без темы"}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="muted">В этой аудитории пока нет опубликованных офлайн-сессий.</p>
-                  )}
-                </>
-              ) : (
-                <p className="muted">Выберите аудиторию из списка слева.</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      </div>
     </section>
   );
 }

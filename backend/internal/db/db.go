@@ -17,6 +17,7 @@ func Connect(databaseURL string) *gorm.DB {
 		&models.User{},
 		&models.Profile{},
 		&models.PasswordResetToken{},
+		&models.PhoneAuthCode{},
 		&models.ProgramAssignment{},
 		&models.AntiplagiatConfig{},
 		&models.ArticleSubmission{},

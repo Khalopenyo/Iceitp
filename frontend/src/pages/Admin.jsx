@@ -4,6 +4,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from "../lib/api.js";
 import AdminProgramTab from "../components/admin/AdminProgramTab.jsx";
 import { defaultRooms } from "../data/rooms.js";
 import { notifyConferenceUpdated } from "../lib/conference.js";
+import { triggerBlobDownload } from "../lib/download.js";
 
 const toInputDateTime = (value) => {
   if (!value) return "";
@@ -305,6 +306,32 @@ export default function Admin() {
     }
   };
 
+  const setBadgeIssued = async (id, badgeIssued) => {
+    try {
+      await apiPut(`/admin/users/${id}/badge`, { badge_issued: badgeIssued });
+      setAdminStatus(badgeIssued ? "Бейдж подготовлен и доступен участнику." : "Доступ к бейджу отключен.");
+      load();
+    } catch (err) {
+      setAdminError(err.message || "Не удалось изменить статус бейджа.");
+    }
+  };
+
+  const downloadUserBadge = async (id, fullName) => {
+    try {
+      const response = await apiGet(`/admin/users/${id}/badge`);
+      const blob = await response.blob();
+      const safeName = String(fullName || `user-${id}`)
+        .trim()
+        .replace(/[^\p{L}\p{N}\-_]+/gu, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "");
+      triggerBlobDownload(blob, `badge-${safeName || id}.pdf`);
+      setAdminStatus("Бейдж скачан из админки.");
+    } catch (err) {
+      setAdminError(err.message || "Не удалось скачать бейдж.");
+    }
+  };
+
   const deleteUser = async (id) => {
     if (!confirm("Удалить пользователя и связанные данные?")) return;
     try {
@@ -521,16 +548,40 @@ export default function Admin() {
                   <div key={u.id} className="row">
                     <div>
                       <strong>{u.profile?.full_name || u.email}</strong>
-                      <div className="muted">{u.email}</div>
+                      <div className="muted">
+                        {u.email} · {u.user_type === "offline" ? "оффлайн" : "онлайн"}
+                      </div>
                     </div>
                     <div className="row-actions">
                       <span className="pill">{u.role}</span>
+                      {u.user_type === "offline" ? (
+                        <span className="pill">{u.badge_issued ? "Бейдж готов" : "Бейдж не подготовлен"}</span>
+                      ) : (
+                        <span className="pill">Без бейджа</span>
+                      )}
                       <button className="btn btn-ghost" onClick={() => updateRole(u.id, "org")}>
                         Оргкомитет
                       </button>
                       <button className="btn btn-ghost" onClick={() => updateRole(u.id, "admin")}>
                         Админ
                       </button>
+                      {u.user_type === "offline" ? (
+                        <>
+                          <button
+                            className="btn btn-ghost"
+                            onClick={() => setBadgeIssued(u.id, !u.badge_issued)}
+                          >
+                            {u.badge_issued ? "Снять бейдж" : "Подготовить бейдж"}
+                          </button>
+                          <button
+                            className="btn btn-primary"
+                            onClick={() => downloadUserBadge(u.id, u.profile?.full_name || u.email)}
+                            disabled={!u.badge_issued}
+                          >
+                            Скачать бейдж
+                          </button>
+                        </>
+                      ) : null}
                       <button className="btn btn-danger" onClick={() => deleteUser(u.id)}>
                         Удалить
                       </button>

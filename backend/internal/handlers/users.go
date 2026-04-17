@@ -49,7 +49,16 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	profile.Degree = strings.TrimSpace(payload.Degree)
 	profile.SectionID = payload.SectionID
 	profile.TalkTitle = strings.TrimSpace(payload.TalkTitle)
-	profile.Phone = strings.TrimSpace(payload.Phone)
+	if strings.TrimSpace(payload.Phone) != "" {
+		phone, err := formatPhoneForStorage(payload.Phone)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid phone"})
+			return
+		}
+		profile.Phone = phone
+	} else {
+		profile.Phone = ""
+	}
 	if err := h.DB.Save(&profile).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update profile"})
 		return
@@ -80,6 +89,39 @@ func (h *UserHandler) UpdateUserRole(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (h *UserHandler) SetBadgeIssued(c *gin.Context) {
+	id := c.Param("id")
+	var payload struct {
+		BadgeIssued bool `json:"badge_issued"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	var user models.User
+	if err := h.DB.First(&user, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		return
+	}
+
+	if user.UserType == models.UserTypeOnline && payload.BadgeIssued {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "badge can be prepared only for offline participants"})
+		return
+	}
+
+	if err := h.DB.Model(&models.User{}).Where("id = ?", id).Update("badge_issued", payload.BadgeIssued).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update badge status"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "badge_issued": payload.BadgeIssued})
 }
 
 func (h *UserHandler) DeleteUser(c *gin.Context) {

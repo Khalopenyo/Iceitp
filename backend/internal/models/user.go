@@ -23,6 +23,7 @@ type User struct {
 	PasswordHash string    `gorm:"not null" json:"-"`
 	Role         Role      `gorm:"type:varchar(20);not null" json:"role"`
 	UserType     UserType  `gorm:"type:varchar(20);not null" json:"user_type"`
+	BadgeIssued  bool      `gorm:"not null;default:false" json:"badge_issued"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	Profile      Profile   `json:"profile"`

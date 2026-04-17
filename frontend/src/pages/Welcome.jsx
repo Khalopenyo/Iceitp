@@ -1,4 +1,5 @@
-import { Link, useOutletContext } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { getToken } from "../lib/auth.js";
 import {
   formatConferenceDateRange,
@@ -8,338 +9,222 @@ import {
   getConferenceTitle,
 } from "../lib/conference.js";
 
-const conferenceSessions = [
+const organizerCards = [
   {
-    label: "Сессия 1",
-    title: "Экономика, право и управление в условиях цифровой трансформации",
-    text: "Для исследований и практических кейсов на стыке экономики, правового регулирования и управления.",
+    id: "university",
+    label: "О вузе",
+    title: "ГГНТУ",
+    text:
+      "Грозненский государственный нефтяной технический университет имени академика М.Д. Миллионщикова выступает основной площадкой конференции и отвечает за очную программу, секции и организационный контур мероприятия.",
   },
   {
-    label: "Сессия 2",
-    title: "Современное общество в цифровую эпоху",
-    text: "Для обсуждения социальных изменений, цифровых сервисов и новых моделей взаимодействия.",
-  },
-  {
-    label: "Сессия 3",
-    title: "Лингвистика и методика преподавания языков",
-    text: "Для преподавателей, исследователей языка и авторов методических и образовательных практик.",
-  },
-  {
-    label: "Сессия 4",
-    title: "Физическое воспитание: инновации и подходы",
-    text: "Для работ об образовательных методиках, здоровье, спорте и современных форматах подготовки.",
-  },
-  {
-    label: "Сессия 5",
-    title: "Наука зуммеров и альфа (молодые ученые до 35 лет)",
-    text: "Отдельный молодежный трек для молодых исследователей, аспирантов и начинающих авторов.",
+    id: "iceitp",
+    label: "Об ИЦЭиТП",
+    title: "Институт цифровой экономики и технологического предпринимательства",
+    text:
+      "ИЦЭиТП координирует цифровую повестку конференции, работу с участниками, сбор материалов, сопровождение публикаций и единый пользовательский путь от регистрации до итоговых документов.",
   },
 ];
 
-const conferenceAudience = [
-  "Студенты",
-  "Аспиранты",
-  "Преподаватели вузов",
-  "Представители бизнеса",
-  "Представители госструктур",
-];
-
-const conferenceResults = [
+const platformFeatures = [
   {
-    title: "РИНЦ / eLIBRARY",
-    text: "Публикация всех принятых материалов в специальном сборнике конференции.",
+    code: "01",
+    title: "Выбор секций",
+    text: "Подача заявки с выбором подходящей секции и темы доклада внутри единой формы регистрации.",
   },
   {
-    title: "Журналы ВАК (К-3)",
-    text: "Лучшие статьи по решению оргкомитета рекомендуются к дальнейшей публикации.",
+    code: "02",
+    title: "Бейджи и сертификаты",
+    text: "Персональные документы участника формируются автоматически и доступны в личном кабинете.",
   },
   {
-    title: "Сертификаты",
-    text: "Электронные документы для портфолио будут доступны участнику прямо в личном кабинете.",
+    code: "03",
+    title: "Чат участников",
+    text: "Общение, вопросы и обмен файлами внутри платформы без перехода в сторонние сервисы.",
   },
   {
-    title: "Антиплагиат от 75%",
-    text: "К рассмотрению принимаются только оригинальные материалы с уровнем оригинальности не ниже 75%.",
+    code: "04",
+    title: "Электронный сборник",
+    text: "После завершения конференции участник получает доступ к итоговым материалам и публикациям.",
   },
 ];
 
-const conferenceDates = [
-  {
-    label: "До 20 апреля",
-    title: "Прием заявок и статей",
-    text: "Материалы загружаются только через личный кабинет платформы. На почту madinaborz@mail.ru статьи больше отправлять не нужно.",
-  },
-  {
-    label: "20 апреля",
-    title: "Программа и ссылки на трансляции",
-    text: "Участники получают готовую программу конференции и данные для онлайн-подключения.",
-  },
-  {
-    label: "24-25 апреля",
-    title: "Дни проведения конференции",
-    text: "Очные и онлайн-сессии проходят в Грозном на площадке ГГНТУ и на цифровой платформе конференции.",
-  },
+const conferenceHighlights = [
+  "Офлайн и онлайн-формат",
+  "5 тематических секций",
+  "РИНЦ / eLIBRARY",
+  "Лучшие статьи для ВАК (К-3)",
 ];
-
-const organizers = [
-  {
-    short: "ГГНТУ",
-    name: "Грозненский государственный нефтяной технический университет",
-  },
-  {
-    short: "СОГУ",
-    name: "Северо-Осетинский государственный университет",
-  },
-  {
-    short: "МГТУ",
-    name: "Майкопский государственный технологический университет",
-  },
-  {
-    short: "БАГСУ",
-    name: "Башкирская академия государственной службы и управления",
-  },
-  {
-    short: "КНИИ РАН",
-    name: "Комплексный научно-исследовательский институт РАН",
-  },
-];
-
-const coordinator = {
-  name: "Барзаева Мадина Ахьятовна",
-  role: "Координатор конференции",
-  email: "madinaborz@mail.ru",
-  phone: "8 (929) 892-07-00",
-};
 
 export default function Welcome() {
+  const navigate = useNavigate();
   const outletContext = useOutletContext() || {};
   const conference = outletContext.conference || null;
   const isAuthorized = Boolean(getToken());
-  const ctaTarget = isAuthorized ? "/dashboard" : "/register";
-  const heroTitle = getConferenceTitle(conference);
+  const [consentAccepted, setConsentAccepted] = useState(false);
+  const [consentError, setConsentError] = useState("");
+
+  const conferenceTitle = getConferenceTitle(conference);
   const conferenceDescription = getConferenceDescription(conference);
   const conferenceSupportEmail = outletContext.conferenceSupportEmail || getConferenceSupportEmail(conference);
   const conferenceDateLabel =
     outletContext.conferenceDateLabel || formatConferenceDateRange(conference?.starts_at, conference?.ends_at);
   const conferenceStatusLabel =
     outletContext.conferenceStatusLabel || getConferenceStatusLabel(conference?.status);
-  const heroSubtitle = [conferenceDateLabel || "24-25 апреля 2026", "Офлайн в Грозном и онлайн-подключение"]
-    .filter(Boolean)
-    .join(" | ");
-  const publicInfoCards = [
-    {
-      eyebrow: "Университет",
-      title: "ГГНТУ",
-      text:
-        "Грозненский государственный нефтяной технический университет выступает основной офлайн-площадкой конференции и точкой сборки очной программы, секций и check-in.",
-    },
-    {
-      eyebrow: "Институт",
-      title: "ИЦЭиТП",
-      text:
-        "ИЦЭиТП отвечает за содержательный контур цифровой повестки конференции, координацию коммуникации с участниками и сбор материалов в единой платформе.",
-    },
-    {
-      eyebrow: "Конференция",
-      title: heroTitle,
-      text: conferenceDescription,
-      meta: [conferenceDateLabel, conferenceStatusLabel, `Поддержка: ${conferenceSupportEmail}`].filter(Boolean),
-    },
-  ];
+
+  const startRegistration = (mode) => {
+    if (!consentAccepted) {
+      setConsentError("Сначала подтвердите согласие на обработку и размещение персональных данных.");
+      return;
+    }
+
+    setConsentError("");
+    navigate(`/register?mode=${mode}`);
+  };
 
   return (
-    <section className="hero landing-page">
-      <div className="hero-stage">
-        <div className="hero-outline-circle" aria-hidden="true" />
-        <div className="hero-dot-grid" aria-hidden="true" />
-        <div className="hero-ribbon" aria-hidden="true" />
-        <div className="hero-cross" aria-hidden="true" />
-        <div className="hero-ring" aria-hidden="true" />
-        <div className="hero-lines" aria-hidden="true" />
-        <div className="hero-vertical-text" aria-hidden="true">
-          Мы будущее
-        </div>
-
-        <div className="hero-copy">
-          <p className="hero-overline">Всероссийская научно-практическая конференция с международным участием</p>
-          <h1>{heroTitle}</h1>
-          <p className="hero-subtitle">{heroSubtitle}</p>
-          <p className="hero-description">{conferenceDescription}</p>
-          <div className="hero-detail-pills">
+    <div className="landing-v2">
+      <section className="landing-v2-hero">
+        <div className="landing-v2-hero-copy">
+          <p className="landing-v2-kicker">Всероссийская научно-практическая конференция с международным участием</p>
+          <h1>{conferenceTitle}</h1>
+          <p className="landing-v2-meta">
+            <strong>{conferenceDateLabel || "24-25 апреля 2026"}</strong>
+            <span>Онлайн и оффлайн участие</span>
             {conferenceStatusLabel ? <span>{conferenceStatusLabel}</span> : null}
-            <span>5 тематических сессий</span>
-            <span>РИНЦ / eLIBRARY</span>
-            <span>Лучшие статьи для ВАК (К-3)</span>
-          </div>
-          <div className="hero-actions">
-            <Link className="btn btn-primary" to={ctaTarget}>
-              {isAuthorized ? "Открыть личный кабинет" : "Подать заявку"}
-            </Link>
-          </div>
-        </div>
-
-        <div className="hero-visual" aria-hidden="true">
-          <div className="hero-visual-stack">
-            <div className="hero-phone">
-              <div className="hero-phone-camera" />
-              <div className="hero-phone-screen">
-                <img className="hero-phone-preview" src="/image.png" alt="" />
-              </div>
-            </div>
-            <div className="hero-coin">
-              <span>2026</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <section className="landing-section reveal">
-        <div className="section-heading">
-          <div className="badge">Публичная информация</div>
-          <h2>Университет, институт и конференция в одном контуре</h2>
-          <p>
-            Платформа сразу показывает, кто проводит конференцию, где проходит очная часть и через какой единый
-            цифровой контур участник идет от регистрации до материалов.
           </p>
-        </div>
-        <div className="public-info-grid stagger-children">
-          {publicInfoCards.map((card) => (
-            <article key={card.eyebrow} className="public-info-card">
-              <span className="public-info-eyebrow">{card.eyebrow}</span>
-              <h3>{card.title}</h3>
-              <p>{card.text}</p>
-              {card.meta?.length ? (
-                <div className="public-info-meta">
-                  {card.meta.map((item) => (
-                    <span key={item}>{item}</span>
-                  ))}
-                </div>
-              ) : null}
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section id="about" className="landing-section section-intro reveal">
-        <div className="section-heading">
-          <div className="badge">О конференции</div>
-          <h2>Кому и зачем это нужно</h2>
-          <p>
-            Конференция собирает участников, которым важно не просто обсуждать цифровую трансформацию, а
-            договариваться о практических точках роста для экономики и общества.
-          </p>
-        </div>
-        <div className="intro-grid">
-          <article className="intro-card intro-card-accent">
-            <span className="intro-card-label">Цель</span>
-            <h3>Диалог между наукой, бизнесом и государством</h3>
-            <p>По вопросам цифровой трансформации экономики, управления, образования и общественных практик.</p>
-          </article>
-          <article className="intro-card">
-            <span className="intro-card-label">Для кого</span>
-            <ul className="intro-audience-list">
-              {conferenceAudience.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </article>
-        </div>
-      </section>
-
-      <section id="sections" className="landing-section reveal">
-        <div className="section-heading">
-          <div className="badge">Секции</div>
-          <h2>Пять сессий для маршрутизации регистрации</h2>
-          <p>
-            Эти направления отображаются на главной странице и используются как базовый набор секций при подаче
-            заявки через личный кабинет.
-          </p>
-        </div>
-        <div className="session-grid stagger-children">
-          {conferenceSessions.map((session) => (
-            <article key={session.label} className="session-card">
-              <div className="session-card-head">
-                <span className="session-card-label">{session.label}</span>
-                <span className="session-card-chip">Регистрация</span>
-              </div>
-              <h3>{session.title}</h3>
-              <p>{session.text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="landing-section reveal">
-        <div className="section-heading">
-          <div className="badge">Публикация и результаты</div>
-          <h2>То, ради чего подают сильные материалы</h2>
-          <p>
-            Научная публикация, статусные рекомендации и документы для портфолио собраны в одном потоке, без
-            ручной переписки и разрозненных каналов.
-          </p>
-        </div>
-        <div className="results-grid stagger-children">
-          {conferenceResults.map((item) => (
-            <article key={item.title} className="result-card">
-              <h3>{item.title}</h3>
-              <p>{item.text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="landing-section reveal">
-        <div className="section-heading">
-          <div className="badge">Важные даты</div>
-          <h2>Календарь участия</h2>
-          <p>Вся логика движения участника по конференции укладывается в три ключевые даты.</p>
-        </div>
-        <div className="timeline">
-          {conferenceDates.map((item) => (
-            <article key={item.label} className="timeline-item">
-              <div className="timeline-marker" aria-hidden="true" />
-              <div className="timeline-content">
-                <span className="timeline-date">{item.label}</span>
-                <h3>{item.title}</h3>
-                <p>{item.text}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="landing-section organizers-section reveal">
-        <div className="section-heading">
-          <div className="badge">Организаторы и контакты</div>
-          <h2>Кто проводит конференцию</h2>
-          <p>
-            Организационный блок собран так, чтобы участник сразу видел состав партнеров и понимал, куда писать
-            по срочным вопросам.
-          </p>
-        </div>
-        <div className="organizers-layout">
-          <div className="organizer-grid">
-            {organizers.map((item) => (
-              <article key={item.short} className="organizer-card" aria-label={item.name}>
-                <strong>{item.short}</strong>
-                <span>{item.name}</span>
-              </article>
+          <p className="landing-v2-description">{conferenceDescription}</p>
+          <div className="landing-v2-highlight-list">
+            {conferenceHighlights.map((item) => (
+              <span key={item}>{item}</span>
             ))}
           </div>
-          <aside className="contact-card">
-            <span className="contact-label">Координатор</span>
-            <h3>{coordinator.name}</h3>
-            <p>{coordinator.role}</p>
-            <div className="contact-list">
-              <a href={`tel:${coordinator.phone.replace(/\D+/g, "")}`}>{coordinator.phone}</a>
-              <a href={`mailto:${coordinator.email}`}>{coordinator.email}</a>
-              {conferenceSupportEmail && conferenceSupportEmail !== coordinator.email ? (
-                <a href={`mailto:${conferenceSupportEmail}`}>Поддержка платформы: {conferenceSupportEmail}</a>
-              ) : null}
-            </div>
-          </aside>
+          <div className="landing-v2-hero-actions">
+            {isAuthorized ? (
+              <Link className="btn btn-primary" to="/dashboard">
+                Открыть личный кабинет
+              </Link>
+            ) : (
+              <>
+                <button type="button" className="btn btn-primary" onClick={() => startRegistration("offline")}>
+                  Подать заявку
+                </button>
+                <Link className="btn btn-ghost" to="/login">
+                  Войти
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+
+        <aside className="landing-v2-hero-panel" aria-label="Краткая информация о мероприятии">
+          <div className="landing-v2-panel-card">
+            <span>Формат участия</span>
+            <strong>Онлайн / Оффлайн</strong>
+            <p>Участник сам выбирает удобный формат при регистрации, а программа и документы формируются автоматически.</p>
+          </div>
+          <div className="landing-v2-panel-card">
+            <span>Что получает участник</span>
+            <strong>Программу, бейдж, сертификат, сборник</strong>
+            <p>Все основные действия и материалы доступны в личном кабинете без разрозненных каналов связи.</p>
+          </div>
+        </aside>
+      </section>
+
+      <section id="conference" className="landing-v2-section">
+        <div className="landing-v2-section-head">
+          <span className="badge">О конференции</span>
+          <h2>Знакомство с мероприятием до регистрации</h2>
+        </div>
+        <div className="landing-v2-conference-text">
+          <p>{conferenceDescription}</p>
+          <p>
+            Платформа ведет участника по полному маршруту: регистрация, выбор формата участия, секция и тема доклада,
+            доступ к программе, документам, чату, обратной связи и итоговому сборнику материалов.
+          </p>
         </div>
       </section>
-    </section>
+
+      <section className="landing-v2-section">
+        <div className="landing-v2-section-head">
+          <span className="badge">Организаторы</span>
+          <h2>Кто проводит конференцию</h2>
+        </div>
+        <div className="landing-v2-organizer-grid">
+          {organizerCards.map((card) => (
+            <article key={card.id} id={card.id} className="landing-v2-organizer-card">
+              <div className="landing-v2-organizer-mark">{card.label}</div>
+              <h3>{card.title}</h3>
+              <p>{card.text}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="landing-v2-section">
+        <div className="landing-v2-section-head">
+          <span className="badge">Возможности платформы</span>
+          <h2>Что ждет участника внутри личного кабинета</h2>
+        </div>
+        <div className="landing-v2-feature-grid">
+          {platformFeatures.map((feature) => (
+            <article key={feature.code} className="landing-v2-feature-card">
+              <span className="landing-v2-feature-code">{feature.code}</span>
+              <h3>{feature.title}</h3>
+              <p>{feature.text}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="landing-v2-section landing-v2-register" aria-labelledby="landing-register-title">
+        <div className="landing-v2-section-head">
+          <span className="badge">Регистрация</span>
+          <h2 id="landing-register-title">Старт регистрации без лишних шагов</h2>
+        </div>
+        <p className="landing-v2-register-copy">
+          Выберите формат участия, подтвердите согласие на обработку и размещение персональных данных и перейдите к полной
+          регистрационной форме.
+        </p>
+
+        {isAuthorized ? (
+          <div className="landing-v2-register-actions">
+            <Link className="btn btn-primary" to="/dashboard">
+              Перейти в личный кабинет
+            </Link>
+          </div>
+        ) : (
+          <>
+            <div className="landing-v2-register-actions">
+              <button type="button" className="btn btn-primary" onClick={() => startRegistration("offline")}>
+                Оффлайн-участник
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={() => startRegistration("online")}>
+                Онлайн-участник
+              </button>
+            </div>
+
+            <label className="landing-v2-consent">
+              <input
+                type="checkbox"
+                checked={consentAccepted}
+                onChange={(event) => {
+                  setConsentAccepted(event.target.checked);
+                  if (event.target.checked) {
+                    setConsentError("");
+                  }
+                }}
+              />
+              <span>
+                Согласие на обработку и размещение персональных данных. Полный текст:
+                {" "}
+                <Link to="/personal-data">официальный документ</Link>.
+              </span>
+            </label>
+            {consentError ? <p className="form-status error">{consentError}</p> : null}
+          </>
+        )}
+      </section>
+    </div>
   );
 }

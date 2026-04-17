@@ -11,24 +11,36 @@ import (
 )
 
 type Config struct {
-	DatabaseURL      string
-	JWTSecret        string
-	Port             string
-	CORSOrigins      []string
-	TrustedProxies   []string
-	AppBaseURL       string
-	SMTPHost         string
-	SMTPPort         int
-	SMTPUsername     string
-	SMTPPassword     string
-	SMTPFrom         string
-	PasswordResetTTL time.Duration
+	DatabaseURL             string
+	JWTSecret               string
+	Port                    string
+	CORSOrigins             []string
+	TrustedProxies          []string
+	AppBaseURL              string
+	SMTPHost                string
+	SMTPPort                int
+	SMTPUsername            string
+	SMTPPassword            string
+	SMTPFrom                string
+	PasswordResetTTL        time.Duration
+	PhoneAuthCodeTTL        time.Duration
+	PhoneAuthResendCooldown time.Duration
+	PhoneAuthMaxAttempts    int
+	GreenSMSBaseURL         string
+	GreenSMSToken           string
+	GreenSMSUser            string
+	GreenSMSPass            string
+	GreenSMSFrom            string
+	GreenSMSTextTemplate    string
 }
 
 const (
-	defaultAppBaseURL       = "http://localhost:5173"
-	defaultSMTPPort         = 587
-	defaultPasswordResetTTL = 2 * time.Hour
+	defaultAppBaseURL        = "http://localhost:5173"
+	defaultSMTPPort          = 587
+	defaultPasswordResetTTL  = 2 * time.Hour
+	defaultPhoneAuthCodeTTL  = 10 * time.Minute
+	defaultPhoneAuthResend   = 60 * time.Second
+	defaultPhoneAuthAttempts = 5
 )
 
 func loadDotEnv() {
@@ -83,18 +95,27 @@ func loadDotEnv() {
 func Load() Config {
 	loadDotEnv()
 	cfg := Config{
-		DatabaseURL:      os.Getenv("DATABASE_URL"),
-		JWTSecret:        os.Getenv("JWT_SECRET"),
-		Port:             os.Getenv("PORT"),
-		CORSOrigins:      splitEnvList(os.Getenv("CORS_ORIGINS")),
-		TrustedProxies:   splitEnvList(os.Getenv("TRUSTED_PROXIES")),
-		AppBaseURL:       loadAppBaseURL(),
-		SMTPHost:         strings.TrimSpace(os.Getenv("SMTP_HOST")),
-		SMTPPort:         envInt("SMTP_PORT", defaultSMTPPort),
-		SMTPUsername:     strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
-		SMTPPassword:     os.Getenv("SMTP_PASSWORD"),
-		SMTPFrom:         strings.TrimSpace(os.Getenv("SMTP_FROM")),
-		PasswordResetTTL: envDuration("PASSWORD_RESET_TTL", defaultPasswordResetTTL),
+		DatabaseURL:             os.Getenv("DATABASE_URL"),
+		JWTSecret:               os.Getenv("JWT_SECRET"),
+		Port:                    os.Getenv("PORT"),
+		CORSOrigins:             splitEnvList(os.Getenv("CORS_ORIGINS")),
+		TrustedProxies:          splitEnvList(os.Getenv("TRUSTED_PROXIES")),
+		AppBaseURL:              loadAppBaseURL(),
+		SMTPHost:                strings.TrimSpace(os.Getenv("SMTP_HOST")),
+		SMTPPort:                envInt("SMTP_PORT", defaultSMTPPort),
+		SMTPUsername:            strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
+		SMTPPassword:            os.Getenv("SMTP_PASSWORD"),
+		SMTPFrom:                strings.TrimSpace(os.Getenv("SMTP_FROM")),
+		PasswordResetTTL:        envDuration("PASSWORD_RESET_TTL", defaultPasswordResetTTL),
+		PhoneAuthCodeTTL:        envDuration("PHONE_AUTH_CODE_TTL", defaultPhoneAuthCodeTTL),
+		PhoneAuthResendCooldown: envDuration("PHONE_AUTH_RESEND_COOLDOWN", defaultPhoneAuthResend),
+		PhoneAuthMaxAttempts:    envInt("PHONE_AUTH_MAX_ATTEMPTS", defaultPhoneAuthAttempts),
+		GreenSMSBaseURL:         strings.TrimSpace(os.Getenv("GREENSMS_API_URL")),
+		GreenSMSToken:           strings.TrimSpace(os.Getenv("GREENSMS_TOKEN")),
+		GreenSMSUser:            strings.TrimSpace(os.Getenv("GREENSMS_USER")),
+		GreenSMSPass:            os.Getenv("GREENSMS_PASS"),
+		GreenSMSFrom:            strings.TrimSpace(os.Getenv("GREENSMS_FROM")),
+		GreenSMSTextTemplate:    os.Getenv("GREENSMS_TEXT_TEMPLATE"),
 	}
 	if cfg.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL is required")

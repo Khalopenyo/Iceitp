@@ -15,6 +15,7 @@ import NoAccess from "./pages/NoAccess.jsx";
 import Map from "./pages/Map.jsx";
 import PersonalData from "./pages/PersonalData.jsx";
 import ConsentAuthors from "./pages/ConsentAuthors.jsx";
+import BadgeCheckIn from "./pages/BadgeCheckIn.jsx";
 
 function ProtectedRoute({ children }) {
   const token = getToken();
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="register" element={<Register />} />
         <Route path="forgot-password" element={<ForgotPassword />} />
         <Route path="reset-password" element={<ResetPassword />} />
+        <Route path="badge/:token" element={<BadgeCheckIn />} />
         <Route index element={<Welcome />} />
         <Route
           path="dashboard"

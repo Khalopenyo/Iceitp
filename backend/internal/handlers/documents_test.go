@@ -100,6 +100,9 @@ func TestDocumentStatusReflectsProgramAndProceedingsState(t *testing.T) {
 	if response.PersonalProgram.Status != documentStatusBlocked {
 		t.Fatalf("expected blocked personal program, got %q", response.PersonalProgram.Status)
 	}
+	if response.Certificate.Status != documentStatusAvailable {
+		t.Fatalf("expected available certificate, got %q", response.Certificate.Status)
+	}
 	if response.Proceedings.Status != documentStatusBlocked {
 		t.Fatalf("expected blocked proceedings, got %q", response.Proceedings.Status)
 	}
@@ -137,6 +140,9 @@ func TestDocumentStatusReflectsProgramAndProceedingsState(t *testing.T) {
 	if response.PersonalProgram.Status != documentStatusAvailable {
 		t.Fatalf("expected available personal program, got %q", response.PersonalProgram.Status)
 	}
+	if response.Certificate.Status != documentStatusAvailable {
+		t.Fatalf("expected available certificate after conference finish, got %q", response.Certificate.Status)
+	}
 	if response.Proceedings.Status != documentStatusAvailable {
 		t.Fatalf("expected available proceedings, got %q", response.Proceedings.Status)
 	}
@@ -161,8 +167,26 @@ func TestDocumentStatusBadgeAvailabilityByAttendanceMode(t *testing.T) {
 	if err := json.Unmarshal(offlineRecorder.Body.Bytes(), &offlineResponse); err != nil {
 		t.Fatalf("unmarshal offline response: %v", err)
 	}
+	if offlineResponse.Badge.Status != documentStatusBlocked {
+		t.Fatalf("expected offline badge to be blocked before admin preparation, got %q", offlineResponse.Badge.Status)
+	}
+	if !strings.Contains(offlineResponse.Badge.Message, "админке") {
+		t.Fatalf("unexpected offline badge message %q", offlineResponse.Badge.Message)
+	}
+
+	if err := db.Model(&models.User{}).Where("id = ?", offlineUser.ID).Update("badge_issued", true).Error; err != nil {
+		t.Fatalf("enable badge: %v", err)
+	}
+
+	offlineRecorder = performDocumentsRequest(t, router, "/api/documents/status", offlineUser)
+	if offlineRecorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, offlineRecorder.Code, offlineRecorder.Body.String())
+	}
+	if err := json.Unmarshal(offlineRecorder.Body.Bytes(), &offlineResponse); err != nil {
+		t.Fatalf("unmarshal offline response after enable: %v", err)
+	}
 	if offlineResponse.Badge.Status != documentStatusAvailable {
-		t.Fatalf("expected offline badge to be available, got %q", offlineResponse.Badge.Status)
+		t.Fatalf("expected offline badge to be available after admin preparation, got %q", offlineResponse.Badge.Status)
 	}
 
 	onlineRecorder := performDocumentsRequest(t, router, "/api/documents/status", onlineUser)
@@ -197,25 +221,40 @@ func TestBadgePDFRejectsOnlineParticipant(t *testing.T) {
 	}
 }
 
+func TestBadgePDFRequiresAdminPreparationForOfflineParticipant(t *testing.T) {
+	db := newDocumentsTestDB(t)
+	router := newDocumentsTestRouter(db)
+	section := seedSection(t, db, "Аудитория 403A")
+	seedConferenceRecord(t, db, models.ConferenceStatusLive, "")
+	user := seedParticipant(t, db, "offline-badge@example.com", models.UserTypeOffline, &section.ID, "Офлайн доклад")
+
+	recorder := performDocumentsRequest(t, router, "/api/documents/badge", user)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusConflict, recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "админке") {
+		t.Fatalf("unexpected body %s", recorder.Body.String())
+	}
+
+	if err := db.Model(&models.User{}).Where("id = ?", user.ID).Update("badge_issued", true).Error; err != nil {
+		t.Fatalf("enable badge: %v", err)
+	}
+
+	recorder = performDocumentsRequest(t, router, "/api/documents/badge", user)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, recorder.Code, recorder.Body.String())
+	}
+	if contentType := recorder.Header().Get("Content-Type"); !strings.Contains(contentType, "application/pdf") {
+		t.Fatalf("expected pdf content type, got %q", contentType)
+	}
+}
+
 func TestCertificatePDFAllowsEligibleOnlineParticipant(t *testing.T) {
 	db := newDocumentsTestDB(t)
 	router := newDocumentsTestRouter(db)
 	section := seedSection(t, db, "Аудитория 404")
 	conf := seedConferenceRecord(t, db, models.ConferenceStatusLive, "")
 	user := seedParticipant(t, db, "online-certificate@example.com", models.UserTypeOnline, &section.ID, "Онлайн доклад")
-	startsAt := time.Date(2026, time.April, 24, 12, 0, 0, 0, time.UTC)
-	endsAt := startsAt.Add(30 * time.Minute)
-
-	if err := db.Create(&models.ProgramAssignment{
-		UserID:    user.ID,
-		UserType:  models.UserTypeOnline,
-		SectionID: &section.ID,
-		TalkTitle: "Утвержденный онлайн доклад",
-		StartsAt:  &startsAt,
-		EndsAt:    &endsAt,
-	}).Error; err != nil {
-		t.Fatalf("create assignment: %v", err)
-	}
 
 	first := performDocumentsRequest(t, router, "/api/documents/certificate", user)
 	if first.Code != http.StatusOK {

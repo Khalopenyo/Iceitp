@@ -40,9 +40,9 @@ async function request(path, options = {}) {
   return res.json();
 }
 
-export const apiGet = (path) => request(path);
-export const apiPost = (path, data) => request(path, { method: "POST", body: JSON.stringify(data) });
-export const apiPostForm = (path, formData) => request(path, { method: "POST", body: formData });
-export const apiPatch = (path, data) => request(path, { method: "PATCH", body: JSON.stringify(data) });
-export const apiPut = (path, data) => request(path, { method: "PUT", body: JSON.stringify(data) });
-export const apiDelete = (path) => request(path, { method: "DELETE" });
+export const apiGet = (path, options = {}) => request(path, options);
+export const apiPost = (path, data, options = {}) => request(path, { ...options, method: "POST", body: JSON.stringify(data) });
+export const apiPostForm = (path, formData, options = {}) => request(path, { ...options, method: "POST", body: formData });
+export const apiPatch = (path, data, options = {}) => request(path, { ...options, method: "PATCH", body: JSON.stringify(data) });
+export const apiPut = (path, data, options = {}) => request(path, { ...options, method: "PUT", body: JSON.stringify(data) });
+export const apiDelete = (path, options = {}) => request(path, { ...options, method: "DELETE" });

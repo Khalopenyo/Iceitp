@@ -3,6 +3,8 @@ package handlers
 import (
 	"bytes"
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/sms"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -24,7 +26,7 @@ func newAuthTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite db: %v", err)
 	}
-	if err := db.AutoMigrate(&models.User{}, &models.Profile{}, &models.Section{}, &models.ConsentLog{}); err != nil {
+	if err := db.AutoMigrate(&models.User{}, &models.Profile{}, &models.Section{}, &models.ConsentLog{}, &models.PhoneAuthCode{}); err != nil {
 		t.Fatalf("auto migrate: %v", err)
 	}
 	return db
@@ -35,6 +37,28 @@ func newRegisterTestRouter(db *gorm.DB) *gin.Engine {
 	router := gin.New()
 	handler := &AuthHandler{DB: db, JWTSecret: "test-secret"}
 	router.POST("/register", handler.Register)
+	return router
+}
+
+type stubAuthCodeSender struct {
+	messages []sms.AuthCodeMessage
+}
+
+func (s *stubAuthCodeSender) SendAuthCode(_ context.Context, message sms.AuthCodeMessage) (sms.AuthCodeDelivery, error) {
+	s.messages = append(s.messages, message)
+	return sms.AuthCodeDelivery{RequestID: "voice-request-id"}, nil
+}
+
+func newPhoneAuthTestRouter(db *gorm.DB, sender sms.AuthCodeSender) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler := &AuthHandler{
+		DB:             db,
+		JWTSecret:      "test-secret",
+		AuthCodeSender: sender,
+	}
+	router.POST("/request", handler.RequestPhoneCode)
+	router.POST("/verify", handler.VerifyPhoneCode)
 	return router
 }
 
@@ -61,6 +85,48 @@ func performRegisterRequest(t *testing.T, router *gin.Engine, payload map[string
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, req)
 	return recorder
+}
+
+func performPhoneAuthRequest(t *testing.T, router *gin.Engine, path string, payload map[string]any) *httptest.ResponseRecorder {
+	t.Helper()
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+	return recorder
+}
+
+func seedUserWithPhone(t *testing.T, db *gorm.DB, email, phone string) models.User {
+	t.Helper()
+
+	passwordHash, err := hashPassword("secret123")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	user := models.User{
+		Email:        email,
+		PasswordHash: passwordHash,
+		Role:         models.RoleParticipant,
+		UserType:     models.UserTypeOffline,
+	}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	profile := models.Profile{
+		UserID:   user.ID,
+		FullName: "Тестовый пользователь",
+		Phone:    phone,
+	}
+	if err := db.Create(&profile).Error; err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+	user.Profile = profile
+	return user
 }
 
 func TestRegisterAllowsSectionWithoutRoom(t *testing.T) {
@@ -187,5 +253,102 @@ func TestRegisterLogsConsentVersion(t *testing.T) {
 		if log.ConsentURL != expectedURL {
 			t.Fatalf("expected consent url %q for type %q, got %q", expectedURL, log.ConsentType, log.ConsentURL)
 		}
+	}
+}
+
+func TestRequestPhoneCodeSendsVoiceMessage(t *testing.T) {
+	db := newAuthTestDB(t)
+	sender := &stubAuthCodeSender{}
+	router := newPhoneAuthTestRouter(db, sender)
+	user := seedUserWithPhone(t, db, "phone@example.com", "+79991234567")
+
+	recorder := performPhoneAuthRequest(t, router, "/request", map[string]any{
+		"phone": "+7 (999) 123-45-67",
+	})
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, recorder.Code, recorder.Body.String())
+	}
+	if len(sender.messages) != 1 {
+		t.Fatalf("expected 1 auth code message, got %d", len(sender.messages))
+	}
+	if sender.messages[0].Phone != "79991234567" {
+		t.Fatalf("expected normalized phone 79991234567, got %s", sender.messages[0].Phone)
+	}
+	if len(sender.messages[0].Code) != phoneAuthCodeDigits {
+		t.Fatalf("expected %d-digit code, got %s", phoneAuthCodeDigits, sender.messages[0].Code)
+	}
+
+	var codes []models.PhoneAuthCode
+	if err := db.Where("user_id = ?", user.ID).Find(&codes).Error; err != nil {
+		t.Fatalf("load auth codes: %v", err)
+	}
+	if len(codes) != 1 {
+		t.Fatalf("expected 1 auth code record, got %d", len(codes))
+	}
+	if codes[0].ProviderRequestID != "voice-request-id" {
+		t.Fatalf("expected provider request id to be stored")
+	}
+}
+
+func TestVerifyPhoneCodeReturnsJWT(t *testing.T) {
+	db := newAuthTestDB(t)
+	sender := &stubAuthCodeSender{}
+	router := newPhoneAuthTestRouter(db, sender)
+	_ = seedUserWithPhone(t, db, "verify@example.com", "+79990000000")
+
+	requestRecorder := performPhoneAuthRequest(t, router, "/request", map[string]any{
+		"phone": "+79990000000",
+	})
+	if requestRecorder.Code != http.StatusOK {
+		t.Fatalf("expected request status %d, got %d: %s", http.StatusOK, requestRecorder.Code, requestRecorder.Body.String())
+	}
+
+	verifyRecorder := performPhoneAuthRequest(t, router, "/verify", map[string]any{
+		"phone": "+79990000000",
+		"code":  sender.messages[0].Code,
+	})
+	if verifyRecorder.Code != http.StatusOK {
+		t.Fatalf("expected verify status %d, got %d: %s", http.StatusOK, verifyRecorder.Code, verifyRecorder.Body.String())
+	}
+
+	var response struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(verifyRecorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("unmarshal verify response: %v", err)
+	}
+	if strings.TrimSpace(response.Token) == "" {
+		t.Fatalf("expected JWT token in verify response")
+	}
+
+	var codes []models.PhoneAuthCode
+	if err := db.Where("phone = ?", "79990000000").Find(&codes).Error; err != nil {
+		t.Fatalf("load auth codes after verify: %v", err)
+	}
+	if len(codes) != 1 || codes[0].ConsumedAt == nil {
+		t.Fatalf("expected auth code to be consumed after successful verify")
+	}
+}
+
+func TestVerifyPhoneCodeRejectsInvalidCode(t *testing.T) {
+	db := newAuthTestDB(t)
+	sender := &stubAuthCodeSender{}
+	router := newPhoneAuthTestRouter(db, sender)
+	_ = seedUserWithPhone(t, db, "invalid-code@example.com", "+79995554433")
+
+	requestRecorder := performPhoneAuthRequest(t, router, "/request", map[string]any{
+		"phone": "+79995554433",
+	})
+	if requestRecorder.Code != http.StatusOK {
+		t.Fatalf("expected request status %d, got %d: %s", http.StatusOK, requestRecorder.Code, requestRecorder.Body.String())
+	}
+
+	verifyRecorder := performPhoneAuthRequest(t, router, "/verify", map[string]any{
+		"phone": "+79995554433",
+		"code":  "00000",
+	})
+	if verifyRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid code status %d, got %d: %s", http.StatusBadRequest, verifyRecorder.Code, verifyRecorder.Body.String())
 	}
 }

@@ -56,6 +56,60 @@ const openExternal = (url) => {
   window.open(url, "_blank", "noopener,noreferrer");
 };
 
+const participationLabel = (userType) => (userType === "online" ? "Онлайн-участник" : "Очный участник");
+
+const assignmentStatusMeta = (status) => {
+  if (status === "approved") {
+    return { label: "Программа утверждена", tone: "success" };
+  }
+  return { label: "Ожидает подтверждения", tone: "warning" };
+};
+
+const liveStatusMeta = (status) => {
+  switch (status) {
+    case "current":
+      return { label: "Идет сейчас", tone: "success" };
+    case "upcoming":
+      return { label: "Скоро начнется", tone: "warning" };
+    case "finished":
+      return { label: "Сессия завершена", tone: "neutral" };
+    default:
+      return { label: "Расписание уточняется", tone: "neutral" };
+  }
+};
+
+const submissionOverviewMeta = (items) => {
+  if (!items.length) {
+    return {
+      label: "Статья не загружена",
+      tone: "warning",
+      description: "Добавьте файл статьи, чтобы запустить проверку.",
+    };
+  }
+
+  if (items.some((item) => item.status === "failed")) {
+    return {
+      label: "Есть ошибки проверки",
+      tone: "danger",
+      description: "Откройте раздел со статьей и обновите проблемный материал.",
+    };
+  }
+
+  if (items.some(submissionIsPending)) {
+    return {
+      label: "Проверка в процессе",
+      tone: "warning",
+      description: "Результаты обновятся автоматически после завершения проверки.",
+    };
+  }
+
+  return {
+    label: "Материалы готовы",
+    tone: "success",
+    description: "Последняя загруженная статья успешно обработана.",
+  };
+};
+
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -155,6 +209,9 @@ export default function Dashboard() {
   const startTime = assignmentStatus === "approved" ? formatTimeOnly(schedulePlacement?.starts_at) : "Не указано";
   const endTime = assignmentStatus === "approved" ? formatTimeOnly(schedulePlacement?.ends_at) : "Не указано";
   const selectedSection = sections.find((section) => String(section.id) === String(profile?.section_id));
+  const assignmentMeta = assignmentStatusMeta(assignmentStatus);
+  const liveMeta = liveStatusMeta(scheduleStatus);
+  const submissionMeta = submissionOverviewMeta(submissions.items);
 
   const save = async () => {
     setSaving(true);
@@ -223,6 +280,82 @@ export default function Dashboard() {
   return (
     <section className="panel">
       <h2>Личный кабинет</h2>
+      <div className="dashboard-overview">
+        <div className="dashboard-summary-grid">
+          <article className="dashboard-summary-card">
+            <div className="dashboard-summary-head">
+              <span className="dashboard-summary-label">Формат участия</span>
+              <span className="status-chip status-chip-neutral">{participationLabel(currentUserType)}</span>
+            </div>
+            <strong>{profile?.full_name || "Участник"}</strong>
+            <p className="muted">
+              {selectedSection?.title || profile?.section_title || "Секция пока не выбрана"}
+            </p>
+          </article>
+
+          <article className="dashboard-summary-card">
+            <div className="dashboard-summary-head">
+              <span className="dashboard-summary-label">Программа</span>
+              <span className={`status-chip status-chip-${assignmentMeta.tone}`}>{assignmentMeta.label}</span>
+            </div>
+            <strong>
+              {assignmentStatus === "approved"
+                ? `${startTime}${endTime !== "Не указано" ? ` - ${endTime}` : ""}`
+                : "Время уточняется"}
+            </strong>
+            <p className="muted">
+              {assignmentStatus === "approved"
+                ? currentUserType === "online"
+                  ? schedulePlacement?.join_url
+                    ? "Ссылка на подключение уже добавлена."
+                    : "Оргкомитет скоро добавит ссылку на видеоконференцию."
+                  : schedulePlacement?.room_name || "Аудитория будет указана после публикации."
+                : liveMeta.label}
+            </p>
+          </article>
+
+          <article className="dashboard-summary-card">
+            <div className="dashboard-summary-head">
+              <span className="dashboard-summary-label">Статья</span>
+              <span className={`status-chip status-chip-${submissionMeta.tone}`}>{submissionMeta.label}</span>
+            </div>
+            <strong>{submissions.items.length ? `${submissions.items.length} файл(ов)` : "Нет загрузок"}</strong>
+            <p className="muted">{submissionMeta.description}</p>
+          </article>
+        </div>
+
+        <div className="dashboard-quick-actions">
+          <div className="dashboard-quick-actions-head">
+            <h3>Быстрые действия</h3>
+            <p className="muted">Открывайте нужный сценарий без поиска по разделам.</p>
+          </div>
+          <div className="dashboard-quick-action-list">
+            <button className="btn btn-ghost" onClick={() => setTab("profile")}>
+              Проверить профиль
+            </button>
+            <button className="btn btn-ghost" onClick={() => setTab("schedule")}>
+              Открыть расписание
+            </button>
+            <button className="btn btn-ghost" onClick={() => setTab("materials")}>
+              Перейти к статье
+            </button>
+            <Link className="btn btn-ghost" to="/documents">
+              Открыть документы
+            </Link>
+            {assignmentStatus === "approved" && currentUserType !== "online" ? (
+              <Link className="btn btn-ghost" to="/map">
+                Маршрут по площадке
+              </Link>
+            ) : null}
+            {assignmentStatus === "approved" && currentUserType === "online" && schedulePlacement?.join_url ? (
+              <button className="btn btn-primary" onClick={() => openExternal(schedulePlacement.join_url)}>
+                Подключиться к сессии
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
       <div className="dashboard-layout">
         <aside className="dashboard-tabs">
           <button className={`tab-btn ${tab === "profile" ? "active" : ""}`} onClick={() => setTab("profile")}>

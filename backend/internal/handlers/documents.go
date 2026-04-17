@@ -5,7 +5,9 @@ import (
 	"conferenceplatforma/internal/models"
 	"errors"
 	"fmt"
+	"image/png"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -20,8 +22,9 @@ import (
 )
 
 type DocumentHandler struct {
-	DB        *gorm.DB
-	JWTSecret string
+	DB         *gorm.DB
+	JWTSecret  string
+	AppBaseURL string
 }
 
 const officialProgramPendingText = "Официальная программа еще не утверждена."
@@ -167,23 +170,8 @@ func loadDocumentStatus(db *gorm.DB, user models.User, conf models.Conference) (
 
 	if effectiveUserType == models.UserTypeOnline {
 		status.Badge = notApplicableDocumentStatus("badge.pdf", "QR-бейдж нужен только офлайн-участникам для регистрации на площадке.")
-	}
-
-	var checkIn models.CheckIn
-	hasCheckIn := db.Where("conference_id = ? AND user_id = ?", conf.ID, user.ID).First(&checkIn).Error == nil
-
-	switch effectiveUserType {
-	case models.UserTypeOffline:
-		if !hasCheckIn {
-			status.Certificate = blockedDocumentStatus("certificate.pdf", "Сертификат станет доступен после check-in на площадке.")
-		}
-	default:
-		if scheduleView == nil || scheduleView.AssignmentStatus != assignmentStatusApproved || conf.Status == models.ConferenceStatusDraft {
-			status.Certificate = blockedDocumentStatus(
-				"certificate.pdf",
-				"Сертификат для онлайн-участника станет доступен после публикации официальной программы и начала конференции.",
-			)
-		}
+	} else if !user.BadgeIssued {
+		status.Badge = blockedDocumentStatus("badge.pdf", "Бейдж станет доступен после подготовки в админке.")
 	}
 
 	proceedingsURL := strings.TrimSpace(conf.ProceedingsURL)
@@ -381,29 +369,35 @@ func (h *DocumentHandler) CertificatePDF(c *gin.Context) {
 	pdf := gofpdf.New("L", "mm", "A4", "")
 	fontFamily := configureDocumentFont(pdf)
 	pdf.SetTitle("Certificate", false)
+	pdf.SetAutoPageBreak(false, 0)
+	pdf.SetMargins(0, 0, 0)
 	pdf.AddPage()
-	pdf.SetFont(fontFamily, "", 26)
-	pdf.Cell(0, 20, "СЕРТИФИКАТ УЧАСТНИКА")
-	pdf.Ln(18)
-	pdf.SetFont(fontFamily, "", 16)
-	pdf.MultiCell(
-		0,
-		12,
-		fmt.Sprintf("%s принял(а) участие в конференции \"%s\".", normalizeText(context.User.Profile.FullName), normalizeText(context.Conf.Title)),
-		"",
-		"L",
-		false,
-	)
-	pdf.Ln(12)
-	pdf.SetFont(fontFamily, "", 12)
-	if talkTitle != "" {
-		pdf.MultiCell(0, 8, fmt.Sprintf("Тема доклада: %s", normalizeText(talkTitle)), "", "L", false)
+
+	if !renderCertificateTemplate(pdf, fontFamily, normalizeText(context.User.Profile.FullName), cert) {
+		pdf.SetMargins(18, 20, 18)
+		pdf.SetFont(fontFamily, "B", 26)
+		pdf.Cell(0, 20, "СЕРТИФИКАТ УЧАСТНИКА")
+		pdf.Ln(18)
+		pdf.SetFont(fontFamily, "", 16)
+		pdf.MultiCell(
+			0,
+			12,
+			fmt.Sprintf("%s принял(а) участие в конференции \"%s\".", normalizeText(context.User.Profile.FullName), normalizeText(context.Conf.Title)),
+			"",
+			"L",
+			false,
+		)
+		pdf.Ln(12)
+		pdf.SetFont(fontFamily, "", 12)
+		if talkTitle != "" {
+			pdf.MultiCell(0, 8, fmt.Sprintf("Тема доклада: %s", normalizeText(talkTitle)), "", "L", false)
+		}
+		if sectionTitle != "" {
+			pdf.MultiCell(0, 8, fmt.Sprintf("Секция: %s", normalizeText(sectionTitle)), "", "L", false)
+		}
+		pdf.MultiCell(0, 8, fmt.Sprintf("Номер сертификата: %s", cert.Number), "", "L", false)
+		pdf.MultiCell(0, 8, fmt.Sprintf("Дата выдачи: %s", cert.IssuedAt.Format("02.01.2006")), "", "L", false)
 	}
-	if sectionTitle != "" {
-		pdf.MultiCell(0, 8, fmt.Sprintf("Секция: %s", normalizeText(sectionTitle)), "", "L", false)
-	}
-	pdf.MultiCell(0, 8, fmt.Sprintf("Номер сертификата: %s", cert.Number), "", "L", false)
-	pdf.MultiCell(0, 8, fmt.Sprintf("Дата выдачи: %s", cert.IssuedAt.Format("02.01.2006")), "", "L", false)
 	writePDF(c, pdf, "certificate.pdf")
 }
 
@@ -422,16 +416,69 @@ func (h *DocumentHandler) BadgePDF(c *gin.Context) {
 		return
 	}
 
+	h.writeBadgePDF(c, context)
+}
+
+func (h *DocumentHandler) AdminBadgePDF(c *gin.Context) {
+	userID := c.Param("id")
+	var user models.User
+	if err := h.DB.Preload("Profile").First(&user, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		return
+	}
+
+	context, err := h.loadDocumentRuntimeContext(user.ID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load conference"})
+		return
+	}
+
+	if !context.Status.Badge.Available {
+		writeBlockedDocumentError(c, context.Status.Badge)
+		return
+	}
+
+	h.writeBadgePDF(c, context)
+}
+
+func (h *DocumentHandler) writeBadgePDF(c *gin.Context, context *documentRuntimeContext) {
+
 	token, err := h.generateBadgeToken(context.User.ID, context.Conf.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate badge token"})
 		return
 	}
 
-	pdf := gofpdf.New("P", "mm", "A6", "")
-	fontFamily := configureDocumentFont(pdf)
+	templatePath := badgeTemplatePath()
+	var pdf *gofpdf.Fpdf
+	var fontFamily string
+	if templatePath != "" {
+		width, height := badgeTemplatePageSize(templatePath)
+		pdf = gofpdf.NewCustom(&gofpdf.InitType{
+			UnitStr: "mm",
+			Size:    gofpdf.SizeType{Wd: width, Ht: height},
+		})
+		fontFamily = configureDocumentFont(pdf)
+	} else {
+		pdf = gofpdf.New("P", "mm", "A6", "")
+		fontFamily = configureDocumentFont(pdf)
+	}
 	pdf.SetTitle("Badge", false)
 	pdf.AddPage()
+	qr, err := qrcode.Encode(h.badgeScanURL(token), qrcode.Medium, 120)
+	if err == nil && renderBadgeTemplate(pdf, templatePath, qr) {
+		writePDF(c, pdf, "badge.pdf")
+		return
+	}
+
 	pdf.SetFont(fontFamily, "", 16)
 	pdf.MultiCell(0, 8, normalizeText(context.Conf.Title), "", "L", false)
 	pdf.Ln(12)
@@ -439,11 +486,14 @@ func (h *DocumentHandler) BadgePDF(c *gin.Context) {
 	pdf.Cell(0, 8, normalizeText(context.User.Profile.FullName))
 	pdf.Ln(6)
 	pdf.Cell(0, 8, context.User.Email)
-	pdf.Ln(8)
-	qr, err := qrcode.Encode(token, qrcode.Medium, 120)
+	pdf.Ln(12)
 	if err == nil {
+		pageWidth, _ := pdf.GetPageSize()
+		qrSize := 36.0
+		qrX := (pageWidth - qrSize) / 2
+		qrY := pdf.GetY()
 		pdf.RegisterImageOptionsReader("qr", gofpdf.ImageOptions{ImageType: "PNG"}, bytes.NewReader(qr))
-		pdf.ImageOptions("qr", 10, 40, 30, 30, false, gofpdf.ImageOptions{ImageType: "PNG"}, 0, "")
+		pdf.ImageOptions("qr", qrX, qrY, qrSize, qrSize, false, gofpdf.ImageOptions{ImageType: "PNG"}, 0, "")
 	}
 	writePDF(c, pdf, "badge.pdf")
 }
@@ -531,6 +581,14 @@ func (h *DocumentHandler) generateBadgeToken(userID, conferenceID uint) (string,
 	return token.SignedString([]byte(h.JWTSecret))
 }
 
+func (h *DocumentHandler) badgeScanURL(token string) string {
+	base := strings.TrimSpace(h.AppBaseURL)
+	if base == "" {
+		return "/badge/" + url.PathEscape(token)
+	}
+	return strings.TrimSuffix(base, "/") + "/badge/" + url.PathEscape(token)
+}
+
 func (h *DocumentHandler) ensureCertificate(conferenceID, userID uint) (*models.Certificate, error) {
 	var cert models.Certificate
 	if err := h.DB.Where("conference_id = ? AND user_id = ?", conferenceID, userID).First(&cert).Error; err == nil {
@@ -569,6 +627,8 @@ func (h *DocumentHandler) ensureCertificate(conferenceID, userID uint) (*models.
 
 func configureDocumentFont(pdf *gofpdf.Fpdf) string {
 	fontPath := firstExistingFile([]string{
+		"backend/assets/fonts/Arial.ttf",
+		"assets/fonts/Arial.ttf",
 		"backend/assets/fonts/DejaVuSans.ttf",
 		"assets/fonts/DejaVuSans.ttf",
 		"/System/Library/Fonts/Supplemental/Arial.ttf",
@@ -591,7 +651,133 @@ func configureDocumentFont(pdf *gofpdf.Fpdf) string {
 		pdf.ClearError()
 		return "Helvetica"
 	}
+
+	boldPath := firstExistingFile([]string{
+		"backend/assets/fonts/Arial-Bold.ttf",
+		"assets/fonts/Arial-Bold.ttf",
+		"backend/assets/fonts/DejaVuSans-Bold.ttf",
+		"assets/fonts/DejaVuSans-Bold.ttf",
+		"/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+		"/Library/Fonts/Arial Bold.ttf",
+		"/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+		"/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+	})
+	if boldPath != "" {
+		if boldBytes, err := os.ReadFile(boldPath); err == nil {
+			pdf.AddUTF8FontFromBytes("DocSans", "B", boldBytes)
+			if pdf.Err() {
+				pdf.ClearError()
+			}
+		}
+	}
 	return "DocSans"
+}
+
+func certificateTemplatePath() string {
+	return firstExistingFile([]string{
+		"backend/assets/certificates/certificate-template.png",
+		"assets/certificates/certificate-template.png",
+		"/app/assets/certificates/certificate-template.png",
+	})
+}
+
+func badgeTemplatePath() string {
+	return firstExistingFile([]string{
+		"backend/assets/badges/badge-template.png",
+		"assets/badges/badge-template.png",
+		"/app/assets/badges/badge-template.png",
+	})
+}
+
+func badgeTemplatePageSize(templatePath string) (float64, float64) {
+	const defaultWidth = 105.0
+	const defaultHeight = 148.0
+
+	file, err := os.Open(templatePath)
+	if err != nil {
+		return defaultWidth, defaultHeight
+	}
+	defer file.Close()
+
+	cfg, err := png.DecodeConfig(file)
+	if err != nil || cfg.Width == 0 || cfg.Height == 0 {
+		return defaultWidth, defaultHeight
+	}
+
+	height := defaultWidth * float64(cfg.Height) / float64(cfg.Width)
+	return defaultWidth, height
+}
+
+func fitTextToWidth(pdf *gofpdf.Fpdf, family, style, text string, maxWidth, maxSize, minSize float64) float64 {
+	size := maxSize
+	for size > minSize {
+		pdf.SetFont(family, style, size)
+		if pdf.GetStringWidth(text) <= maxWidth {
+			return size
+		}
+		size -= 1
+	}
+	return minSize
+}
+
+func renderCertificateTemplate(pdf *gofpdf.Fpdf, fontFamily, fullName string, cert *models.Certificate) bool {
+	templatePath := certificateTemplatePath()
+	if templatePath == "" {
+		return false
+	}
+
+	pdf.ImageOptions(
+		templatePath,
+		0,
+		0,
+		297,
+		210,
+		false,
+		gofpdf.ImageOptions{ImageType: "PNG", ReadDpi: true},
+		0,
+		"",
+	)
+
+	pdf.SetTextColor(33, 61, 135)
+	nameFontSize := fitTextToWidth(pdf, fontFamily, "B", fullName, 195, 30, 16)
+	pdf.SetFont(fontFamily, "B", nameFontSize)
+	pdf.SetXY(51, 92)
+	pdf.CellFormat(195, 14, fullName, "", 0, "C", false, 0, "")
+
+	pdf.SetTextColor(76, 82, 96)
+	pdf.SetFont(fontFamily, "", 8.5)
+	pdf.SetXY(24, 188)
+	pdf.CellFormat(90, 6, fmt.Sprintf("№ %s", cert.Number), "", 0, "L", false, 0, "")
+	pdf.SetXY(183, 188)
+	pdf.CellFormat(90, 6, fmt.Sprintf("Дата выдачи: %s", cert.IssuedAt.Format("02.01.2006")), "", 0, "R", false, 0, "")
+
+	return true
+}
+
+func renderBadgeTemplate(pdf *gofpdf.Fpdf, templatePath string, qr []byte) bool {
+	if templatePath == "" || len(qr) == 0 {
+		return false
+	}
+
+	pageWidth, pageHeight := pdf.GetPageSize()
+	pdf.ImageOptions(
+		templatePath,
+		0,
+		0,
+		pageWidth,
+		pageHeight,
+		false,
+		gofpdf.ImageOptions{ImageType: "PNG", ReadDpi: true},
+		0,
+		"",
+	)
+
+	qrSize := minFloat(pageWidth, pageHeight) * 0.42
+	qrX := (pageWidth - qrSize) / 2
+	qrY := (pageHeight - qrSize) / 2
+	pdf.RegisterImageOptionsReader("badge-qr", gofpdf.ImageOptions{ImageType: "PNG"}, bytes.NewReader(qr))
+	pdf.ImageOptions("badge-qr", qrX, qrY, qrSize, qrSize, false, gofpdf.ImageOptions{ImageType: "PNG"}, 0, "")
+	return true
 }
 
 func firstExistingFile(paths []string) string {
@@ -601,6 +787,13 @@ func firstExistingFile(paths []string) string {
 		}
 	}
 	return ""
+}
+
+func minFloat(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func valueOrZero(value *uint) uint {

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm } from "../lib/api.js";
 import { getToken, getUser } from "../lib/auth.js";
+import { triggerBlobDownload } from "../lib/download.js";
 
 const CHAT_SCOPE_CONFERENCE = "conference";
 const CHAT_SCOPE_SECTION = "section";
@@ -360,12 +361,7 @@ export default function Chat() {
         throw new Error("Не удалось скачать вложение");
       }
       const blob = await res.blob();
-      const objectUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = objectUrl;
-      link.download = attachment.file_name || "attachment";
-      link.click();
-      window.URL.revokeObjectURL(objectUrl);
+      triggerBlobDownload(blob, attachment.file_name || "attachment");
     } catch (err) {
       setError(err.message || "Не удалось скачать вложение");
     }

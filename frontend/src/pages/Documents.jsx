@@ -1,16 +1,8 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "../lib/api.js";
+import { triggerBlobDownload } from "../lib/download.js";
 
 const materialCards = [
-  {
-    key: "personal_program",
-    title: "Моя программа",
-    description: "Персональная PDF-программа на основе утвержденного места в сетке конференции.",
-    actionLabel: "Скачать PDF",
-    filename: "program-personal.pdf",
-    path: "/documents/program?type=personal",
-    mode: "download",
-  },
   {
     key: "full_program",
     title: "Полная программа",
@@ -52,13 +44,30 @@ const materialCards = [
 async function downloadPdf(path, filename) {
   const res = await apiGet(path);
   const blob = await res.blob();
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  window.URL.revokeObjectURL(url);
+  triggerBlobDownload(blob, filename);
 }
+
+async function openPdfPreview(path) {
+  const res = await apiGet(path);
+  return res.blob();
+}
+
+function buildPreviewSrc(url) {
+  if (!url) {
+    return "";
+  }
+  return `${url}#toolbar=0&navpanes=0&scrollbar=0&zoom=page-width&view=FitH`;
+}
+
+const documentStatusMeta = (material) => {
+  if (material?.available) {
+    return { label: "Доступно", tone: "success" };
+  }
+  if (material?.status === "not_applicable") {
+    return { label: "Не требуется", tone: "neutral" };
+  }
+  return { label: "Ожидает открытия", tone: "warning" };
+};
 
 export default function Documents() {
   const [materials, setMaterials] = useState(null);
@@ -67,6 +76,11 @@ export default function Documents() {
   const [busyKey, setBusyKey] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [previewDocument, setPreviewDocument] = useState(null);
+  const availableCount = materialCards.filter((card) => materials?.[card.key]?.available).length;
+  const waitingCount = materialCards.filter(
+    (card) => materials?.[card.key] && !materials?.[card.key]?.available && materials?.[card.key]?.status !== "not_applicable"
+  ).length;
 
   useEffect(() => {
     let active = true;
@@ -94,11 +108,26 @@ export default function Documents() {
     };
   }, []);
 
-  const handleAction = async (card) => {
+  useEffect(() => () => {
+    if (previewDocument?.url) {
+      window.URL.revokeObjectURL(previewDocument.url);
+    }
+  }, [previewDocument]);
+
+  const closePreview = () => {
+    if (previewDocument?.url) {
+      window.URL.revokeObjectURL(previewDocument.url);
+    }
+    setPreviewDocument(null);
+  };
+
+  const handleAction = async (card, action = "download") => {
     const material = materials?.[card.key];
     if (!material?.available) return;
 
-    setBusyKey(card.key);
+    const nextBusyKey = `${card.key}:${action}`;
+
+    setBusyKey(nextBusyKey);
     setStatusMessage("");
     setErrorMessage("");
     try {
@@ -110,8 +139,23 @@ export default function Documents() {
         window.open(targetUrl, "_blank", "noopener,noreferrer");
         setStatusMessage("Сборник открыт в новой вкладке.");
       } else {
-        await downloadPdf(card.path, card.filename);
-        setStatusMessage(`Документ "${card.title}" подготовлен для скачивания.`);
+        if (action === "preview") {
+          const blob = await openPdfPreview(card.path);
+          const nextUrl = window.URL.createObjectURL(blob);
+          if (previewDocument?.url) {
+            window.URL.revokeObjectURL(previewDocument.url);
+          }
+          setPreviewDocument({
+            title: card.title,
+            filename: card.filename,
+            path: card.path,
+            url: nextUrl,
+          });
+          setStatusMessage(`Документ "${card.title}" открыт для просмотра.`);
+        } else {
+          await downloadPdf(card.path, card.filename);
+          setStatusMessage(`Документ "${card.title}" подготовлен для скачивания.`);
+        }
       }
     } catch (err) {
       setErrorMessage(err.message || "Не удалось выполнить действие с документом.");
@@ -132,23 +176,57 @@ export default function Documents() {
       {statusMessage ? <p className="form-status success">{statusMessage}</p> : null}
       {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
 
+      {!loading && materials ? (
+        <div className="documents-summary">
+          <article className="documents-summary-card">
+            <span className="dashboard-summary-label">Уже доступно</span>
+            <strong>{availableCount}</strong>
+            <p className="muted">Документы можно открыть или скачать сразу.</p>
+          </article>
+          <article className="documents-summary-card">
+            <span className="dashboard-summary-label">Ожидают публикации</span>
+            <strong>{waitingCount}</strong>
+            <p className="muted">Откроются автоматически после выполнения условий конференции.</p>
+          </article>
+        </div>
+      ) : null}
+
       <div className="doc-grid">
         {materialCards.map((card) => {
           const material = materials?.[card.key];
           const isAvailable = Boolean(material?.available);
-          const isBusy = busyKey === card.key;
-          const buttonLabel = isBusy ? "Подготовка..." : card.actionLabel;
+          const downloadBusy = busyKey === `${card.key}:download`;
+          const previewBusy = busyKey === `${card.key}:preview`;
+          const buttonLabel = downloadBusy ? "Подготовка..." : card.actionLabel;
+          const statusMeta = documentStatusMeta(material);
+          const canPreviewPdf = card.mode === "download";
 
           return (
-            <div key={card.key} className="doc-card">
-              <h3>{card.title}</h3>
-              <p>{card.description}</p>
-              <p className="muted">{material?.message || "Статус документа будет доступен после загрузки страницы."}</p>
+            <div key={card.key} className={`doc-card doc-card-${statusMeta.tone}`}>
+              <div className="doc-card-head">
+                <div>
+                  <h3>{card.title}</h3>
+                  <p>{card.description}</p>
+                </div>
+                <span className={`status-chip status-chip-${statusMeta.tone}`}>{statusMeta.label}</span>
+              </div>
+              <p className="doc-card-message">
+                {material?.message || "Статус документа будет доступен после загрузки страницы."}
+              </p>
               <div className="form-actions">
+                {canPreviewPdf ? (
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => handleAction(card, "preview")}
+                    disabled={loading || !isAvailable || previewBusy || downloadBusy}
+                  >
+                    {previewBusy ? "Открытие..." : "Открыть"}
+                  </button>
+                ) : null}
                 <button
                   className={isAvailable ? "btn btn-primary" : "btn btn-ghost"}
-                  onClick={() => handleAction(card)}
-                  disabled={loading || !isAvailable || isBusy}
+                  onClick={() => handleAction(card, "download")}
+                  disabled={loading || !isAvailable || downloadBusy || previewBusy}
                 >
                   {buttonLabel}
                 </button>
@@ -163,6 +241,30 @@ export default function Documents() {
           );
         })}
       </div>
+
+      {previewDocument ? (
+        <div className="modal-backdrop" onClick={closePreview}>
+          <div className="modal document-preview-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>{previewDocument.title}</h3>
+                <p className="muted">Просмотр PDF без скачивания</p>
+              </div>
+              <div className="form-actions">
+                <button className="btn btn-ghost" onClick={() => downloadPdf(previewDocument.path, previewDocument.filename)}>
+                  Скачать
+                </button>
+                <button className="btn btn-primary" onClick={closePreview}>
+                  Закрыть
+                </button>
+              </div>
+            </div>
+            <div className="modal-body">
+              <iframe className="document-preview-frame" src={buildPreviewSrc(previewDocument.url)} title={previewDocument.title} />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

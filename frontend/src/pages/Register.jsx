@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiPost } from "../lib/api.js";
 import { setToken } from "../lib/auth.js";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 export default function Register() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
@@ -115,6 +116,14 @@ export default function Register() {
       .then(setSections)
       .catch(() => setSections([]));
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const mode = params.get("mode");
+    if (mode === "online" || mode === "offline") {
+      setForm((prev) => ({ ...prev, user_type: mode }));
+    }
+  }, [location.search]);
 
   const update = (field, value) => {
     setErrorMessage("");
@@ -268,7 +277,7 @@ export default function Register() {
             </label>
             <label>
               Телефон
-              <input value={form.phone} onChange={(e) => update("phone", e.target.value)} />
+              <input value={form.phone} onChange={(e) => update("phone", e.target.value)} required />
             </label>
           </>
         )}
@@ -323,7 +332,10 @@ export default function Register() {
                 setErrorMessage("");
                 setStep(step + 1);
               }}
-              disabled={(step === 1 && !form.full_name.trim()) || (step === 2 && (!form.section_id || !form.talk_title.trim()))}
+              disabled={
+                (step === 1 && !form.full_name.trim()) ||
+                (step === 2 && (!form.section_id || !form.talk_title.trim() || !form.phone.trim()))
+              }
             >
               Далее
             </button>

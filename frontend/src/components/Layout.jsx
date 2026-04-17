@@ -14,14 +14,12 @@ export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [user, setUserState] = useState(getUser());
-  const [scheduleMeta, setScheduleMeta] = useState(null);
   const [conference, setConference] = useState(null);
   const [navOpen, setNavOpen] = useState(false);
   const token = getToken();
 
   useEffect(() => {
     if (!token) {
-      setScheduleMeta(null);
       return;
     }
     apiGet("/me")
@@ -32,17 +30,7 @@ export default function Layout() {
       .catch(() => {
         clearToken();
         setUserState(null);
-        setScheduleMeta(null);
       });
-
-    apiGet("/schedule")
-      .then((data) => {
-        setScheduleMeta({
-          assignmentStatus: data?.assignment_status || "pending",
-          currentUserType: data?.current_user_type || "",
-        });
-      })
-      .catch(() => setScheduleMeta(null));
   }, [token]);
 
   useEffect(() => {
@@ -76,16 +64,78 @@ export default function Layout() {
     setNavOpen(false);
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return undefined;
+    }
+
+    document.body.classList.toggle("nav-open", navOpen);
+
+    return () => {
+      document.body.classList.remove("nav-open");
+    };
+  }, [navOpen]);
+
+  useEffect(() => {
+    if (!navOpen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setNavOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [navOpen]);
+
   const logout = () => {
     clearToken();
     setUserState(null);
-    setScheduleMeta(null);
     setNavOpen(false);
     navigate("/");
   };
 
   const isPrivileged = !!user && ["admin", "org"].includes(user.role);
-  const showMapLink = isPrivileged || (!!user && scheduleMeta && scheduleMeta.currentUserType !== "online");
+  const showMapLink = !!user;
+  const marketingNavItems = [
+    { href: "/#university", label: "О вузе" },
+    { href: "/#iceitp", label: "Об ИЦЭиТП" },
+    { href: "/#conference", label: "О конференции" },
+    { href: "/#contacts", label: "Контакты" },
+  ];
+  const desktopNavItems = user
+    ? [
+        { to: "/", label: "Главная", end: true },
+        { to: "/dashboard", label: "Кабинет" },
+        { to: "/documents", label: "Документы" },
+        ...(showMapLink ? [{ to: "/map", label: "Карта" }] : []),
+        { to: "/feedback", label: "Отзывы" },
+        { to: "/chat", label: "Чат" },
+        ...(["admin", "org"].includes(user.role) ? [{ to: "/admin", label: "Админка" }] : []),
+      ]
+    : [
+        { to: "/", label: "Главная", end: true },
+      ];
+  const mobilePrimaryNavItems = user
+    ? [
+        { to: "/", label: "Главная", mobileLabel: "Главная", end: true },
+        { to: "/dashboard", label: "Кабинет", mobileLabel: "Кабинет" },
+        { to: "/documents", label: "Документы", mobileLabel: "Док-ты" },
+        ...(showMapLink ? [{ to: "/map", label: "Карта", mobileLabel: "Карта" }] : []),
+      ]
+    : [];
+  const mobileSecondaryNavItems = user
+    ? [
+        { to: "/feedback", label: "Отзывы" },
+        { to: "/chat", label: "Чат" },
+        ...(["admin", "org"].includes(user.role) ? [{ to: "/admin", label: "Админка" }] : []),
+      ]
+    : [];
   const conferenceTitle = getConferenceTitle(conference);
   const conferenceSupportEmail = getConferenceSupportEmail(conference);
   const conferenceDateLabel = formatConferenceDateRange(conference?.starts_at, conference?.ends_at);
@@ -119,70 +169,129 @@ export default function Layout() {
             <div className="subtitle">{subtitle}</div>
           </div>
         </Link>
-        <button
-          type="button"
-          className={`nav-toggle${navOpen ? " open" : ""}`}
-          aria-expanded={navOpen}
-          aria-controls="site-navigation"
-          aria-label={navOpen ? "Закрыть навигацию" : "Открыть навигацию"}
-          onClick={() => setNavOpen((prev) => !prev)}
-        >
-          <span />
-          <span />
-          <span />
-        </button>
-        <div className={`header-actions${navOpen ? " open" : ""}`}>
-          <nav id="site-navigation" className="nav">
-            {user ? (
-              <>
-                <NavLink to="/" end>
-                  Главная
+        <div className={`mobile-header-bar ${user ? "mobile-header-bar-auth" : "mobile-header-bar-guest"}`}>
+          {user ? (
+            <nav className="mobile-header-nav" aria-label="Навигация по страницам">
+              {mobilePrimaryNavItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive }) => `mobile-header-link${isActive ? " active" : ""}`}
+                  onClick={() => setNavOpen(false)}
+                >
+                  {item.mobileLabel || item.label}
                 </NavLink>
-                <NavLink to="/dashboard">Кабинет</NavLink>
-                <NavLink to="/documents">Документы</NavLink>
-                {showMapLink && <NavLink to="/map">Карта</NavLink>}
-                <NavLink to="/feedback">Отзывы</NavLink>
-                <NavLink to="/chat">Чат</NavLink>
-                {["admin", "org"].includes(user.role) && <NavLink to="/admin">Админка</NavLink>}
-              </>
-            ) : (
-              <>
-                <NavLink to="/" end>
-                  Главная
-                </NavLink>
-                <NavLink to="/login">Вход</NavLink>
-                <NavLink to="/register">Регистрация</NavLink>
-              </>
-            )}
-          </nav>
-          <div className="auth-actions">
-            {user ? (
-              <>
+              ))}
+              <button
+                type="button"
+                className={`nav-toggle${navOpen ? " open" : ""}`}
+                aria-expanded={navOpen}
+                aria-controls="site-navigation"
+                aria-label={navOpen ? "Закрыть навигацию" : "Открыть навигацию"}
+                onClick={() => setNavOpen((prev) => !prev)}
+              >
+                <span />
+                <span />
+                <span />
+              </button>
+            </nav>
+          ) : (
+            <div className="mobile-guest-actions">
+              <Link className="btn btn-ghost header-compact-btn" to="/login">
+                Войти
+              </Link>
+              <Link className="btn btn-primary header-compact-btn" to="/register">
+                Регистрация
+              </Link>
+              <button
+                type="button"
+                className={`nav-toggle${navOpen ? " open" : ""}`}
+                aria-expanded={navOpen}
+                aria-controls="site-navigation"
+                aria-label={navOpen ? "Закрыть навигацию" : "Открыть навигацию"}
+                onClick={() => setNavOpen((prev) => !prev)}
+              >
+                <span />
+                <span />
+                <span />
+              </button>
+            </div>
+          )}
+        </div>
+        <div className={`header-actions ${user ? "header-actions-auth" : "header-actions-guest"}${navOpen ? " open" : ""}`}>
+          {user ? (
+            <>
+              <nav id="site-navigation" className="nav desktop-nav">
+                {desktopNavItems.map((item) => (
+                  <NavLink key={item.to} to={item.to} end={item.end}>
+                    {item.label}
+                  </NavLink>
+                ))}
+              </nav>
+              <nav className="nav mobile-menu-nav" aria-label="Дополнительные страницы">
+                {mobileSecondaryNavItems.map((item) => (
+                  <NavLink key={item.to} to={item.to} end={item.end}>
+                    {item.label}
+                  </NavLink>
+                ))}
+              </nav>
+              <div className="auth-actions">
                 <span className="user-chip">{user.profile?.full_name || user.email}</span>
                 <button className="btn btn-ghost" onClick={logout}>
                   Выйти
                 </button>
-              </>
-            ) : (
-              <Link className="btn btn-primary" to="/login">
-                Войти
-              </Link>
-            )}
-          </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <nav id="site-navigation" className="nav desktop-nav marketing-nav" aria-label="Основные разделы">
+                {marketingNavItems.map((item) => (
+                  <a key={item.href} href={item.href}>
+                    {item.label}
+                  </a>
+                ))}
+              </nav>
+              <nav className="nav mobile-menu-nav marketing-nav" aria-label="Основные разделы">
+                {marketingNavItems.map((item) => (
+                  <a key={item.href} href={item.href} onClick={() => setNavOpen(false)}>
+                    {item.label}
+                  </a>
+                ))}
+              </nav>
+              <div className="auth-actions desktop-auth-actions">
+                <Link className="btn btn-ghost" to="/login">
+                  Войти
+                </Link>
+                <Link className="btn btn-primary" to="/register">
+                  Регистрация
+                </Link>
+              </div>
+            </>
+          )}
         </div>
       </header>
       <main className="main">
         <Outlet context={outletContext} />
       </main>
-      <footer className="footer">
+      <footer id="contacts" className="footer">
         <div className="footer-copy">
           <strong>{conferenceTitle}</strong>
           <span>{subtitle}</span>
         </div>
         <div className="footer-links">
+          {!user
+            ? marketingNavItems.map((item) => (
+                <a key={item.href} href={item.href}>
+                  {item.label}
+                </a>
+              ))
+            : null}
+          <a href={`mailto:${conferenceSupportEmail}`}>Email: {conferenceSupportEmail}</a>
+          <a href="tel:+79298920700">Телефон: 8 (929) 892-07-00</a>
           <Link to="/personal-data">Политика обработки данных</Link>
           <Link to="/consent-authors">Согласие авторов</Link>
-          <a href={`mailto:${conferenceSupportEmail}`}>Поддержка: {conferenceSupportEmail}</a>
+          <span className="footer-legal">© 2026 {conferenceTitle}</span>
         </div>
       </footer>
     </div>

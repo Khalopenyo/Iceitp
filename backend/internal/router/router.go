@@ -6,6 +6,7 @@ import (
 	"conferenceplatforma/internal/config"
 	"conferenceplatforma/internal/handlers"
 	"conferenceplatforma/internal/mail"
+	"conferenceplatforma/internal/sms"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -37,18 +38,22 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 	}
 
 	authHandler := &handlers.AuthHandler{
-		DB:               db,
-		JWTSecret:        cfg.JWTSecret,
-		AppBaseURL:       cfg.AppBaseURL,
-		PasswordResetTTL: cfg.PasswordResetTTL,
-		MailSender:       mail.NewPasswordResetSender(cfg),
+		DB:                      db,
+		JWTSecret:               cfg.JWTSecret,
+		AppBaseURL:              cfg.AppBaseURL,
+		PasswordResetTTL:        cfg.PasswordResetTTL,
+		PhoneAuthCodeTTL:        cfg.PhoneAuthCodeTTL,
+		PhoneAuthResendCooldown: cfg.PhoneAuthResendCooldown,
+		PhoneAuthMaxAttempts:    cfg.PhoneAuthMaxAttempts,
+		MailSender:              mail.NewPasswordResetSender(cfg),
+		AuthCodeSender:          sms.NewAuthCodeSender(cfg),
 	}
 	userHandler := &handlers.UserHandler{DB: db}
 	sectionHandler := &handlers.SectionHandler{DB: db}
 	scheduleHandler := &handlers.ScheduleHandler{DB: db}
 	feedbackHandler := &handlers.FeedbackHandler{DB: db}
 	chatHandler := &handlers.ChatHandler{DB: db}
-	docHandler := &handlers.DocumentHandler{DB: db, JWTSecret: cfg.JWTSecret}
+	docHandler := &handlers.DocumentHandler{DB: db, JWTSecret: cfg.JWTSecret, AppBaseURL: cfg.AppBaseURL}
 	consentHandler := &handlers.ConsentHandler{DB: db}
 	roomHandler := &handlers.RoomHandler{DB: db}
 	mapMarkerHandler := &handlers.MapMarkerHandler{DB: db}
@@ -63,6 +68,8 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 	api := r.Group("/api")
 	api.POST("/auth/register", authHandler.Register)
 	api.POST("/auth/login", authHandler.Login)
+	api.POST("/auth/phone-code/request", authHandler.RequestPhoneCode)
+	api.POST("/auth/phone-code/verify", authHandler.VerifyPhoneCode)
 	api.POST("/auth/forgot-password", authHandler.ForgotPassword)
 	api.POST("/auth/reset-password", authHandler.ResetPassword)
 	api.GET("/sections", sectionHandler.ListSections)
@@ -71,6 +78,7 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 	api.GET("/map/routes", mapRouteHandler.ListRoutes)
 	api.GET("/conference", conferenceHandler.GetConference)
 	api.GET("/certificates/:number", docHandler.VerifyCertificate)
+	api.POST("/checkin/scan", checkInHandler.ScanBadge)
 
 	protected := api.Group("")
 	protected.Use(auth.Middleware(cfg.JWTSecret))
@@ -100,6 +108,8 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 	admin.Use(auth.RequireRole("admin", "org"))
 	admin.GET("/users", userHandler.ListUsers)
 	admin.PUT("/users/:id/role", userHandler.UpdateUserRole)
+	admin.PUT("/users/:id/badge", userHandler.SetBadgeIssued)
+	admin.GET("/users/:id/badge", docHandler.AdminBadgePDF)
 	admin.DELETE("/users/:id", userHandler.DeleteUser)
 	admin.POST("/sections", sectionHandler.CreateSection)
 	admin.PUT("/sections/:id", sectionHandler.UpdateSection)

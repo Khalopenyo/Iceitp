@@ -22,6 +22,7 @@ WORKDIR /app
 
 COPY --from=builder /out/server /usr/local/bin/server
 COPY --from=builder /out/worker /usr/local/bin/worker
+COPY --from=builder /src/assets /app/assets
 
 USER app
 
