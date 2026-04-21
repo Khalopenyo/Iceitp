@@ -4,6 +4,7 @@ import (
 	"conferenceplatforma/internal/models"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -82,12 +83,59 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 }
 
 func (h *UserHandler) ListUsers(c *gin.Context) {
+	page, pageSize := parsePagination(c, 20, 100)
+	searchQuery := strings.ToLower(strings.TrimSpace(c.Query("q")))
+	roleFilter := strings.TrimSpace(c.Query("role"))
+	userTypeFilter := strings.TrimSpace(c.Query("user_type"))
+	badgeIssuedFilter := strings.TrimSpace(c.Query("badge_issued"))
+
+	tx := h.DB.Model(&models.User{}).
+		Joins("LEFT JOIN profiles ON profiles.user_id = users.id")
+
+	if searchQuery != "" {
+		pattern := "%" + searchQuery + "%"
+		tx = tx.Where(
+			"LOWER(users.email) LIKE ? OR LOWER(COALESCE(profiles.full_name, '')) LIKE ? OR LOWER(COALESCE(profiles.organization, '')) LIKE ? OR LOWER(COALESCE(profiles.phone, '')) LIKE ?",
+			pattern,
+			pattern,
+			pattern,
+			pattern,
+		)
+	}
+	if roleFilter != "" {
+		tx = tx.Where("users.role = ?", roleFilter)
+	}
+	if userTypeFilter != "" {
+		tx = tx.Where("users.user_type = ?", userTypeFilter)
+	}
+	if badgeIssuedFilter != "" {
+		value, err := strconv.ParseBool(badgeIssuedFilter)
+		if err == nil {
+			tx = tx.Where("users.badge_issued = ?", value)
+		}
+	}
+
+	var total int64
+	if err := tx.Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count users"})
+		return
+	}
+
 	var users []models.User
-	if err := h.DB.Preload("Profile").Find(&users).Error; err != nil {
+	if err := tx.Preload("Profile").
+		Order("users.created_at desc").
+		Limit(pageSize).
+		Offset((page - 1) * pageSize).
+		Find(&users).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list users"})
 		return
 	}
-	c.JSON(http.StatusOK, users)
+	c.JSON(http.StatusOK, paginatedResponse[models.User]{
+		Items:    users,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	})
 }
 
 func (h *UserHandler) UpdateUserRole(c *gin.Context) {

@@ -164,20 +164,20 @@ func TestListFeedbackIncludesAuthorContext(t *testing.T) {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, recorder.Code, recorder.Body.String())
 	}
 
-	var response []feedbackEntry
+	var response paginatedResponse[feedbackEntry]
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
-	if len(response) != 1 {
-		t.Fatalf("expected 1 feedback item, got %d", len(response))
+	if len(response.Items) != 1 {
+		t.Fatalf("expected 1 feedback item, got %d", len(response.Items))
 	}
-	if response[0].UserName != "Мария Иванова" {
-		t.Fatalf("expected user name %q, got %q", "Мария Иванова", response[0].UserName)
+	if response.Items[0].UserName != "Мария Иванова" {
+		t.Fatalf("expected user name %q, got %q", "Мария Иванова", response.Items[0].UserName)
 	}
-	if response[0].UserEmail != "participant@example.com" {
-		t.Fatalf("expected participant email, got %q", response[0].UserEmail)
+	if response.Items[0].UserEmail != "participant@example.com" {
+		t.Fatalf("expected participant email, got %q", response.Items[0].UserEmail)
 	}
-	if response[0].CreatedAt == "" {
+	if response.Items[0].CreatedAt == "" {
 		t.Fatalf("expected created_at to be set")
 	}
 }

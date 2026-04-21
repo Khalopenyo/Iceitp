@@ -59,53 +59,66 @@ func (h *FeedbackHandler) CreateFeedback(c *gin.Context) {
 }
 
 func (h *FeedbackHandler) ListFeedback(c *gin.Context) {
-	var feedback []models.Feedback
-	if err := h.DB.Order("created_at desc").Find(&feedback).Error; err != nil {
+	page, pageSize := parsePagination(c, 20, 100)
+	searchQuery := strings.ToLower(strings.TrimSpace(c.Query("q")))
+	ratingFilter := parsePositiveInt(c.Query("rating"), 0)
+
+	tx := h.DB.Table("feedbacks").
+		Joins("LEFT JOIN users ON users.id = feedbacks.user_id").
+		Joins("LEFT JOIN profiles ON profiles.user_id = users.id")
+
+	if searchQuery != "" {
+		pattern := "%" + searchQuery + "%"
+		tx = tx.Where(
+			"LOWER(COALESCE(profiles.full_name, '')) LIKE ? OR LOWER(COALESCE(users.email, '')) LIKE ? OR LOWER(COALESCE(feedbacks.comment, '')) LIKE ?",
+			pattern,
+			pattern,
+			pattern,
+		)
+	}
+	if ratingFilter >= 1 && ratingFilter <= 5 {
+		tx = tx.Where("feedbacks.rating = ?", ratingFilter)
+	}
+
+	var total int64
+	if err := tx.Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count feedback"})
+		return
+	}
+
+	var response []feedbackEntry
+	if err := tx.Select(`
+			feedbacks.id,
+			feedbacks.user_id,
+			CASE
+				WHEN TRIM(COALESCE(profiles.full_name, '')) <> '' THEN profiles.full_name
+				ELSE COALESCE(users.email, '')
+			END AS user_name,
+			COALESCE(users.email, '') AS user_email,
+			feedbacks.rating,
+			feedbacks.comment,
+			feedbacks.created_at
+		`).
+		Order("feedbacks.created_at desc").
+		Limit(pageSize).
+		Offset((page - 1) * pageSize).
+		Scan(&response).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list feedback"})
 		return
 	}
-	if len(feedback) == 0 {
-		c.JSON(http.StatusOK, []feedbackEntry{})
-		return
-	}
 
-	userIDs := make([]uint, 0, len(feedback))
-	seen := make(map[uint]struct{}, len(feedback))
-	for _, item := range feedback {
-		if _, ok := seen[item.UserID]; ok {
-			continue
+	for i := range response {
+		if response[i].CreatedAt != "" {
+			if parsed, err := time.Parse(time.RFC3339Nano, response[i].CreatedAt); err == nil {
+				response[i].CreatedAt = parsed.Format(time.RFC3339)
+			}
 		}
-		seen[item.UserID] = struct{}{}
-		userIDs = append(userIDs, item.UserID)
 	}
 
-	var users []models.User
-	if err := h.DB.Preload("Profile").Where("id IN ?", userIDs).Find(&users).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load feedback authors"})
-		return
-	}
-	userByID := make(map[uint]models.User, len(users))
-	for _, user := range users {
-		userByID[user.ID] = user
-	}
-
-	response := make([]feedbackEntry, 0, len(feedback))
-	for _, item := range feedback {
-		user := userByID[item.UserID]
-		userName := strings.TrimSpace(user.Profile.FullName)
-		if userName == "" {
-			userName = user.Email
-		}
-		response = append(response, feedbackEntry{
-			ID:        item.ID,
-			UserID:    item.UserID,
-			UserName:  userName,
-			UserEmail: user.Email,
-			Rating:    item.Rating,
-			Comment:   item.Comment,
-			CreatedAt: item.CreatedAt.Format(time.RFC3339),
-		})
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, paginatedResponse[feedbackEntry]{
+		Items:    response,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	})
 }

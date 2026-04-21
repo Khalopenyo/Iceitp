@@ -40,7 +40,6 @@ var migrations = []migration{
 				&models.PasswordResetToken{},
 				&models.PhoneAuthCode{},
 				&models.ProgramAssignment{},
-				&models.AntiplagiatConfig{},
 				&models.ArticleSubmission{},
 				&models.Section{},
 				&models.Room{},

@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/objectstore"
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
@@ -57,9 +58,13 @@ func newChatTestRouter(db *gorm.DB, storageRoot string, maxAttachmentSize int64)
 		c.Next()
 	})
 
+	store, err := objectstore.NewFilesystemStore(storageRoot)
+	if err != nil {
+		panic(err)
+	}
 	handler := &ChatHandler{
 		DB:                     db,
-		StorageRoot:            storageRoot,
+		Store:                  store,
 		MaxAttachmentSizeBytes: maxAttachmentSize,
 	}
 	router.GET("/api/chat", handler.ListMessages)
@@ -236,11 +241,12 @@ func TestPostChatMessageWithAttachment(t *testing.T) {
 	if attachment.FileName != "notes.pdf" {
 		t.Fatalf("expected stored file name notes.pdf, got %q", attachment.FileName)
 	}
-	if _, err := os.Stat(attachment.FilePath); err != nil {
+	storedPath := filepath.Join(filepath.Clean(storageRoot), filepath.FromSlash(attachment.ObjectKey))
+	if _, err := os.Stat(storedPath); err != nil {
 		t.Fatalf("expected stored attachment file: %v", err)
 	}
-	if !strings.HasPrefix(attachment.FilePath, filepath.Clean(storageRoot)) {
-		t.Fatalf("expected file path inside test storage root, got %q", attachment.FilePath)
+	if !strings.HasPrefix(storedPath, filepath.Clean(storageRoot)) {
+		t.Fatalf("expected file path inside test storage root, got %q", storedPath)
 	}
 
 	listRecorder := performChatDownloadRequest(t, router, "/api/chat?scope=conference", user)

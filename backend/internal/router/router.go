@@ -1,11 +1,11 @@
 package router
 
 import (
-	"conferenceplatforma/internal/antiplagiat"
 	"conferenceplatforma/internal/auth"
 	"conferenceplatforma/internal/config"
 	"conferenceplatforma/internal/handlers"
 	"conferenceplatforma/internal/mail"
+	"conferenceplatforma/internal/objectstore"
 	"conferenceplatforma/internal/ratelimit"
 	"conferenceplatforma/internal/sms"
 	"time"
@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Service) *gin.Engine {
+func Setup(db *gorm.DB, cfg config.Config, store objectstore.Store) *gin.Engine {
 	r := gin.Default()
 	corsConfig := cors.Config{
 		AllowOrigins:     []string{"*"},
@@ -54,7 +54,7 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 	sectionHandler := &handlers.SectionHandler{DB: db}
 	scheduleHandler := &handlers.ScheduleHandler{DB: db}
 	feedbackHandler := &handlers.FeedbackHandler{DB: db}
-	chatHandler := &handlers.ChatHandler{DB: db}
+	chatHandler := &handlers.ChatHandler{DB: db, Store: store}
 	docHandler := &handlers.DocumentHandler{DB: db, JWTSecret: cfg.JWTSecret, AppBaseURL: cfg.AppBaseURL}
 	consentHandler := &handlers.ConsentHandler{DB: db}
 	roomHandler := &handlers.RoomHandler{DB: db}
@@ -63,7 +63,7 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 	conferenceHandler := &handlers.ConferenceHandler{DB: db}
 	programHandler := &handlers.ProgramHandler{DB: db}
 	checkInHandler := &handlers.CheckInHandler{DB: db, JWTSecret: cfg.JWTSecret}
-	submissionHandler := &handlers.SubmissionHandler{DB: db, Service: antiplagiatService}
+	submissionHandler := &handlers.SubmissionHandler{DB: db, Store: store}
 
 	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 
@@ -71,7 +71,6 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 	verificationLimiter := ratelimit.New(10, 10*time.Minute)
 	loginLimiter := ratelimit.New(10, 10*time.Minute)
 	resetLimiter := ratelimit.New(5, 15*time.Minute)
-	qrScanLimiter := ratelimit.New(20, time.Minute)
 
 	api := r.Group("/api")
 	api.POST("/auth/register", registrationLimiter.Middleware("auth_register"), authHandler.RequestRegistrationCode)
@@ -79,8 +78,6 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 	api.POST("/auth/register/verify", verificationLimiter.Middleware("auth_register_verify"), authHandler.VerifyRegistrationCode)
 	api.POST("/auth/login", loginLimiter.Middleware("auth_login"), authHandler.Login)
 	api.POST("/auth/logout", authHandler.Logout)
-	api.POST("/auth/phone-code/request", registrationLimiter.Middleware("auth_phone_request"), authHandler.RequestPhoneCode)
-	api.POST("/auth/phone-code/verify", verificationLimiter.Middleware("auth_phone_verify"), authHandler.VerifyPhoneCode)
 	api.POST("/auth/forgot-password", resetLimiter.Middleware("auth_forgot_password"), authHandler.ForgotPassword)
 	api.POST("/auth/reset-password", authHandler.ResetPassword)
 	api.GET("/sections", sectionHandler.ListSections)
@@ -89,8 +86,6 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 	api.GET("/map/routes", mapRouteHandler.ListRoutes)
 	api.GET("/conference", conferenceHandler.GetConference)
 	api.GET("/certificates/:number", docHandler.VerifyCertificate)
-	api.POST("/checkin/scan", qrScanLimiter.Middleware("checkin_scan"), checkInHandler.ScanBadge)
-
 	protected := api.Group("")
 	protected.Use(auth.Middleware(cfg.JWTSecret))
 	protected.GET("/me", userHandler.Me)
@@ -110,9 +105,7 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 	protected.GET("/documents/proceedings", docHandler.Proceedings)
 	protected.GET("/submissions", submissionHandler.ListSubmissions)
 	protected.POST("/submissions", submissionHandler.CreateSubmission)
-	protected.POST("/submissions/:id/retry", submissionHandler.RetrySubmission)
-	protected.POST("/submissions/:id/refresh", submissionHandler.RefreshSubmission)
-	protected.POST("/submissions/:id/pdf", submissionHandler.RequestPDF)
+	protected.GET("/submissions/:id/file", submissionHandler.DownloadSubmissionFile)
 
 	admin := api.Group("/admin")
 	admin.Use(auth.Middleware(cfg.JWTSecret))
@@ -138,10 +131,6 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 	admin.GET("/conference", conferenceHandler.GetConference)
 	admin.PUT("/conference", conferenceHandler.UpdateConference)
 	admin.POST("/checkin/verify", checkInHandler.VerifyBadge)
-	admin.GET("/antiplagiat/config", submissionHandler.GetConfig)
-	admin.GET("/antiplagiat/services", submissionHandler.ListCheckServices)
-	admin.PUT("/antiplagiat/config", submissionHandler.SaveConfig)
-	admin.POST("/antiplagiat/ping", submissionHandler.PingConfig)
 
 	return r
 }

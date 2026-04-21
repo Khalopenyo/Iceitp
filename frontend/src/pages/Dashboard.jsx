@@ -1,20 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiGet, apiPost, apiPostForm, apiPut } from "../lib/api.js";
+import { apiGet, apiPostForm, apiPut } from "../lib/api.js";
 import { setUser } from "../lib/auth.js";
 import { getSessionStatus } from "../lib/sessionStatus.js";
 
 const defaultSubmissionState = {
   items: [],
-  configured: false,
-  enabled: false,
-  permissions: {
-    editable_report: false,
-    readonly_report: false,
-    short_report: false,
-    pdf_report: false,
-  },
-  message: "",
+  storage_configured: false,
+  max_file_size_bytes: 20 * 1024 * 1024,
 };
 
 const formatTimeOnly = (value) => {
@@ -31,29 +24,9 @@ const formatDateTime = (value) => {
   return date.toLocaleString();
 };
 
-const formatPercent = (value) => `${Number(value || 0).toFixed(1)}%`;
-
-const submissionIsPending = (item) =>
-  ["uploaded", "checking"].includes(item.status) || item.pdf_status === "in_progress";
-
-const submissionStatusLabel = (status) => {
-  switch (status) {
-    case "uploaded":
-      return "Загружен";
-    case "checking":
-      return "Проверяется";
-    case "ready":
-      return "Проверен";
-    case "failed":
-      return "Ошибка";
-    default:
-      return "Неизвестно";
-  }
-};
-
-const openExternal = (url) => {
-  if (!url) return;
-  window.open(url, "_blank", "noopener,noreferrer");
+const formatMegabytes = (bytes) => {
+  if (!bytes) return "20 МБ";
+  return `${(bytes / 1024 / 1024).toFixed(0)} МБ`;
 };
 
 const participationLabel = (userType) => (userType === "online" ? "Онлайн-участник" : "Очный участник");
@@ -78,36 +51,46 @@ const liveStatusMeta = (status) => {
   }
 };
 
+const submissionStatusLabel = (status) => {
+  switch (status) {
+    case "uploaded":
+      return "Загружен";
+    case "ready":
+      return "Файл сохранен";
+    case "failed":
+      return "Ошибка";
+    default:
+      return "Неизвестно";
+  }
+};
+
 const submissionOverviewMeta = (items) => {
   if (!items.length) {
     return {
       label: "Статья не загружена",
       tone: "warning",
-      description: "Добавьте файл статьи, чтобы запустить проверку.",
+      description: "Добавьте файл статьи, чтобы материал появился в системе.",
     };
   }
 
   if (items.some((item) => item.status === "failed")) {
     return {
-      label: "Есть ошибки проверки",
+      label: "Есть ошибки загрузки",
       tone: "danger",
-      description: "Откройте раздел со статьей и обновите проблемный материал.",
-    };
-  }
-
-  if (items.some(submissionIsPending)) {
-    return {
-      label: "Проверка в процессе",
-      tone: "warning",
-      description: "Результаты обновятся автоматически после завершения проверки.",
+      description: "Проверьте проблемный файл и загрузите его заново.",
     };
   }
 
   return {
-    label: "Материалы готовы",
+    label: "Материалы загружены",
     tone: "success",
-    description: "Последняя загруженная статья успешно обработана.",
+    description: "Последние версии файлов сохранены и доступны организаторам.",
   };
+};
+
+const openExternal = (url) => {
+  if (!url) return;
+  window.open(url, "_blank", "noopener,noreferrer");
 };
 
 export default function Dashboard() {
@@ -125,7 +108,6 @@ export default function Dashboard() {
   const [uploadFile, setUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [fileInputKey, setFileInputKey] = useState(0);
-  const [busyActionKey, setBusyActionKey] = useState("");
 
   const loadSubmissions = async () => {
     try {
@@ -133,14 +115,11 @@ export default function Dashboard() {
       setSubmissions({
         ...defaultSubmissionState,
         ...response,
-        permissions: {
-          ...defaultSubmissionState.permissions,
-          ...(response?.permissions || {}),
-        },
         items: response?.items || [],
       });
     } catch (err) {
-      setSubmissions((prev) => ({ ...prev, message: err.message || "Не удалось загрузить проверки" }));
+      setSubmissionMessage(err.message || "Не удалось загрузить список статей");
+      setSubmissions(defaultSubmissionState);
     }
   };
 
@@ -174,14 +153,6 @@ export default function Dashboard() {
     const timer = setInterval(() => setNowTs(Date.now()), 30000);
     return () => clearInterval(timer);
   }, []);
-
-  useEffect(() => {
-    if (!submissions.items.some(submissionIsPending)) return undefined;
-    const timer = setInterval(() => {
-      loadSubmissions();
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [submissions.items]);
 
   if (!data) {
     return (
@@ -251,7 +222,7 @@ export default function Dashboard() {
       setUploadTitle("");
       setUploadFile(null);
       setFileInputKey((prev) => prev + 1);
-      setSubmissionMessage("Файл загружен. Проверка запущена в фоне.");
+      setSubmissionMessage("Файл статьи загружен.");
       await loadSubmissions();
       setTab("materials");
     } catch (err) {
@@ -261,20 +232,8 @@ export default function Dashboard() {
     }
   };
 
-  const runSubmissionAction = async (type, id, request) => {
-    setBusyActionKey(`${type}:${id}`);
-    setSubmissionMessage("");
-    try {
-      const payload = await request();
-      if (type === "pdf" && payload?.pdf_url) {
-        openExternal(payload.pdf_url);
-      }
-      await loadSubmissions();
-    } catch (err) {
-      setSubmissionMessage(err.message || "Операция не выполнена");
-    } finally {
-      setBusyActionKey("");
-    }
+  const downloadSubmission = (submissionId) => {
+    window.location.href = `/api/submissions/${submissionId}/file`;
   };
 
   return (
@@ -365,16 +324,16 @@ export default function Dashboard() {
             Расписание
           </button>
           <button className={`tab-btn ${tab === "materials" ? "active" : ""}`} onClick={() => setTab("materials")}>
-            Статья и проверка
+            Материалы
           </button>
         </aside>
         <div className="dashboard-content">
-          {tab === "profile" && (
+          {tab === "profile" ? (
             <div className="card">
               <h3>Профиль участника</h3>
               {profileStatusMessage ? <p className="form-status success">{profileStatusMessage}</p> : null}
               {profileErrorMessage ? <p className="form-status error">{profileErrorMessage}</p> : null}
-              {profile && (
+              {profile ? (
                 <div className="form-grid">
                   <label>
                     ФИО
@@ -430,17 +389,18 @@ export default function Dashboard() {
                     {saving ? "Сохранение..." : "Сохранить изменения"}
                   </button>
                 </div>
-              )}
+              ) : null}
             </div>
-          )}
-          {tab === "schedule" && (
+          ) : null}
+
+          {tab === "schedule" ? (
             <div className="card">
               <h3>Моя секция и расписание</h3>
               {assignmentStatus === "approved" ? (
                 <div className="session-item highlighted">
                   <div className="session-head">
                     <div className="session-title">{schedulePlacement?.section_title || "Секция не указана"}</div>
-                    {scheduleStatus === "current" && <span className="pill pill-current">Текущая сессия</span>}
+                    {scheduleStatus === "current" ? <span className="pill pill-current">Текущая сессия</span> : null}
                   </div>
                   <div className="schedule-row-grid">
                     <div className="schedule-field">
@@ -496,31 +456,28 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
-          )}
-          {tab === "materials" && (
+          ) : null}
+
+          {tab === "materials" ? (
             <div className="article-stack">
               <div className="card">
                 <div className="article-card-head">
                   <div>
                     <h3>Загрузка статьи</h3>
                     <p className="muted">
-                      Загрузите материал в личном кабинете. Проверка запускается в фоне и не прерывается, если вы
-                      закроете страницу.
+                      Загрузите файл статьи в кабинет. Материал будет сохранен и станет доступен оргкомитету.
                     </p>
                   </div>
-                  <span className={`article-api-pill${submissions.enabled ? " ready" : ""}`}>
-                    {submissions.configured ? (submissions.enabled ? "API подключен" : "API выключен") : "API не настроен"}
+                  <span className={`article-api-pill${submissions.storage_configured ? " ready" : ""}`}>
+                    {submissions.storage_configured ? "Хранилище подключено" : "Хранилище недоступно"}
                   </span>
                 </div>
 
-                {!submissions.configured ? (
-                  <p className="muted">Администратор еще не настроил подключение к Антиплагиату.</p>
-                ) : null}
-                {submissions.configured && !submissions.enabled ? (
-                  <p className="muted">Интеграция временно отключена в настройках платформы.</p>
+                {!submissions.storage_configured ? (
+                  <p className="muted">Серверное хранилище пока недоступно. Повторите попытку позже.</p>
                 ) : null}
 
-                {submissions.configured && submissions.enabled ? (
+                {submissions.storage_configured ? (
                   <form className="form-grid article-upload-form" onSubmit={handleUpload}>
                     <label>
                       Название работы
@@ -540,161 +497,73 @@ export default function Dashboard() {
                       />
                     </label>
                     <p className="muted">
-                      Поддерживаются форматы `.txt`, `.doc`, `.docx`, `.pdf`, `.rtf`, `.odt`. Максимальный размер
-                      файла: 20 МБ.
+                      Поддерживаются `.txt`, `.doc`, `.docx`, `.pdf`, `.rtf`, `.odt`. Максимальный размер файла:{" "}
+                      {formatMegabytes(submissions.max_file_size_bytes)}.
                     </p>
                     <div className="form-actions article-form-actions">
                       <button className="btn btn-primary" type="submit" disabled={uploading}>
-                        {uploading ? "Загрузка..." : "Загрузить и проверить"}
+                        {uploading ? "Загрузка..." : "Загрузить статью"}
                       </button>
                     </div>
                   </form>
                 ) : null}
 
                 {submissionMessage ? <p className="article-inline-note">{submissionMessage}</p> : null}
-                {submissions.message ? <p className="article-inline-note">{submissions.message}</p> : null}
               </div>
 
               <div className="card">
                 <div className="article-card-head">
                   <div>
-                    <h3>Мои проверки</h3>
-                    <p className="muted">Статусы обновляются автоматически, пока документ проверяется или формируется PDF.</p>
+                    <h3>Мои материалы</h3>
+                    <p className="muted">Последние загруженные версии файлов.</p>
                   </div>
                 </div>
 
                 {submissions.items.length ? (
                   <div className="article-list">
-                    {submissions.items.map((item) => {
-                      const pdfBusy = busyActionKey === `pdf:${item.id}`;
-                      const refreshBusy = busyActionKey === `refresh:${item.id}`;
-                      const retryBusy = busyActionKey === `retry:${item.id}`;
-                      const originalityLow = item.status === "ready" && Number(item.originality_score || 0) < 75;
-
-                      return (
-                        <article key={item.id} className="article-submission-card">
-                          <div className="article-submission-head">
-                            <div>
-                              <h4>{item.title}</h4>
-                              <p className="muted">
-                                {item.file_name} · {formatDateTime(item.created_at)}
-                              </p>
-                            </div>
-                            <div className="article-status-group">
-                              <span className={`article-status article-status-${item.status}`}>
-                                {submissionStatusLabel(item.status)}
-                              </span>
-                              {item.is_suspicious ? <span className="article-warning-pill">Подозрительно</span> : null}
-                            </div>
-                          </div>
-
-                          {item.status === "ready" ? (
-                            <div className="article-score-grid">
-                              <div className="article-score-card">
-                                <span>Оригинальность</span>
-                                <strong>{formatPercent(item.originality_score)}</strong>
-                              </div>
-                              <div className="article-score-card">
-                                <span>Совпадения</span>
-                                <strong>{formatPercent(item.plagiarism_score)}</strong>
-                              </div>
-                              <div className="article-score-card">
-                                <span>Цитирование</span>
-                                <strong>{formatPercent(item.legal_score)}</strong>
-                              </div>
-                              <div className="article-score-card">
-                                <span>Самоцитирование</span>
-                                <strong>{formatPercent(item.self_cite_score)}</strong>
-                              </div>
-                            </div>
-                          ) : null}
-
-                          {item.estimated_wait_time ? (
-                            <p className="muted">Оценочное ожидание: около {item.estimated_wait_time} сек.</p>
-                          ) : null}
-                          {originalityLow ? (
-                            <p className="article-warning-note">
-                              Оригинальность ниже требуемых 75%. Проверьте отчет и обновите результат после правок.
+                    {submissions.items.map((item) => (
+                      <article key={item.id} className="article-submission-card">
+                        <div className="article-submission-head">
+                          <div>
+                            <h4>{item.title}</h4>
+                            <p className="muted">
+                              {item.file_name} · {formatDateTime(item.created_at)}
                             </p>
-                          ) : null}
-                          {item.error_details ? <p className="article-error-note">{item.error_details}</p> : null}
-                          {item.pdf_status === "in_progress" ? (
-                            <p className="article-inline-note">PDF-отчет формируется в фоне.</p>
-                          ) : null}
-
-                          <div className="article-actions">
-                            {submissions.permissions.short_report && item.short_report_url ? (
-                              <a className="btn btn-ghost" href={item.short_report_url} target="_blank" rel="noreferrer">
-                                Краткий отчет
-                              </a>
-                            ) : null}
-                            {submissions.permissions.readonly_report && item.readonly_report_url ? (
-                              <a className="btn btn-ghost" href={item.readonly_report_url} target="_blank" rel="noreferrer">
-                                Полный readonly
-                              </a>
-                            ) : null}
-                            {submissions.permissions.editable_report && item.report_url ? (
-                              <a className="btn btn-ghost" href={item.report_url} target="_blank" rel="noreferrer">
-                                Полный редактируемый
-                              </a>
-                            ) : null}
-                            {item.summary_report_url ? (
-                              <a className="btn btn-ghost" href={item.summary_report_url} target="_blank" rel="noreferrer">
-                                Сводка
-                              </a>
-                            ) : null}
-                            <button
-                              className="btn btn-ghost"
-                              onClick={() =>
-                                runSubmissionAction("refresh", item.id, () => apiPost(`/submissions/${item.id}/refresh`, {}))
-                              }
-                              disabled={refreshBusy}
-                            >
-                              {refreshBusy ? "Обновление..." : "Обновить результаты"}
-                            </button>
-                            {item.status === "failed" ? (
-                              <button
-                                className="btn btn-primary"
-                                onClick={() =>
-                                  runSubmissionAction("retry", item.id, () => apiPost(`/submissions/${item.id}/retry`, {}))
-                                }
-                                disabled={retryBusy}
-                              >
-                                {retryBusy ? "Запуск..." : "Повторить проверку"}
-                              </button>
-                            ) : null}
-                            {submissions.permissions.pdf_report && item.status === "ready" ? (
-                              <button
-                                className="btn btn-primary"
-                                onClick={() => {
-                                  if (item.pdf_status === "ready" && item.pdf_url) {
-                                    openExternal(item.pdf_url);
-                                    return;
-                                  }
-                                  runSubmissionAction("pdf", item.id, () => apiPost(`/submissions/${item.id}/pdf`, {}));
-                                }}
-                                disabled={pdfBusy || item.pdf_status === "in_progress"}
-                              >
-                                {item.pdf_status === "ready"
-                                  ? "Открыть PDF"
-                                  : item.pdf_status === "in_progress"
-                                    ? "PDF формируется..."
-                                    : pdfBusy
-                                      ? "Запрос..."
-                                      : "Сформировать PDF"}
-                              </button>
-                            ) : null}
                           </div>
-                        </article>
-                      );
-                    })}
+                          <div className="article-status-group">
+                            <span className={`article-status article-status-${item.status}`}>
+                              {submissionStatusLabel(item.status)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="article-score-grid">
+                          <div className="article-score-card">
+                            <span>Размер файла</span>
+                            <strong>{Math.max(1, Math.round((item.file_size || 0) / 1024))} КБ</strong>
+                          </div>
+                          <div className="article-score-card">
+                            <span>Тип файла</span>
+                            <strong>{item.file_type || "-"}</strong>
+                          </div>
+                        </div>
+
+                        {item.error_details ? <p className="article-error-note">{item.error_details}</p> : null}
+
+                        <div className="article-actions">
+                          <button className="btn btn-primary" onClick={() => downloadSubmission(item.id)}>
+                            Скачать файл
+                          </button>
+                        </div>
+                      </article>
+                    ))}
                   </div>
                 ) : (
                   <p className="muted">Статьи пока не загружены.</p>
                 )}
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </section>

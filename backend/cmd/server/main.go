@@ -1,14 +1,13 @@
 package main
 
 import (
-	"conferenceplatforma/internal/antiplagiat"
 	"conferenceplatforma/internal/config"
 	"conferenceplatforma/internal/db"
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/objectstore"
 	"conferenceplatforma/internal/router"
 	"errors"
 	"log"
-	"os"
 	"strings"
 	"time"
 
@@ -19,9 +18,12 @@ func main() {
 	cfg := config.Load()
 	database := db.Connect(cfg.DatabaseURL)
 	seed(database)
-	antiplagiatService := antiplagiat.NewService(database)
+	store, err := objectstore.NewFilesystemStore(cfg.FileStorageRoot)
+	if err != nil {
+		log.Fatalf("init file storage: %v", err)
+	}
 
-	r := router.Setup(database, cfg, antiplagiatService)
+	r := router.Setup(database, cfg, store)
 	log.Printf("server running on :%s", cfg.Port)
 	if err := r.Run(":" + cfg.Port); err != nil {
 		log.Fatal(err)
@@ -31,7 +33,6 @@ func main() {
 func seed(db *gorm.DB) {
 	syncSectionSeed(db)
 	syncConferenceSeed(db)
-	syncAntiplagiatSeed(db)
 	ensureDefaultRooms(db)
 
 	// Ensure required map markers exist (do not overwrite user-edited coordinates).
@@ -137,63 +138,6 @@ func syncConferenceSeed(db *gorm.DB) {
 		"support_email": defaultConference.SupportEmail,
 	}).Error; err != nil {
 		log.Printf("seed conference: failed to update conference: %v", err)
-	}
-}
-
-func syncAntiplagiatSeed(db *gorm.DB) {
-	if !antiplagiatTestBootstrapEnabled() {
-		return
-	}
-
-	var cfg models.AntiplagiatConfig
-	if err := db.Order("id asc").First(&cfg).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			testCfg := models.AntiplagiatConfig{
-				SiteURL:             "https://testapi.antiplagiat.ru",
-				WSDLURL:             "https://api.antiplagiat.ru:4959/apiCorp/testapi?wsdl",
-				APILogin:            "testapi@antiplagiat.ru",
-				APIPassword:         "testapi",
-				Enabled:             true,
-				AllowShortReport:    true,
-				AllowReadonlyReport: true,
-				AllowEditableReport: false,
-				AllowPdfReport:      true,
-			}
-			if err := db.Create(&testCfg).Error; err != nil {
-				log.Printf("seed antiplagiat: failed to create config: %v", err)
-			}
-		}
-		return
-	}
-
-	updates := map[string]any{}
-	if strings.TrimSpace(cfg.SiteURL) == "" {
-		updates["site_url"] = "https://testapi.antiplagiat.ru"
-	}
-	if strings.TrimSpace(cfg.WSDLURL) == "" {
-		updates["wsdl_url"] = "https://api.antiplagiat.ru:4959/apiCorp/testapi?wsdl"
-	}
-	if strings.TrimSpace(cfg.APILogin) == "" {
-		updates["api_login"] = "testapi@antiplagiat.ru"
-	}
-	if strings.TrimSpace(cfg.APIPassword) == "" {
-		updates["api_password"] = "testapi"
-	}
-	if len(updates) == 0 {
-		return
-	}
-	if err := db.Model(&cfg).Updates(updates).Error; err != nil {
-		log.Printf("seed antiplagiat: failed to update config: %v", err)
-	}
-}
-
-func antiplagiatTestBootstrapEnabled() bool {
-	value := strings.TrimSpace(strings.ToLower(os.Getenv("ANTIPLAGIAT_BOOTSTRAP_TEST_CONFIG")))
-	switch value {
-	case "1", "true", "yes", "on":
-		return true
-	default:
-		return false
 	}
 }
 

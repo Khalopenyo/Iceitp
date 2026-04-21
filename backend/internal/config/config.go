@@ -37,13 +37,7 @@ type Config struct {
 	GreenSMSTelegramTTL     int
 	GreenSMSTelegramCascade string
 	GreenSMSTelegramText    string
-	ObjectStorageEndpoint   string
-	ObjectStorageRegion     string
-	ObjectStorageBucket     string
-	ObjectStoragePrefix     string
-	ObjectStorageAccessKey  string
-	ObjectStorageSecretKey  string
-	ObjectStorageUsePathStyle bool
+	FileStorageRoot         string
 }
 
 const (
@@ -134,13 +128,7 @@ func Load() Config {
 		GreenSMSTelegramTTL:     envInt("GREENSMS_TELEGRAM_TTL", 3600),
 		GreenSMSTelegramCascade: strings.TrimSpace(os.Getenv("GREENSMS_TELEGRAM_CASCADE")),
 		GreenSMSTelegramText:    os.Getenv("GREENSMS_TELEGRAM_CASCADE_TEXT"),
-		ObjectStorageEndpoint:   strings.TrimSpace(os.Getenv("OBJECT_STORAGE_ENDPOINT")),
-		ObjectStorageRegion:     strings.TrimSpace(os.Getenv("OBJECT_STORAGE_REGION")),
-		ObjectStorageBucket:     strings.TrimSpace(os.Getenv("OBJECT_STORAGE_BUCKET")),
-		ObjectStoragePrefix:     strings.TrimSpace(os.Getenv("OBJECT_STORAGE_PREFIX")),
-		ObjectStorageAccessKey:  strings.TrimSpace(os.Getenv("OBJECT_STORAGE_ACCESS_KEY")),
-		ObjectStorageSecretKey:  os.Getenv("OBJECT_STORAGE_SECRET_KEY"),
-		ObjectStorageUsePathStyle: envBool("OBJECT_STORAGE_USE_PATH_STYLE", true),
+		FileStorageRoot:         defaultFileStorageRoot(),
 	}
 	if cfg.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL is required")
@@ -152,6 +140,20 @@ func Load() Config {
 		cfg.Port = "8080"
 	}
 	return cfg
+}
+
+func defaultFileStorageRoot() string {
+	if value := strings.TrimSpace(os.Getenv("FILE_STORAGE_ROOT")); value != "" {
+		return value
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "storage"
+	}
+	if filepath.Base(cwd) == "backend" {
+		return filepath.Clean(filepath.Join(cwd, "..", "storage"))
+	}
+	return filepath.Join(cwd, "storage")
 }
 
 func loadAppBaseURL() string {
@@ -179,21 +181,6 @@ func envInt(key string, fallback int) int {
 		return fallback
 	}
 	return parsed
-}
-
-func envBool(key string, fallback bool) bool {
-	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
-	if value == "" {
-		return fallback
-	}
-	switch value {
-	case "1", "true", "yes", "on":
-		return true
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return fallback
-	}
 }
 
 func envDuration(key string, fallback time.Duration) time.Duration {

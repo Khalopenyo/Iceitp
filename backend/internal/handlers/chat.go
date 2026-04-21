@@ -356,7 +356,7 @@ func (h *ChatHandler) DownloadAttachment(c *gin.Context) {
 	}
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", attachment.FileName))
 	c.Header("Content-Length", strconv.FormatInt(obj.Size, 10))
-	_, _ = c.Writer.ReadFrom(obj.Body)
+	_, _ = io.Copy(c.Writer, obj.Body)
 }
 
 func (h *ChatHandler) resolveRequestedChannel(userID uint, rawScope string) (models.ChatChannel, *models.Section, error) {

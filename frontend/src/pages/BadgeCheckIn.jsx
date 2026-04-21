@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { apiPost } from "../lib/api.js";
+import { apiGet, apiPost } from "../lib/api.js";
 
 function formatDateTime(value) {
   if (!value) return "";
@@ -30,6 +30,9 @@ function formatCheckInError(err) {
   if (err?.name === "AbortError") {
     return "Backend не ответил на запрос check-in за 8 секунд. Проверьте, что API запущен и доступен.";
   }
+  if (err?.message === "Forbidden") {
+    return "Отмечать присутствие по бейджу может только администратор или оргкомитет.";
+  }
   return err?.message || "Не удалось отметить присутствие по QR.";
 }
 
@@ -39,6 +42,41 @@ export default function BadgeCheckIn() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [authRequired, setAuthRequired] = useState(false);
+
+  const verifyBadge = async () => {
+    setLoading(true);
+    setErrorMessage("");
+    setAuthRequired(false);
+    const requestOptions = createCheckInRequestOptions();
+    try {
+      const currentUser = await apiGet("/me", {
+        signal: requestOptions.signal,
+        suppressAuthRedirect: true,
+      });
+      if (!currentUser?.role || !["admin", "org"].includes(currentUser.role)) {
+        throw new Error("Forbidden");
+      }
+      const data = await apiPost(
+        "/admin/checkin/verify",
+        { token },
+        {
+          signal: requestOptions.signal,
+          suppressAuthRedirect: true,
+        }
+      );
+      setResult(data);
+    } catch (err) {
+      if (err?.message === "Request failed" || err?.message === "Unauthorized") {
+        setAuthRequired(true);
+      } else {
+        setErrorMessage(formatCheckInError(err));
+      }
+    } finally {
+      requestOptions.cleanup();
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!token) {
@@ -52,22 +90,11 @@ export default function BadgeCheckIn() {
     let cancelled = false;
 
     const verify = async () => {
-      setLoading(true);
-      setErrorMessage("");
-      const requestOptions = createCheckInRequestOptions();
       try {
-        const data = await apiPost("/checkin/scan", { token }, { signal: requestOptions.signal });
-        if (!cancelled) {
-          setResult(data);
-        }
+        await verifyBadge();
       } catch (err) {
         if (!cancelled) {
           setErrorMessage(formatCheckInError(err));
-        }
-      } finally {
-        requestOptions.cleanup();
-        if (!cancelled) {
-          setLoading(false);
         }
       }
     };
@@ -86,16 +113,10 @@ export default function BadgeCheckIn() {
     attemptedRef.current = "";
     setResult(null);
     setErrorMessage("");
-    setLoading(true);
-    const requestOptions = createCheckInRequestOptions();
     try {
-      const data = await apiPost("/checkin/scan", { token }, { signal: requestOptions.signal });
-      setResult(data);
+      await verifyBadge();
     } catch (err) {
       setErrorMessage(formatCheckInError(err));
-    } finally {
-      requestOptions.cleanup();
-      setLoading(false);
     }
   };
 
@@ -116,7 +137,12 @@ export default function BadgeCheckIn() {
   return (
     <section className="panel narrow">
       <h2>Отметка присутствия</h2>
-      {loading ? <p className="form-status info">Отмечаю ваше присутствие по QR-коду...</p> : null}
+      {loading ? <p className="form-status info">Проверяю права организатора и отмечаю участника...</p> : null}
+      {authRequired ? (
+        <p className="form-status info">
+          Для отметки присутствия нужно войти под администратором или оргкомитетом.
+        </p>
+      ) : null}
       {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
       {result ? (
         <>
@@ -146,6 +172,11 @@ export default function BadgeCheckIn() {
         </>
       ) : null}
       <div className="form-actions">
+        {authRequired ? (
+          <Link className="btn btn-primary" to={`/login?next=${encodeURIComponent(`/badge/${token}`)}`}>
+            Войти как организатор
+          </Link>
+        ) : null}
         <button className="btn btn-primary" type="button" onClick={retry} disabled={loading}>
           {loading ? "Обработка..." : "Повторить"}
         </button>

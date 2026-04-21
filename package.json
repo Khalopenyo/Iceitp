@@ -5,7 +5,6 @@
     "dev": "npm --prefix frontend run dev",
     "build": "npm --prefix frontend run build",
     "lint": "npm --prefix frontend run lint",
-    "api": "cd backend && go run ./cmd/server",
-    "worker": "cd backend && go run ./cmd/worker"
+    "api": "cd backend && go run ./cmd/server"
   }
 }

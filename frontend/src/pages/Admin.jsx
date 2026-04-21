@@ -1,10 +1,17 @@
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiDelete, apiGet, apiPost, apiPut } from "../lib/api.js";
 import AdminProgramTab from "../components/admin/AdminProgramTab.jsx";
 import { defaultRooms } from "../data/rooms.js";
 import { notifyConferenceUpdated } from "../lib/conference.js";
 import { triggerBlobDownload } from "../lib/download.js";
+
+const emptyPage = {
+  items: [],
+  total: 0,
+  page: 1,
+  page_size: 20,
+};
 
 const toInputDateTime = (value) => {
   if (!value) return "";
@@ -38,7 +45,7 @@ function RoomDropdown({ value, onChange, rooms, placeholder }) {
       >
         {value || placeholder}
       </button>
-      {open && (
+      {open ? (
         <div className="dropdown-menu room-menu">
           <input
             className="dropdown-search"
@@ -70,7 +77,7 @@ function RoomDropdown({ value, onChange, rooms, placeholder }) {
             );
           })}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -125,12 +132,50 @@ function RoomMapPicker({ open, rooms, onClose, onSelect }) {
   );
 }
 
+function buildQuery(params) {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return;
+    searchParams.set(key, String(value));
+  });
+  const query = searchParams.toString();
+  return query ? `?${query}` : "";
+}
+
+function PaginationControls({ page, pageSize, total, onPageChange }) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  return (
+    <div className="row-actions">
+      <span className="muted">
+        Страница {page} из {totalPages} · всего {total}
+      </span>
+      <button
+        type="button"
+        className="btn btn-ghost"
+        onClick={() => onPageChange(Math.max(1, page - 1))}
+        disabled={page <= 1}
+      >
+        Назад
+      </button>
+      <button
+        type="button"
+        className="btn btn-ghost"
+        onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+        disabled={page >= totalPages}
+      >
+        Вперед
+      </button>
+    </div>
+  );
+}
+
 export default function Admin() {
   const navigate = useNavigate();
-  const [users, setUsers] = useState([]);
+  const [usersPage, setUsersPage] = useState(emptyPage);
+  const [consentsPage, setConsentsPage] = useState(emptyPage);
+  const [feedbackPage, setFeedbackPage] = useState(emptyPage);
   const [sections, setSections] = useState([]);
-  const [consents, setConsents] = useState([]);
-  const [feedbackEntries, setFeedbackEntries] = useState([]);
   const [rooms, setRooms] = useState(defaultRooms);
   const [tab, setTab] = useState("users");
   const [showRoomMap, setShowRoomMap] = useState(false);
@@ -144,32 +189,6 @@ export default function Admin() {
     support_email: "",
   });
   const [savingConference, setSavingConference] = useState(false);
-  const [antiplagiatForm, setAntiplagiatForm] = useState({
-    site_url: "",
-    wsdl_url: "",
-    api_login: "",
-    api_password: "",
-    enabled: false,
-    add_to_index: false,
-    check_services: [],
-    allow_short_report: true,
-    allow_readonly_report: true,
-    allow_editable_report: false,
-    allow_pdf_report: true,
-    has_password: false,
-    env_overrides: {
-      site_url: false,
-      wsdl_url: false,
-      api_login: false,
-      api_password: false,
-      enabled: false,
-    },
-  });
-  const [availableCheckServices, setAvailableCheckServices] = useState([]);
-  const [loadingCheckServices, setLoadingCheckServices] = useState(false);
-  const [savingAntiplagiat, setSavingAntiplagiat] = useState(false);
-  const [pingingAntiplagiat, setPingingAntiplagiat] = useState(false);
-  const [antiplagiatPing, setAntiplagiatPing] = useState("");
   const [checkinToken, setCheckinToken] = useState("");
   const [verifyingCheckin, setVerifyingCheckin] = useState(false);
   const [checkinResult, setCheckinResult] = useState(null);
@@ -185,78 +204,16 @@ export default function Admin() {
   });
   const [roomForm, setRoomForm] = useState({ floor: 1, name: "" });
 
-  const loadAntiplagiatServices = async () => {
-    setLoadingCheckServices(true);
-    try {
-      const response = await apiGet("/admin/antiplagiat/services");
-      setAvailableCheckServices(response?.items || []);
-    } catch {
-      setAvailableCheckServices([]);
-    } finally {
-      setLoadingCheckServices(false);
-    }
-  };
+  const [userQuery, setUserQuery] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState("");
+  const [userTypeFilter, setUserTypeFilter] = useState("");
+  const [userBadgeFilter, setUserBadgeFilter] = useState("");
 
-  const load = () => {
-    apiGet("/admin/users").then(setUsers).catch(handleForbidden);
-    apiGet("/sections").then(setSections).catch(() => setSections([]));
-    apiGet("/admin/consents").then(setConsents).catch(() => setConsents([]));
-    apiGet("/admin/feedback").then(setFeedbackEntries).catch(() => setFeedbackEntries([]));
-    apiGet("/rooms").then(setRooms).catch(() => setRooms(defaultRooms));
-    apiGet("/admin/conference")
-      .then((conf) => {
-        setConferenceForm({
-          title: conf.title || "",
-          description: conf.description || "",
-          status: conf.status || "draft",
-          starts_at: toInputDateTime(conf.starts_at),
-          ends_at: toInputDateTime(conf.ends_at),
-          proceedings_url: conf.proceedings_url || "",
-          support_email: conf.support_email || "",
-        });
-      })
-      .catch(() => {});
-    apiGet("/admin/antiplagiat/config")
-      .then((config) => {
-        setAntiplagiatForm({
-          site_url: config.site_url || "",
-          wsdl_url: config.wsdl_url || "",
-          api_login: config.api_login || "",
-          api_password: "",
-          enabled: Boolean(config.enabled),
-          add_to_index: Boolean(config.add_to_index),
-          check_services: config.check_services || [],
-          allow_short_report: config.allow_short_report !== false,
-          allow_readonly_report: config.allow_readonly_report !== false,
-          allow_editable_report: Boolean(config.allow_editable_report),
-          allow_pdf_report: config.allow_pdf_report !== false,
-          has_password: Boolean(config.has_password),
-          env_overrides: {
-            site_url: Boolean(config.env_overrides?.site_url),
-            wsdl_url: Boolean(config.env_overrides?.wsdl_url),
-            api_login: Boolean(config.env_overrides?.api_login),
-            api_password: Boolean(config.env_overrides?.api_password),
-            enabled: Boolean(config.env_overrides?.enabled),
-          },
-        });
-        if (config.site_url || config.wsdl_url || config.api_login || config.has_password || config.env_overrides?.api_password) {
-          loadAntiplagiatServices();
-        } else {
-          setAvailableCheckServices([]);
-        }
-      })
-      .catch(() => {
-        setAvailableCheckServices([]);
-      });
-  };
+  const [consentQuery, setConsentQuery] = useState("");
+  const [consentTypeFilter, setConsentTypeFilter] = useState("");
 
-  const loadOnMount = useEffectEvent(() => {
-    load();
-  });
-
-  useEffect(() => {
-    loadOnMount();
-  }, []);
+  const [feedbackQuery, setFeedbackQuery] = useState("");
+  const [feedbackRatingFilter, setFeedbackRatingFilter] = useState("");
 
   const setAdminStatus = (message) => {
     setAdminErrorMessage("");
@@ -266,6 +223,103 @@ export default function Admin() {
   const setAdminError = (message) => {
     setAdminStatusMessage("");
     setAdminErrorMessage(message);
+  };
+
+  const handleForbidden = () => {
+    navigate("/forbidden", { replace: true });
+  };
+
+  const loadUsers = async (page = usersPage.page) => {
+    try {
+      const response = await apiGet(
+        `/admin/users${buildQuery({
+          page,
+          page_size: usersPage.page_size,
+          q: userQuery,
+          role: userRoleFilter,
+          user_type: userTypeFilter,
+          badge_issued: userBadgeFilter,
+        })}`
+      );
+      setUsersPage(response);
+    } catch {
+      handleForbidden();
+    }
+  };
+
+  const loadConsents = async (page = consentsPage.page) => {
+    try {
+      const response = await apiGet(
+        `/admin/consents${buildQuery({
+          page,
+          page_size: consentsPage.page_size,
+          q: consentQuery,
+          consent_type: consentTypeFilter,
+        })}`
+      );
+      setConsentsPage(response);
+    } catch {
+      setConsentsPage(emptyPage);
+    }
+  };
+
+  const loadFeedback = async (page = feedbackPage.page) => {
+    try {
+      const response = await apiGet(
+        `/admin/feedback${buildQuery({
+          page,
+          page_size: feedbackPage.page_size,
+          q: feedbackQuery,
+          rating: feedbackRatingFilter,
+        })}`
+      );
+      setFeedbackPage(response);
+    } catch {
+      setFeedbackPage(emptyPage);
+    }
+  };
+
+  const loadBase = async () => {
+    try {
+      const [sectionsResponse, roomsResponse, conferenceResponse] = await Promise.all([
+        apiGet("/sections"),
+        apiGet("/rooms"),
+        apiGet("/admin/conference"),
+      ]);
+      setSections(sectionsResponse);
+      setRooms(roomsResponse);
+      setConferenceForm({
+        title: conferenceResponse.title || "",
+        description: conferenceResponse.description || "",
+        status: conferenceResponse.status || "draft",
+        starts_at: toInputDateTime(conferenceResponse.starts_at),
+        ends_at: toInputDateTime(conferenceResponse.ends_at),
+        proceedings_url: conferenceResponse.proceedings_url || "",
+        support_email: conferenceResponse.support_email || "",
+      });
+    } catch {
+      handleForbidden();
+    }
+  };
+
+  useEffect(() => {
+    loadBase();
+  }, []);
+
+  useEffect(() => {
+    loadUsers(1);
+  }, [userQuery, userRoleFilter, userTypeFilter, userBadgeFilter]);
+
+  useEffect(() => {
+    loadConsents(1);
+  }, [consentQuery, consentTypeFilter]);
+
+  useEffect(() => {
+    loadFeedback(1);
+  }, [feedbackQuery, feedbackRatingFilter]);
+
+  const reloadEverything = async () => {
+    await Promise.all([loadBase(), loadUsers(usersPage.page), loadConsents(consentsPage.page), loadFeedback(feedbackPage.page)]);
   };
 
   const createSection = async (e) => {
@@ -279,19 +333,17 @@ export default function Admin() {
       });
       setSectionForm({ title: "", description: "", room: "", capacity: 10, start_at: "", end_at: "" });
       setAdminStatus("Секция добавлена в программу конференции.");
-      load();
+      loadBase();
     } catch {
       handleForbidden();
     }
   };
 
-  // sessions removed; no auto-assign
-
   const seedDemo = async () => {
     try {
       await apiPost("/admin/seed-demo", {});
       setAdminStatus("Тестовые данные созданы.");
-      load();
+      loadBase();
     } catch {
       handleForbidden();
     }
@@ -300,7 +352,8 @@ export default function Admin() {
   const updateRole = async (id, role) => {
     try {
       await apiPut(`/admin/users/${id}/role`, { role });
-      load();
+      setAdminStatus("Роль пользователя обновлена.");
+      loadUsers(usersPage.page);
     } catch {
       handleForbidden();
     }
@@ -310,7 +363,7 @@ export default function Admin() {
     try {
       await apiPut(`/admin/users/${id}/badge`, { badge_issued: badgeIssued });
       setAdminStatus(badgeIssued ? "Бейдж подготовлен и доступен участнику." : "Доступ к бейджу отключен.");
-      load();
+      loadUsers(usersPage.page);
     } catch (err) {
       setAdminError(err.message || "Не удалось изменить статус бейджа.");
     }
@@ -336,17 +389,19 @@ export default function Admin() {
     if (!confirm("Удалить пользователя и связанные данные?")) return;
     try {
       await apiDelete(`/admin/users/${id}`);
-      load();
+      setAdminStatus("Пользователь удален.");
+      loadUsers(Math.max(1, usersPage.page));
     } catch {
       handleForbidden();
     }
   };
 
   const deleteSection = async (id) => {
-    if (!confirm("Удалить секцию и все сессии в ней?")) return;
+    if (!confirm("Удалить секцию и все связанные записи?")) return;
     try {
       await apiDelete(`/admin/sections/${id}`);
-      load();
+      setAdminStatus("Секция удалена.");
+      loadBase();
     } catch {
       handleForbidden();
     }
@@ -361,7 +416,18 @@ export default function Admin() {
       await apiPost("/admin/rooms", { name, floor });
       setRoomForm({ floor, name: "" });
       setAdminStatus(`Аудитория "${name}" добавлена.`);
-      load();
+      loadBase();
+    } catch {
+      handleForbidden();
+    }
+  };
+
+  const deleteRoom = async (id) => {
+    if (!confirm("Удалить аудиторию из списка?")) return;
+    try {
+      await apiDelete(`/admin/rooms/${id}`);
+      setAdminStatus("Аудитория удалена.");
+      loadBase();
     } catch {
       handleForbidden();
     }
@@ -387,91 +453,11 @@ export default function Admin() {
       });
       notifyConferenceUpdated();
       setAdminStatus("Параметры конференции сохранены.");
-      load();
+      loadBase();
     } catch {
       handleForbidden();
     } finally {
       setSavingConference(false);
-    }
-  };
-
-  const toggleCheckService = (code) => {
-    setAntiplagiatForm((prev) => {
-      const exists = prev.check_services.includes(code);
-      return {
-        ...prev,
-        check_services: exists
-          ? prev.check_services.filter((item) => item !== code)
-          : [...prev.check_services, code],
-      };
-    });
-  };
-
-  const saveAntiplagiat = async (e) => {
-    e.preventDefault();
-    if (!antiplagiatForm.site_url.trim() || !antiplagiatForm.wsdl_url.trim() || !antiplagiatForm.api_login.trim()) {
-      setAdminError("Укажите адрес кабинета, WSDL и API-логин.");
-      return;
-    }
-    setSavingAntiplagiat(true);
-    setAntiplagiatPing("");
-    setAdminErrorMessage("");
-    try {
-      const saved = await apiPut("/admin/antiplagiat/config", {
-        site_url: antiplagiatForm.site_url,
-        wsdl_url: antiplagiatForm.wsdl_url,
-        api_login: antiplagiatForm.api_login,
-        api_password: antiplagiatForm.api_password,
-        enabled: antiplagiatForm.enabled,
-        add_to_index: antiplagiatForm.add_to_index,
-        check_services: antiplagiatForm.check_services,
-        allow_short_report: antiplagiatForm.allow_short_report,
-        allow_readonly_report: antiplagiatForm.allow_readonly_report,
-        allow_editable_report: antiplagiatForm.allow_editable_report,
-        allow_pdf_report: antiplagiatForm.allow_pdf_report,
-      });
-      setAntiplagiatForm((prev) => ({
-        ...prev,
-        site_url: saved.site_url || prev.site_url,
-        wsdl_url: saved.wsdl_url || prev.wsdl_url,
-        api_login: saved.api_login || prev.api_login,
-        enabled: Boolean(saved.enabled),
-        add_to_index: Boolean(saved.add_to_index),
-        check_services: saved.check_services || prev.check_services,
-        allow_short_report: saved.allow_short_report !== false,
-        allow_readonly_report: saved.allow_readonly_report !== false,
-        allow_editable_report: Boolean(saved.allow_editable_report),
-        allow_pdf_report: saved.allow_pdf_report !== false,
-        api_password: "",
-        has_password: Boolean(saved.has_password),
-        env_overrides: {
-          site_url: Boolean(saved.env_overrides?.site_url),
-          wsdl_url: Boolean(saved.env_overrides?.wsdl_url),
-          api_login: Boolean(saved.env_overrides?.api_login),
-          api_password: Boolean(saved.env_overrides?.api_password),
-          enabled: Boolean(saved.env_overrides?.enabled),
-        },
-      }));
-      await loadAntiplagiatServices();
-      setAdminStatus("Настройки Антиплагиата сохранены.");
-    } catch (err) {
-      setAdminError(err.message || "Не удалось сохранить настройки Антиплагиата");
-    } finally {
-      setSavingAntiplagiat(false);
-    }
-  };
-
-  const pingAntiplagiat = async () => {
-    setPingingAntiplagiat(true);
-    setAntiplagiatPing("");
-    try {
-      const result = await apiPost("/admin/antiplagiat/ping", {});
-      await loadAntiplagiatServices();
-      setAntiplagiatPing(`Соединение успешно: ${result.result || "ok"}`);
-    } catch (err) {
-      setAntiplagiatPing(err.message || "Не удалось проверить подключение");
-    } finally {
-      setPingingAntiplagiat(false);
     }
   };
 
@@ -494,27 +480,12 @@ export default function Admin() {
     }
   };
 
-  const deleteRoom = async (id) => {
-    if (!confirm("Удалить аудиторию из списка?")) return;
-    try {
-      await apiDelete(`/admin/rooms/${id}`);
-      load();
-    } catch {
-      handleForbidden();
-    }
-  };
-
-  const handleForbidden = () => {
-    navigate("/forbidden", { replace: true });
-  };
-
-  const antiplagiatUsesEnv = Object.values(antiplagiatForm.env_overrides || {}).some(Boolean);
-
   return (
     <section className="panel">
       <h2>Администрирование</h2>
       {adminStatusMessage ? <p className="form-status success">{adminStatusMessage}</p> : null}
       {adminErrorMessage ? <p className="form-status error">{adminErrorMessage}</p> : null}
+
       <div className="dashboard-layout">
         <aside className="dashboard-tabs">
           <button className={`tab-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>
@@ -539,59 +510,105 @@ export default function Admin() {
             Инструменты
           </button>
         </aside>
+
         <div className="dashboard-content">
-          {tab === "users" && (
+          {tab === "users" ? (
             <div className="card">
               <h3>Пользователи</h3>
+              <div className="form-grid">
+                <label>
+                  Поиск
+                  <input
+                    value={userQuery}
+                    onChange={(e) => setUserQuery(e.target.value)}
+                    placeholder="ФИО, email, организация, телефон"
+                  />
+                </label>
+                <label>
+                  Роль
+                  <select value={userRoleFilter} onChange={(e) => setUserRoleFilter(e.target.value)}>
+                    <option value="">Все</option>
+                    <option value="participant">participant</option>
+                    <option value="org">org</option>
+                    <option value="admin">admin</option>
+                  </select>
+                </label>
+                <label>
+                  Формат участия
+                  <select value={userTypeFilter} onChange={(e) => setUserTypeFilter(e.target.value)}>
+                    <option value="">Все</option>
+                    <option value="offline">offline</option>
+                    <option value="online">online</option>
+                  </select>
+                </label>
+                <label>
+                  Бейдж
+                  <select value={userBadgeFilter} onChange={(e) => setUserBadgeFilter(e.target.value)}>
+                    <option value="">Все</option>
+                    <option value="true">готов</option>
+                    <option value="false">не готов</option>
+                  </select>
+                </label>
+              </div>
+
               <div className="table">
-                {users.map((u) => (
-                  <div key={u.id} className="row">
+                {usersPage.items.map((user) => (
+                  <div key={user.id} className="row">
                     <div>
-                      <strong>{u.profile?.full_name || u.email}</strong>
+                      <strong>{user.profile?.full_name || user.email}</strong>
                       <div className="muted">
-                        {u.email} · {u.user_type === "offline" ? "оффлайн" : "онлайн"}
+                        {user.email} · {user.user_type === "offline" ? "оффлайн" : "онлайн"}
                       </div>
+                      {user.profile?.organization ? <div className="muted">{user.profile.organization}</div> : null}
                     </div>
                     <div className="row-actions">
-                      <span className="pill">{u.role}</span>
-                      {u.user_type === "offline" ? (
-                        <span className="pill">{u.badge_issued ? "Бейдж готов" : "Бейдж не подготовлен"}</span>
+                      <span className="pill">{user.role}</span>
+                      {user.user_type === "offline" ? (
+                        <span className="pill">{user.badge_issued ? "Бейдж готов" : "Бейдж не подготовлен"}</span>
                       ) : (
                         <span className="pill">Без бейджа</span>
                       )}
-                      <button className="btn btn-ghost" onClick={() => updateRole(u.id, "org")}>
+                      <button className="btn btn-ghost" onClick={() => updateRole(user.id, "org")}>
                         Оргкомитет
                       </button>
-                      <button className="btn btn-ghost" onClick={() => updateRole(u.id, "admin")}>
+                      <button className="btn btn-ghost" onClick={() => updateRole(user.id, "admin")}>
                         Админ
                       </button>
-                      {u.user_type === "offline" ? (
+                      {user.user_type === "offline" ? (
                         <>
                           <button
                             className="btn btn-ghost"
-                            onClick={() => setBadgeIssued(u.id, !u.badge_issued)}
+                            onClick={() => setBadgeIssued(user.id, !user.badge_issued)}
                           >
-                            {u.badge_issued ? "Снять бейдж" : "Подготовить бейдж"}
+                            {user.badge_issued ? "Снять бейдж" : "Подготовить бейдж"}
                           </button>
                           <button
                             className="btn btn-primary"
-                            onClick={() => downloadUserBadge(u.id, u.profile?.full_name || u.email)}
-                            disabled={!u.badge_issued}
+                            onClick={() => downloadUserBadge(user.id, user.profile?.full_name || user.email)}
+                            disabled={!user.badge_issued}
                           >
                             Скачать бейдж
                           </button>
                         </>
                       ) : null}
-                      <button className="btn btn-danger" onClick={() => deleteUser(u.id)}>
+                      <button className="btn btn-danger" onClick={() => deleteUser(user.id)}>
                         Удалить
                       </button>
                     </div>
                   </div>
                 ))}
               </div>
+              {usersPage.items.length === 0 ? <p className="muted">Пользователи не найдены.</p> : null}
+              <PaginationControls
+                page={usersPage.page}
+                pageSize={usersPage.page_size}
+                total={usersPage.total}
+                onPageChange={loadUsers}
+              />
             </div>
-          )}
-          {tab === "sections" && (
+          ) : null}
+
+          {tab === "sections" ? (
             <div className="card">
               <h3>Секции</h3>
               <form className="form-grid" onSubmit={createSection}>
@@ -654,25 +671,27 @@ export default function Admin() {
                 </button>
               </form>
               <div className="table compact">
-                {sections.map((s) => (
-                  <div key={s.id} className="row">
+                {sections.map((section) => (
+                  <div key={section.id} className="row">
                     <div>
-                      <strong>{s.title}</strong>
+                      <strong>{section.title}</strong>
                       <div className="muted">
-                        {s.room || "Без аудитории"} ·{" "}
-                        {s.start_at ? new Date(s.start_at).toLocaleString() : "Без времени"}
+                        {section.room || "Без аудитории"} ·{" "}
+                        {section.start_at ? new Date(section.start_at).toLocaleString() : "Без времени"}
                       </div>
                     </div>
-                    <button className="btn btn-danger" onClick={() => deleteSection(s.id)}>
+                    <button className="btn btn-danger" onClick={() => deleteSection(section.id)}>
                       Удалить
                     </button>
                   </div>
                 ))}
               </div>
             </div>
-          )}
-          {tab === "program" && <AdminProgramTab />}
-          {tab === "rooms" && (
+          ) : null}
+
+          {tab === "program" ? <AdminProgramTab /> : null}
+
+          {tab === "rooms" ? (
             <div className="card">
               <h3>Аудитории</h3>
               <form className="form-grid" onSubmit={createRoom}>
@@ -703,42 +722,93 @@ export default function Admin() {
                       <strong>{room.name}</strong>
                       <div className="muted">Этаж {room.floor || "-"}</div>
                     </div>
-                    {room.id && (
+                    {room.id ? (
                       <button className="btn btn-danger" onClick={() => deleteRoom(room.id)}>
                         Удалить
                       </button>
-                    )}
+                    ) : null}
                   </div>
                 ))}
               </div>
             </div>
-          )}
-          {tab === "consents" && (
+          ) : null}
+
+          {tab === "consents" ? (
             <div className="card">
               <h3>Логи согласий</h3>
+              <div className="form-grid">
+                <label>
+                  Поиск
+                  <input
+                    value={consentQuery}
+                    onChange={(e) => setConsentQuery(e.target.value)}
+                    placeholder="ФИО, email, версия, IP"
+                  />
+                </label>
+                <label>
+                  Тип согласия
+                  <select value={consentTypeFilter} onChange={(e) => setConsentTypeFilter(e.target.value)}>
+                    <option value="">Все</option>
+                    <option value="personal_data">personal_data</option>
+                    <option value="publication">publication</option>
+                  </select>
+                </label>
+              </div>
+
               <div className="table compact">
-                {consents.map((c) => (
-                  <div key={c.id} className="row">
+                {consentsPage.items.map((consent) => (
+                  <div key={consent.id} className="row">
                     <div>
-                      <strong>Пользователь #{c.user_id}</strong>
-                      <div className="muted">{new Date(c.granted_at).toLocaleString()}</div>
+                      <strong>{consent.user_name || consent.user_email || `Пользователь #${consent.user_id}`}</strong>
+                      <div className="muted">{consent.user_email || "Email не указан"}</div>
+                      <div className="muted">{new Date(consent.granted_at).toLocaleString()}</div>
                     </div>
                     <div className="row-actions">
-                      <span className="pill">{c.consent_version}</span>
-                      <span className="muted">{c.ip}</span>
+                      <span className="pill">{consent.consent_type}</span>
+                      <span className="pill">{consent.consent_version}</span>
+                      {consent.ip ? <span className="muted">{consent.ip}</span> : null}
                     </div>
                   </div>
                 ))}
               </div>
-              {consents.length === 0 && <p className="muted">Записей пока нет.</p>}
+              {consentsPage.items.length === 0 ? <p className="muted">Записей пока нет.</p> : null}
+              <PaginationControls
+                page={consentsPage.page}
+                pageSize={consentsPage.page_size}
+                total={consentsPage.total}
+                onPageChange={loadConsents}
+              />
             </div>
-          )}
-          {tab === "feedback" && (
+          ) : null}
+
+          {tab === "feedback" ? (
             <div className="card">
               <h3>Отзывы участников</h3>
               <p className="muted">Все отправленные отзывы и предложения по улучшению конференции.</p>
+              <div className="form-grid">
+                <label>
+                  Поиск
+                  <input
+                    value={feedbackQuery}
+                    onChange={(e) => setFeedbackQuery(e.target.value)}
+                    placeholder="ФИО, email, текст отзыва"
+                  />
+                </label>
+                <label>
+                  Оценка
+                  <select value={feedbackRatingFilter} onChange={(e) => setFeedbackRatingFilter(e.target.value)}>
+                    <option value="">Все</option>
+                    <option value="5">5</option>
+                    <option value="4">4</option>
+                    <option value="3">3</option>
+                    <option value="2">2</option>
+                    <option value="1">1</option>
+                  </select>
+                </label>
+              </div>
+
               <div className="table compact">
-                {feedbackEntries.map((entry) => (
+                {feedbackPage.items.map((entry) => (
                   <div key={entry.id} className="row">
                     <div>
                       <strong>{entry.user_name || entry.user_email || `Участник #${entry.user_id}`}</strong>
@@ -754,167 +824,27 @@ export default function Admin() {
                   </div>
                 ))}
               </div>
-              {feedbackEntries.length === 0 && <p className="muted">Отзывов пока нет.</p>}
+              {feedbackPage.items.length === 0 ? <p className="muted">Отзывов пока нет.</p> : null}
+              <PaginationControls
+                page={feedbackPage.page}
+                pageSize={feedbackPage.page_size}
+                total={feedbackPage.total}
+                onPageChange={loadFeedback}
+              />
             </div>
-          )}
-          {tab === "tools" && (
+          ) : null}
+
+          {tab === "tools" ? (
             <div className="card">
               <h3>Инструменты</h3>
               <p className="muted">Параметры конференции и служебные действия.</p>
+
               <hr />
-              <h4>Антиплагиат API</h4>
-              <form className="form-grid" onSubmit={saveAntiplagiat}>
-                {antiplagiatUsesEnv ? (
-                  <p className="antiplagiat-env-note">
-                    Часть параметров переопределяется через переменные окружения сервера и имеет приоритет над
-                    сохраненными значениями.
-                  </p>
-                ) : null}
-                <label>
-                  Адрес кабинета Антиплагиата
-                  <input
-                    value={antiplagiatForm.site_url}
-                    onChange={(e) => setAntiplagiatForm({ ...antiplagiatForm, site_url: e.target.value })}
-                    placeholder="https://testapi.antiplagiat.ru"
-                  />
-                </label>
-                <label>
-                  WSDL
-                  <input
-                    value={antiplagiatForm.wsdl_url}
-                    onChange={(e) => setAntiplagiatForm({ ...antiplagiatForm, wsdl_url: e.target.value })}
-                    placeholder="https://api.antiplagiat.ru:4959/apiCorp/testapi?wsdl"
-                  />
-                </label>
-                <label>
-                  API-логин
-                  <input
-                    value={antiplagiatForm.api_login}
-                    onChange={(e) => setAntiplagiatForm({ ...antiplagiatForm, api_login: e.target.value })}
-                    placeholder="testapi@antiplagiat.ru"
-                  />
-                </label>
-                <label>
-                  API-пароль
-                  <input
-                    type="password"
-                    value={antiplagiatForm.api_password}
-                    onChange={(e) => setAntiplagiatForm({ ...antiplagiatForm, api_password: e.target.value })}
-                    placeholder={
-                      antiplagiatForm.env_overrides?.api_password
-                        ? "Пароль берется из ANTIPLAGIAT_API_PASSWORD"
-                        : antiplagiatForm.has_password
-                          ? "Оставьте пустым, чтобы не менять"
-                          : "Введите пароль API"
-                    }
-                  />
-                </label>
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
-                    checked={antiplagiatForm.enabled}
-                    onChange={(e) => setAntiplagiatForm({ ...antiplagiatForm, enabled: e.target.checked })}
-                  />
-                  <span>Интеграция включена</span>
-                </label>
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
-                    checked={antiplagiatForm.add_to_index}
-                    onChange={(e) => setAntiplagiatForm({ ...antiplagiatForm, add_to_index: e.target.checked })}
-                  />
-                  <span>Добавлять загруженные статьи в индекс компании для перекрестной проверки</span>
-                </label>
-                <div className="antiplagiat-service-section">
-                  <div className="antiplagiat-service-head">
-                    <div>
-                      <strong>Сервисы проверки</strong>
-                      <p className="muted">
-                        Если ничего не выбрано, backend использует все сервисы, доступные текущему API-аккаунту.
-                      </p>
-                    </div>
-                    <button
-                      className="btn btn-ghost"
-                      type="button"
-                      onClick={loadAntiplagiatServices}
-                      disabled={loadingCheckServices}
-                    >
-                      {loadingCheckServices ? "Загрузка..." : "Обновить список"}
-                    </button>
-                  </div>
-                  {availableCheckServices.length ? (
-                    <div className="antiplagiat-service-grid">
-                      {availableCheckServices.map((service) => (
-                        <label key={service.code} className="checkbox antiplagiat-service-card">
-                          <input
-                            type="checkbox"
-                            checked={antiplagiatForm.check_services.includes(service.code)}
-                            onChange={() => toggleCheckService(service.code)}
-                          />
-                          <span>
-                            <strong>{service.code}</strong>
-                            <small>{service.description || "Без описания"}</small>
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="muted">Список сервисов пока не загружен.</p>
-                  )}
-                </div>
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
-                    checked={antiplagiatForm.allow_short_report}
-                    onChange={(e) =>
-                      setAntiplagiatForm({ ...antiplagiatForm, allow_short_report: e.target.checked })
-                    }
-                  />
-                  <span>Разрешить краткий отчет пользователям</span>
-                </label>
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
-                    checked={antiplagiatForm.allow_readonly_report}
-                    onChange={(e) =>
-                      setAntiplagiatForm({ ...antiplagiatForm, allow_readonly_report: e.target.checked })
-                    }
-                  />
-                  <span>Разрешить полный readonly-отчет</span>
-                </label>
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
-                    checked={antiplagiatForm.allow_editable_report}
-                    onChange={(e) =>
-                      setAntiplagiatForm({ ...antiplagiatForm, allow_editable_report: e.target.checked })
-                    }
-                  />
-                  <span>Разрешить полный редактируемый отчет</span>
-                </label>
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
-                    checked={antiplagiatForm.allow_pdf_report}
-                    onChange={(e) => setAntiplagiatForm({ ...antiplagiatForm, allow_pdf_report: e.target.checked })}
-                  />
-                  <span>Разрешить PDF-отчеты</span>
-                </label>
-                <div className="form-actions admin-tool-actions">
-                  <button className="btn btn-ghost" type="button" onClick={pingAntiplagiat} disabled={pingingAntiplagiat}>
-                    {pingingAntiplagiat ? "Проверка..." : "Проверить подключение"}
-                  </button>
-                  <button className="btn btn-primary" type="submit" disabled={savingAntiplagiat}>
-                    {savingAntiplagiat ? "Сохранение..." : "Сохранить настройки API"}
-                  </button>
-                </div>
-              </form>
-              {antiplagiatPing ? <p className="muted">{antiplagiatPing}</p> : null}
-              <hr />
-              <h4>Конференция</h4>
+
+              <h4>Параметры конференции</h4>
               <form className="form-grid" onSubmit={saveConference}>
                 <label>
-                  Название конференции
+                  Название
                   <input
                     value={conferenceForm.title}
                     onChange={(e) => setConferenceForm({ ...conferenceForm, title: e.target.value })}
@@ -926,13 +856,14 @@ export default function Admin() {
                     value={conferenceForm.status}
                     onChange={(e) => setConferenceForm({ ...conferenceForm, status: e.target.value })}
                   >
-                    <option value="draft">draft (подготовка)</option>
-                    <option value="live">live (идет сейчас)</option>
-                    <option value="finished">finished (завершена)</option>
+                    <option value="draft">draft</option>
+                    <option value="registration_open">registration_open</option>
+                    <option value="in_progress">in_progress</option>
+                    <option value="completed">completed</option>
                   </select>
                 </label>
                 <label>
-                  Начало конференции
+                  Начало
                   <input
                     type="datetime-local"
                     value={conferenceForm.starts_at}
@@ -940,7 +871,7 @@ export default function Admin() {
                   />
                 </label>
                 <label>
-                  Окончание конференции
+                  Окончание
                   <input
                     type="datetime-local"
                     value={conferenceForm.ends_at}
@@ -952,68 +883,80 @@ export default function Admin() {
                   <input
                     value={conferenceForm.support_email}
                     onChange={(e) => setConferenceForm({ ...conferenceForm, support_email: e.target.value })}
-                    placeholder="info@conference.local"
                   />
                 </label>
                 <label>
-                  Ссылка на сборник трудов (PDF)
+                  URL сборника
                   <input
                     value={conferenceForm.proceedings_url}
                     onChange={(e) => setConferenceForm({ ...conferenceForm, proceedings_url: e.target.value })}
-                    placeholder="https://.../proceedings.pdf"
                   />
                 </label>
                 <label>
                   Описание
                   <textarea
-                    rows={3}
+                    rows="5"
                     value={conferenceForm.description}
                     onChange={(e) => setConferenceForm({ ...conferenceForm, description: e.target.value })}
                   />
                 </label>
-                <button className="btn btn-primary" type="submit" disabled={savingConference}>
-                  {savingConference ? "Сохранение..." : "Сохранить параметры конференции"}
-                </button>
+                <div className="admin-tool-actions">
+                  <button className="btn btn-primary" type="submit" disabled={savingConference}>
+                    {savingConference ? "Сохранение..." : "Сохранить параметры"}
+                  </button>
+                </div>
               </form>
-              <div className="form-actions">
-                <button className="btn btn-ghost" onClick={seedDemo}>
-                  Создать тестовое мероприятие
-                </button>
-              </div>
+
               <hr />
-              <h4>Проверка бейджа (check-in)</h4>
+
+              <h4>Ручной check-in по токену</h4>
               <form className="form-grid" onSubmit={verifyCheckin}>
                 <label>
-                  Токен из QR
+                  JWT из бейджа
                   <textarea
-                    rows={3}
+                    rows="4"
                     value={checkinToken}
                     onChange={(e) => setCheckinToken(e.target.value)}
-                    placeholder="Вставьте токен из QR бейджа"
+                    placeholder="Вставьте токен из QR-ссылки или PDF-бейджа"
                   />
                 </label>
-                <button className="btn btn-primary" type="submit" disabled={verifyingCheckin || !checkinToken.trim()}>
-                  {verifyingCheckin ? "Проверка..." : "Проверить и отметить"}
-                </button>
+                <div className="admin-tool-actions">
+                  <button className="btn btn-primary" type="submit" disabled={verifyingCheckin}>
+                    {verifyingCheckin ? "Проверка..." : "Отметить присутствие"}
+                  </button>
+                  <button className="btn btn-ghost" type="button" onClick={seedDemo}>
+                    Создать демо-данные
+                  </button>
+                  <button className="btn btn-ghost" type="button" onClick={reloadEverything}>
+                    Обновить данные
+                  </button>
+                </div>
               </form>
-              {checkinResult && (
-                <p className="muted">
-                  {checkinResult.user?.full_name || "Участник"} ·{" "}
-                  {checkinResult.already_checked_in ? "уже был отмечен" : "успешно отмечен"} ·{" "}
-                  {new Date(checkinResult.checked_in_at).toLocaleString()}
-                </p>
-              )}
+
+              {checkinResult ? (
+                <div className="card">
+                  <strong>{checkinResult.user?.full_name || "Участник"}</strong>
+                  <div className="muted">{checkinResult.user?.email || "Email не указан"}</div>
+                  <div className="muted">
+                    {checkinResult.already_checked_in
+                      ? "Участник уже был отмечен ранее."
+                      : "Присутствие успешно отмечено."}
+                  </div>
+                  <div className="muted">
+                    Время: {checkinResult.checked_in_at ? new Date(checkinResult.checked_in_at).toLocaleString() : "не указано"}
+                  </div>
+                </div>
+              ) : null}
             </div>
-          )}
+          ) : null}
         </div>
       </div>
+
       <RoomMapPicker
         open={showRoomMap}
         rooms={rooms}
         onClose={() => setShowRoomMap(false)}
-        onSelect={(roomName) => {
-          setSectionForm({ ...sectionForm, room: roomName });
-        }}
+        onSelect={(roomName) => setSectionForm((prev) => ({ ...prev, room: roomName }))}
       />
     </section>
   );

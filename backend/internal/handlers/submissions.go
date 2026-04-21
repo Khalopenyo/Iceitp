@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -41,7 +42,7 @@ func (h *SubmissionHandler) ListSubmissions(c *gin.Context) {
 
 func (h *SubmissionHandler) CreateSubmission(c *gin.Context) {
 	if h.Store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "object storage is not configured"})
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "file storage is not configured"})
 		return
 	}
 
@@ -94,7 +95,7 @@ func (h *SubmissionHandler) CreateSubmission(c *gin.Context) {
 	objectKey := buildSubmissionObjectKey(userID, submission.ID, submission.FileName)
 	if err := h.Store.Put(c.Request.Context(), objectKey, src, file.Size, file.Header.Get("Content-Type")); err != nil {
 		_ = h.DB.Delete(&models.ArticleSubmission{}, submission.ID).Error
-		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to upload file to object storage"})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to save uploaded file"})
 		return
 	}
 
@@ -119,7 +120,7 @@ func (h *SubmissionHandler) DownloadSubmissionFile(c *gin.Context) {
 		return
 	}
 	if h.Store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "object storage is not configured"})
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "file storage is not configured"})
 		return
 	}
 	if strings.TrimSpace(submission.ObjectKey) == "" {
@@ -143,7 +144,7 @@ func (h *SubmissionHandler) DownloadSubmissionFile(c *gin.Context) {
 	}
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", submission.FileName))
 	c.Header("Content-Length", strconv.FormatInt(obj.Size, 10))
-	_, _ = c.Writer.ReadFrom(obj.Body)
+	_, _ = io.Copy(c.Writer, obj.Body)
 }
 
 func (h *SubmissionHandler) loadOwnedSubmission(c *gin.Context) (*models.ArticleSubmission, error) {
