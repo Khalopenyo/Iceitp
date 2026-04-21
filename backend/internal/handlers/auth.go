@@ -30,7 +30,7 @@ const (
 	defaultPhoneAuthCodeTTL          = 10 * time.Minute
 	defaultPhoneAuthResendCooldown   = 60 * time.Second
 	defaultPhoneAuthMaxAttempts      = 5
-	phoneAuthCodeDigits              = 5
+	phoneAuthCodeDigits              = 4
 	forgotPasswordResponseMessage    = "reset instructions sent if the email exists"
 	resetPasswordSuccessMessage      = "password updated successfully"
 	resetPasswordInvalidTokenMessage = "invalid or expired reset token"
@@ -43,6 +43,7 @@ var errAmbiguousPhone = errors.New("phone is used by multiple accounts")
 type AuthHandler struct {
 	DB                      *gorm.DB
 	JWTSecret               string
+	AccessTokenTTL          time.Duration
 	AppBaseURL              string
 	PasswordResetTTL        time.Duration
 	PhoneAuthCodeTTL        time.Duration
@@ -136,12 +137,14 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 	h.logConsent(c, user.ID, normalized.ConsentVersion)
-	token, err := auth.GenerateToken(user.ID, user.Role, h.JWTSecret)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+	if err := h.issueSession(c, user); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to establish session"})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"token": token})
+	c.JSON(http.StatusCreated, gin.H{
+		"user":               user,
+		"expires_in_seconds": int(h.accessTokenTTL().Seconds()),
+	})
 }
 
 func (h *AuthHandler) RequestRegistrationCode(c *gin.Context) {
@@ -158,17 +161,6 @@ func (h *AuthHandler) RequestRegistrationCode(c *gin.Context) {
 			status = http.StatusConflict
 		}
 		c.JSON(status, gin.H{"error": err.Error()})
-		return
-	}
-
-	if _, err := h.findUserByPhone(h.DB.Preload("Profile"), strings.TrimPrefix(normalized.Phone, "+")); err == nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "user with this phone already exists"})
-		return
-	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) && !errors.Is(err, errAmbiguousPhone) {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate phone"})
-		return
-	} else if errors.Is(err, errAmbiguousPhone) {
-		c.JSON(http.StatusConflict, gin.H{"error": "this phone is assigned to multiple accounts"})
 		return
 	}
 
@@ -249,7 +241,7 @@ func (h *AuthHandler) RequestRegistrationCode(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":            "Код отправлен по SMS",
+		"message":            "Код отправлен",
 		"verification_token": rawToken,
 		"cooldown_seconds":   int(h.phoneAuthResendCooldown() / time.Second),
 		"expires_in_seconds": int(h.phoneAuthCodeTTL() / time.Second),
@@ -271,7 +263,7 @@ func (h *AuthHandler) VerifyRegistrationCode(c *gin.Context) {
 
 	now := h.currentTime()
 	maxAttempts := h.phoneAuthMaxAttempts()
-	var jwtToken string
+	var createdUser models.User
 
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
 		var attempt models.RegistrationAttempt
@@ -349,11 +341,7 @@ func (h *AuthHandler) VerifyRegistrationCode(c *gin.Context) {
 			return err
 		}
 
-		issuedToken, err := auth.GenerateToken(user.ID, user.Role, h.JWTSecret)
-		if err != nil {
-			return err
-		}
-		jwtToken = issuedToken
+		createdUser = user
 		return nil
 	})
 	if err != nil {
@@ -370,7 +358,15 @@ func (h *AuthHandler) VerifyRegistrationCode(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"token": jwtToken})
+	if err := h.issueSession(c, createdUser); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to establish session"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"user":               createdUser,
+		"expires_in_seconds": int(h.accessTokenTTL().Seconds()),
+	})
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
@@ -391,12 +387,19 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
-	token, err := auth.GenerateToken(user.ID, user.Role, h.JWTSecret)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+	if err := h.issueSession(c, user); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to establish session"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"token": token})
+	c.JSON(http.StatusOK, gin.H{
+		"user":               user,
+		"expires_in_seconds": int(h.accessTokenTTL().Seconds()),
+	})
+}
+
+func (h *AuthHandler) Logout(c *gin.Context) {
+	auth.ClearSessionCookie(c, h.appBaseURL())
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
 func (h *AuthHandler) RequestPhoneCode(c *gin.Context) {
@@ -412,7 +415,7 @@ func (h *AuthHandler) RequestPhoneCode(c *gin.Context) {
 		return
 	}
 
-	user, err := h.findUserByPhone(h.DB.Preload("Profile"), phoneDigits)
+	user, err := h.findUserByPhone(h.DB.Preload("Profile"), req.Phone)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user with this phone was not found"})
 		return
@@ -486,7 +489,7 @@ func (h *AuthHandler) RequestPhoneCode(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":            "Код отправлен по SMS",
+		"message":            "Код отправлен",
 		"cooldown_seconds":   int(h.phoneAuthResendCooldown() / time.Second),
 		"expires_in_seconds": int(h.phoneAuthCodeTTL() / time.Second),
 	})
@@ -512,7 +515,7 @@ func (h *AuthHandler) VerifyPhoneCode(c *gin.Context) {
 
 	now := h.currentTime()
 	maxAttempts := h.phoneAuthMaxAttempts()
-	var token string
+	var sessionUser models.User
 
 	err = h.DB.Transaction(func(tx *gorm.DB) error {
 		var authCode models.PhoneAuthCode
@@ -557,11 +560,7 @@ func (h *AuthHandler) VerifyPhoneCode(c *gin.Context) {
 			return err
 		}
 
-		issuedToken, err := auth.GenerateToken(user.ID, user.Role, h.JWTSecret)
-		if err != nil {
-			return err
-		}
-		token = issuedToken
+		sessionUser = user
 		return nil
 	})
 	if err != nil {
@@ -576,7 +575,15 @@ func (h *AuthHandler) VerifyPhoneCode(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": token})
+	if err := h.issueSession(c, sessionUser); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to establish session"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"user":               sessionUser,
+		"expires_in_seconds": int(h.accessTokenTTL().Seconds()),
+	})
 }
 
 func (h *AuthHandler) ForgotPassword(c *gin.Context) {
@@ -705,7 +712,7 @@ func (h *AuthHandler) validateRegistrationRequest(req RegisterRequest) (string, 
 
 	phone, err := formatPhoneForStorage(req.Phone)
 	if err != nil {
-		return "", RegisterRequest{}, errors.New("invalid phone")
+		return "", RegisterRequest{}, err
 	}
 	req.Phone = phone
 
@@ -737,6 +744,13 @@ func (h *AuthHandler) validateRegistrationRequest(req RegisterRequest) (string, 
 	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", RegisterRequest{}, errors.New("failed to validate user")
 	}
+	if _, err := h.findUserByPhone(h.DB.Preload("Profile"), req.Phone); err == nil {
+		return "", RegisterRequest{}, errors.New("user with this phone already exists")
+	} else if errors.Is(err, errAmbiguousPhone) {
+		return "", RegisterRequest{}, errors.New("this phone is assigned to multiple accounts")
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", RegisterRequest{}, errors.New("failed to validate phone")
+	}
 
 	passwordHash, err := hashPassword(password)
 	if err != nil {
@@ -765,8 +779,8 @@ func normalizePhoneDigits(phone string) (string, error) {
 	if len(digits) == 11 && strings.HasPrefix(digits, "8") {
 		digits = "7" + digits[1:]
 	}
-	if len(digits) < 11 || len(digits) > 14 {
-		return "", errors.New("invalid phone")
+	if len(digits) != 11 || !strings.HasPrefix(digits, "7") || digits[1] != '9' {
+		return "", errors.New("Введите номер в формате +7 999 123-45-67")
 	}
 	return digits, nil
 }
@@ -807,31 +821,28 @@ func (h *AuthHandler) findUserByEmail(query *gorm.DB, email string) (models.User
 	return user, err
 }
 
-func (h *AuthHandler) findUserByPhone(query *gorm.DB, phoneDigits string) (models.User, error) {
-	var users []models.User
-	if err := query.Find(&users).Error; err != nil {
+func (h *AuthHandler) findUserByPhone(query *gorm.DB, phone string) (models.User, error) {
+	storedPhone, err := formatPhoneForStorage(phone)
+	if err != nil {
 		return models.User{}, err
 	}
 
-	var match *models.User
-	for i := range users {
-		normalized, err := normalizePhoneDigits(users[i].Profile.Phone)
-		if err != nil {
-			continue
-		}
-		if normalized != phoneDigits {
-			continue
-		}
-		if match != nil {
-			return models.User{}, errAmbiguousPhone
-		}
-		user := users[i]
-		match = &user
+	var profiles []models.Profile
+	if err := h.DB.Where("phone = ?", storedPhone).Limit(2).Find(&profiles).Error; err != nil {
+		return models.User{}, err
 	}
-	if match == nil {
+	if len(profiles) == 0 {
 		return models.User{}, gorm.ErrRecordNotFound
 	}
-	return *match, nil
+	if len(profiles) > 1 {
+		return models.User{}, errAmbiguousPhone
+	}
+
+	var user models.User
+	if err := query.First(&user, profiles[0].UserID).Error; err != nil {
+		return models.User{}, err
+	}
+	return user, nil
 }
 
 func (h *AuthHandler) issuePasswordReset(user models.User, requestedIP, requestedUserAgent string) (mail.PasswordResetMessage, error) {
@@ -934,6 +945,13 @@ func (h *AuthHandler) phoneAuthMaxAttempts() int {
 	return h.PhoneAuthMaxAttempts
 }
 
+func (h *AuthHandler) accessTokenTTL() time.Duration {
+	if h.AccessTokenTTL <= 0 {
+		return 12 * time.Hour
+	}
+	return h.AccessTokenTTL
+}
+
 func (h *AuthHandler) passwordResetSender() mail.PasswordResetSender {
 	if h.MailSender == nil {
 		return &mail.LogPasswordResetSender{}
@@ -953,6 +971,15 @@ func (h *AuthHandler) currentTime() time.Time {
 		return h.Now()
 	}
 	return time.Now()
+}
+
+func (h *AuthHandler) issueSession(c *gin.Context, user models.User) error {
+	token, err := auth.GenerateToken(user.ID, user.Role, h.JWTSecret, h.accessTokenTTL())
+	if err != nil {
+		return err
+	}
+	auth.SetSessionCookie(c, token, h.appBaseURL(), h.accessTokenTTL())
+	return nil
 }
 
 func generateNumericAuthCode(length int) (string, error) {

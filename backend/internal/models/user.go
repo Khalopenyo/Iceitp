@@ -39,7 +39,7 @@ type Profile struct {
 	Degree       string `json:"degree"`
 	SectionID    *uint  `json:"section_id"`
 	TalkTitle    string `json:"talk_title"`
-	Phone        string `json:"phone"`
+	Phone        string `gorm:"index:idx_profiles_phone_unique,unique,where:phone <> ''" json:"phone"`
 	// ConsentGiven remains for compatibility with existing API consumers.
 	ConsentGiven bool `json:"consent_given"`
 }

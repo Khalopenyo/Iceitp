@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"conferenceplatforma/internal/models"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -55,11 +56,25 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid phone"})
 			return
 		}
+		var existing models.Profile
+		if err := h.DB.
+			Where("phone = ? AND user_id <> ?", phone, userID).
+			First(&existing).Error; err == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "phone already in use"})
+			return
+		} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate phone"})
+			return
+		}
 		profile.Phone = phone
 	} else {
 		profile.Phone = ""
 	}
 	if err := h.DB.Save(&profile).Error; err != nil {
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			c.JSON(http.StatusConflict, gin.H{"error": "phone already in use"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update profile"})
 		return
 	}

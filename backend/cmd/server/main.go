@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -30,24 +29,6 @@ func main() {
 }
 
 func seed(db *gorm.DB) {
-	var count int64
-	db.Model(&models.User{}).Where("email = ?", "admin@conf.local").Count(&count)
-	if count == 0 {
-		password, _ := bcrypt.GenerateFromPassword([]byte("Admin123!"), 12)
-		admin := models.User{
-			Email:        "admin@conf.local",
-			PasswordHash: string(password),
-			Role:         models.RoleAdmin,
-			UserType:     models.UserTypeOffline,
-			Profile: models.Profile{
-				FullName:     "Администратор",
-				Organization: "Оргкомитет",
-				ConsentGiven: true,
-			},
-		}
-		db.Create(&admin)
-	}
-
 	syncSectionSeed(db)
 	syncConferenceSeed(db)
 	syncAntiplagiatSeed(db)

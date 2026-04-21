@@ -14,6 +14,7 @@ type Config struct {
 	DatabaseURL             string
 	JWTSecret               string
 	Port                    string
+	AccessTokenTTL          time.Duration
 	CORSOrigins             []string
 	TrustedProxies          []string
 	AppBaseURL              string
@@ -30,12 +31,24 @@ type Config struct {
 	GreenSMSToken           string
 	GreenSMSUser            string
 	GreenSMSPass            string
+	GreenSMSChannel         string
 	GreenSMSFrom            string
 	GreenSMSTextTemplate    string
+	GreenSMSTelegramTTL     int
+	GreenSMSTelegramCascade string
+	GreenSMSTelegramText    string
+	ObjectStorageEndpoint   string
+	ObjectStorageRegion     string
+	ObjectStorageBucket     string
+	ObjectStoragePrefix     string
+	ObjectStorageAccessKey  string
+	ObjectStorageSecretKey  string
+	ObjectStorageUsePathStyle bool
 }
 
 const (
 	defaultAppBaseURL        = "http://localhost:5173"
+	defaultAccessTokenTTL    = 12 * time.Hour
 	defaultSMTPPort          = 587
 	defaultPasswordResetTTL  = 2 * time.Hour
 	defaultPhoneAuthCodeTTL  = 10 * time.Minute
@@ -98,6 +111,7 @@ func Load() Config {
 		DatabaseURL:             os.Getenv("DATABASE_URL"),
 		JWTSecret:               os.Getenv("JWT_SECRET"),
 		Port:                    os.Getenv("PORT"),
+		AccessTokenTTL:          envDuration("ACCESS_TOKEN_TTL", defaultAccessTokenTTL),
 		CORSOrigins:             splitEnvList(os.Getenv("CORS_ORIGINS")),
 		TrustedProxies:          splitEnvList(os.Getenv("TRUSTED_PROXIES")),
 		AppBaseURL:              loadAppBaseURL(),
@@ -114,8 +128,19 @@ func Load() Config {
 		GreenSMSToken:           strings.TrimSpace(os.Getenv("GREENSMS_TOKEN")),
 		GreenSMSUser:            strings.TrimSpace(os.Getenv("GREENSMS_USER")),
 		GreenSMSPass:            os.Getenv("GREENSMS_PASS"),
+		GreenSMSChannel:         strings.TrimSpace(os.Getenv("GREENSMS_CHANNEL")),
 		GreenSMSFrom:            strings.TrimSpace(os.Getenv("GREENSMS_FROM")),
 		GreenSMSTextTemplate:    os.Getenv("GREENSMS_TEXT_TEMPLATE"),
+		GreenSMSTelegramTTL:     envInt("GREENSMS_TELEGRAM_TTL", 3600),
+		GreenSMSTelegramCascade: strings.TrimSpace(os.Getenv("GREENSMS_TELEGRAM_CASCADE")),
+		GreenSMSTelegramText:    os.Getenv("GREENSMS_TELEGRAM_CASCADE_TEXT"),
+		ObjectStorageEndpoint:   strings.TrimSpace(os.Getenv("OBJECT_STORAGE_ENDPOINT")),
+		ObjectStorageRegion:     strings.TrimSpace(os.Getenv("OBJECT_STORAGE_REGION")),
+		ObjectStorageBucket:     strings.TrimSpace(os.Getenv("OBJECT_STORAGE_BUCKET")),
+		ObjectStoragePrefix:     strings.TrimSpace(os.Getenv("OBJECT_STORAGE_PREFIX")),
+		ObjectStorageAccessKey:  strings.TrimSpace(os.Getenv("OBJECT_STORAGE_ACCESS_KEY")),
+		ObjectStorageSecretKey:  os.Getenv("OBJECT_STORAGE_SECRET_KEY"),
+		ObjectStorageUsePathStyle: envBool("OBJECT_STORAGE_USE_PATH_STYLE", true),
 	}
 	if cfg.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL is required")
@@ -154,6 +179,21 @@ func envInt(key string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func envBool(key string, fallback bool) bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	if value == "" {
+		return fallback
+	}
+	switch value {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
 }
 
 func envDuration(key string, fallback time.Duration) time.Duration {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
-import { getToken } from "../lib/auth.js";
+import { isAuthenticated } from "../lib/auth.js";
 import {
   formatConferenceDateRange,
   getConferenceDescription,
@@ -60,7 +60,7 @@ export default function Welcome() {
   const navigate = useNavigate();
   const outletContext = useOutletContext() || {};
   const conference = outletContext.conference || null;
-  const isAuthorized = Boolean(getToken());
+  const isAuthorized = isAuthenticated();
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [consentError, setConsentError] = useState("");
 

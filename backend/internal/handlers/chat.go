@@ -1,13 +1,14 @@
 package handlers
 
 import (
+	"context"
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/objectstore"
 	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
-	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -24,12 +25,11 @@ const (
 	maxChatMessageLength      = 2000
 	defaultChatAttachmentMax  = 5
 	defaultChatAttachmentSize = 10 * 1024 * 1024
-	defaultChatAttachmentRoot = "storage/chat"
 )
 
 type ChatHandler struct {
 	DB                       *gorm.DB
-	StorageRoot              string
+	Store                    objectstore.Store
 	MaxAttachmentSizeBytes   int64
 	MaxAttachmentsPerMessage int
 }
@@ -134,12 +134,12 @@ func (h *ChatHandler) PostMessage(c *gin.Context) {
 	}
 
 	var attachments []models.ChatAttachment
-	var storedPaths []string
+	var storedKeys []string
 	if err := h.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&msg).Error; err != nil {
 			return err
 		}
-		attachments, storedPaths, err = h.storeChatAttachments(files, channel, section, msg.ID)
+		attachments, storedKeys, err = h.storeChatAttachments(c.Request.Context(), files, channel, section, msg.ID)
 		if err != nil {
 			return err
 		}
@@ -148,8 +148,10 @@ func (h *ChatHandler) PostMessage(c *gin.Context) {
 		}
 		return tx.Create(&attachments).Error
 	}); err != nil {
-		for _, path := range storedPaths {
-			_ = removeFileQuietly(path)
+		for _, key := range storedKeys {
+			if h.Store != nil {
+				_ = h.Store.Delete(c.Request.Context(), key)
+			}
 		}
 		if errors.Is(err, errInvalidChatScope) || errors.Is(err, errUserHasNoSection) {
 			h.writeScopeError(c, err)
@@ -283,9 +285,9 @@ func (h *ChatHandler) DeleteMessage(c *gin.Context) {
 		return
 	}
 
-	paths := make([]string, 0, len(msg.Attachments))
+	objectKeys := make([]string, 0, len(msg.Attachments))
 	for _, attachment := range msg.Attachments {
-		paths = append(paths, attachment.FilePath)
+		objectKeys = append(objectKeys, attachment.ObjectKey)
 	}
 	if err := h.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("message_id = ?", msg.ID).Delete(&models.ChatAttachment{}).Error; err != nil {
@@ -296,8 +298,10 @@ func (h *ChatHandler) DeleteMessage(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete message"})
 		return
 	}
-	for _, path := range paths {
-		_ = removeFileQuietly(path)
+	for _, key := range objectKeys {
+		if h.Store != nil {
+			_ = h.Store.Delete(c.Request.Context(), key)
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
@@ -329,20 +333,30 @@ func (h *ChatHandler) DownloadAttachment(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify attachment access"})
 		return
 	}
-
-	if _, err := os.Stat(attachment.FilePath); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "attachment file not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load attachment file"})
+	if h.Store == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "object storage is not configured"})
 		return
 	}
 
-	if strings.TrimSpace(attachment.ContentType) != "" {
+	obj, err := h.Store.Get(c.Request.Context(), attachment.ObjectKey)
+	if err != nil {
+		if errors.Is(err, objectstore.ErrObjectNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "attachment file not found"})
+			return
+		}
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to load attachment file"})
+		return
+	}
+	defer obj.Body.Close()
+
+	if strings.TrimSpace(obj.ContentType) != "" {
+		c.Header("Content-Type", obj.ContentType)
+	} else if strings.TrimSpace(attachment.ContentType) != "" {
 		c.Header("Content-Type", attachment.ContentType)
 	}
-	c.FileAttachment(attachment.FilePath, attachment.FileName)
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", attachment.FileName))
+	c.Header("Content-Length", strconv.FormatInt(obj.Size, 10))
+	_, _ = c.Writer.ReadFrom(obj.Body)
 }
 
 func (h *ChatHandler) resolveRequestedChannel(userID uint, rawScope string) (models.ChatChannel, *models.Section, error) {
@@ -592,6 +606,7 @@ func (h *ChatHandler) parseMultipartMessageSubmission(c *gin.Context) (chatMessa
 }
 
 func (h *ChatHandler) storeChatAttachments(
+	ctx context.Context,
 	fileHeaders []*multipart.FileHeader,
 	channel models.ChatChannel,
 	section *models.Section,
@@ -602,19 +617,20 @@ func (h *ChatHandler) storeChatAttachments(
 	}
 
 	attachments := make([]models.ChatAttachment, 0, len(fileHeaders))
-	storedPaths := make([]string, 0, len(fileHeaders))
+	storedKeys := make([]string, 0, len(fileHeaders))
 	for _, fileHeader := range fileHeaders {
-		attachment, err := h.saveChatAttachment(fileHeader, channel, section, messageID)
+		attachment, err := h.saveChatAttachment(ctx, fileHeader, channel, section, messageID)
 		if err != nil {
-			return nil, storedPaths, err
+			return nil, storedKeys, err
 		}
 		attachments = append(attachments, attachment)
-		storedPaths = append(storedPaths, attachment.FilePath)
+		storedKeys = append(storedKeys, attachment.ObjectKey)
 	}
-	return attachments, storedPaths, nil
+	return attachments, storedKeys, nil
 }
 
 func (h *ChatHandler) saveChatAttachment(
+	ctx context.Context,
 	fileHeader *multipart.FileHeader,
 	channel models.ChatChannel,
 	section *models.Section,
@@ -652,47 +668,35 @@ func (h *ChatHandler) saveChatAttachment(
 		return models.ChatAttachment{}, err
 	}
 
-	targetPath, err := h.chatAttachmentStoragePath(channel, section, messageID, fileName)
-	if err != nil {
-		return models.ChatAttachment{}, err
+	if h.Store == nil {
+		return models.ChatAttachment{}, objectstore.ErrNotConfigured
 	}
-	dst, err := os.Create(targetPath)
-	if err != nil {
-		return models.ChatAttachment{}, err
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, src); err != nil {
-		_ = removeFileQuietly(targetPath)
+	objectKey := h.chatAttachmentObjectKey(channel, section, messageID, fileName)
+	if err := h.Store.Put(ctx, objectKey, src, fileHeader.Size, contentType); err != nil {
 		return models.ChatAttachment{}, err
 	}
 
 	return models.ChatAttachment{
 		MessageID:   messageID,
 		FileName:    fileName,
-		FilePath:    targetPath,
+		ObjectKey:   objectKey,
 		ContentType: contentType,
 		FileSize:    fileHeader.Size,
 	}, nil
 }
 
-func (h *ChatHandler) chatAttachmentStoragePath(
+func (h *ChatHandler) chatAttachmentObjectKey(
 	channel models.ChatChannel,
 	section *models.Section,
 	messageID uint,
 	fileName string,
-) (string, error) {
-	root := h.storageRoot()
+) string {
 	scopeDir := string(channel)
 	if channel == models.ChatChannelSection && section != nil {
-		scopeDir = filepath.Join(scopeDir, fmt.Sprintf("section-%d", section.ID))
-	}
-	targetDir := filepath.Join(root, scopeDir)
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
-		return "", err
+		scopeDir = fmt.Sprintf("%s/section-%d", scopeDir, section.ID)
 	}
 	storedName := fmt.Sprintf("%d-%d-%s", messageID, time.Now().UnixNano(), fileName)
-	return filepath.Join(targetDir, storedName), nil
+	return fmt.Sprintf("chat/%s/%s", scopeDir, storedName)
 }
 
 func (h *ChatHandler) authorizeAttachmentAccess(userID uint, role models.Role, message models.ChatMessage) error {
@@ -710,13 +714,6 @@ func (h *ChatHandler) authorizeAttachmentAccess(userID uint, role models.Role, m
 		return errUnauthorizedChatAttachment
 	}
 	return nil
-}
-
-func (h *ChatHandler) storageRoot() string {
-	if strings.TrimSpace(h.StorageRoot) == "" {
-		return defaultChatAttachmentRoot
-	}
-	return strings.TrimSpace(h.StorageRoot)
 }
 
 func (h *ChatHandler) maxAttachmentSizeBytes() int64 {

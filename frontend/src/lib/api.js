@@ -1,25 +1,31 @@
-import { clearToken, getToken } from "./auth.js";
+import { clearAuth } from "./auth.js";
 
 const rawBaseUrl = typeof import.meta.env.VITE_API_URL === "string" ? import.meta.env.VITE_API_URL.trim() : "";
 const baseUrl = rawBaseUrl.replace(/\/+$/, "");
 
 async function request(path, options = {}) {
+  const { suppressAuthRedirect: suppressAuthRedirectOption, ...fetchOptions } = options;
   const headers = options.headers || {};
-  const token = getToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
   if (!(options.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
+  const suppressAuthRedirect =
+    suppressAuthRedirectOption === true ||
+    path.startsWith("/auth/login") ||
+    path.startsWith("/auth/register") ||
+    path.startsWith("/auth/forgot-password") ||
+    path.startsWith("/auth/reset-password") ||
+    path.startsWith("/auth/logout");
   const res = await fetch(`${baseUrl}/api${path}`, {
-    ...options,
+    ...fetchOptions,
     headers,
+    credentials: "include",
   });
   if (res.status === 401) {
-    clearToken();
-    window.location.href = "/login";
-    throw new Error("Unauthorized");
+    clearAuth();
+    if (!suppressAuthRedirect) {
+      window.location.href = "/login";
+    }
   }
   if (res.status === 403) {
     throw new Error("Forbidden");

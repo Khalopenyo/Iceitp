@@ -1,7 +1,7 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { clearToken, getToken, getUser, setUser } from "../lib/auth.js";
+import { clearAuth, getUser, setUser } from "../lib/auth.js";
 import { useEffect, useState } from "react";
-import { apiGet } from "../lib/api.js";
+import { apiGet, apiPost } from "../lib/api.js";
 import {
   CONFERENCE_UPDATED_EVENT,
   formatConferenceDateRange,
@@ -16,10 +16,9 @@ export default function Layout() {
   const [user, setUserState] = useState(getUser());
   const [conference, setConference] = useState(null);
   const [navOpen, setNavOpen] = useState(false);
-  const token = getToken();
 
   useEffect(() => {
-    if (!token) {
+    if (!user) {
       return;
     }
     apiGet("/me")
@@ -28,10 +27,10 @@ export default function Layout() {
         setUserState(data);
       })
       .catch(() => {
-        clearToken();
+        clearAuth();
         setUserState(null);
       });
-  }, [token]);
+  }, [user?.id]);
 
   useEffect(() => {
     let active = true;
@@ -93,8 +92,13 @@ export default function Layout() {
     };
   }, [navOpen]);
 
-  const logout = () => {
-    clearToken();
+  const logout = async () => {
+    try {
+      await apiPost("/auth/logout", {}, { suppressAuthRedirect: true });
+    } catch {
+      // Session cleanup still continues locally even if backend cookie is already gone.
+    }
+    clearAuth();
     setUserState(null);
     setNavOpen(false);
     navigate("/");

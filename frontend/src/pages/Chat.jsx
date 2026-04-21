@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm } from "../lib/api.js";
-import { getToken, getUser } from "../lib/auth.js";
+import { getUser } from "../lib/auth.js";
 import { triggerBlobDownload } from "../lib/download.js";
 
 const CHAT_SCOPE_CONFERENCE = "conference";
@@ -341,17 +341,14 @@ export default function Chat() {
   };
 
   const handleDownloadAttachment = async (attachment) => {
-    const token = getToken();
-    if (!token) {
+    if (!getUser()) {
       window.location.href = "/login";
       return;
     }
 
     try {
       const res = await fetch(buildAttachmentUrl(attachment.download_url), {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       });
       if (res.status === 401) {
         window.location.href = "/login";

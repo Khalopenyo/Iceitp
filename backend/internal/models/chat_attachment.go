@@ -7,7 +7,7 @@ type ChatAttachment struct {
 	MessageID   uint        `gorm:"index;not null" json:"message_id"`
 	Message     ChatMessage `gorm:"foreignKey:MessageID;references:ID" json:"-"`
 	FileName    string      `gorm:"not null" json:"file_name"`
-	FilePath    string      `gorm:"not null" json:"-"`
+	ObjectKey   string      `gorm:"column:file_path;not null" json:"-"`
 	ContentType string      `gorm:"not null" json:"content_type"`
 	FileSize    int64       `gorm:"not null" json:"file_size"`
 	CreatedAt   time.Time   `gorm:"autoCreateTime" json:"created_at"`

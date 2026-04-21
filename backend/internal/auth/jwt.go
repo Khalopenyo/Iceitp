@@ -7,18 +7,23 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const defaultAccessTokenTTL = 12 * time.Hour
+
 type Claims struct {
 	UserID uint        `json:"user_id"`
 	Role   models.Role `json:"role"`
 	jwt.RegisteredClaims
 }
 
-func GenerateToken(userID uint, role models.Role, secret string) (string, error) {
+func GenerateToken(userID uint, role models.Role, secret string, ttl time.Duration) (string, error) {
+	if ttl <= 0 {
+		ttl = defaultAccessTokenTTL
+	}
 	claims := Claims{
 		UserID: userID,
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}

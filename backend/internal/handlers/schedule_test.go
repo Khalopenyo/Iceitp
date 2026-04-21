@@ -59,7 +59,7 @@ func seedScheduleParticipant(
 			Degree:       "Кандидат наук",
 			SectionID:    sectionID,
 			TalkTitle:    talkTitle,
-			Phone:        "+79990000000",
+			Phone:        uniqueTestPhoneFromSeed(email),
 			ConsentGiven: true,
 		},
 	}

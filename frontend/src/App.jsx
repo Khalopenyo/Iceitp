@@ -10,7 +10,7 @@ import Admin from "./pages/Admin.jsx";
 import Feedback from "./pages/Feedback.jsx";
 import Chat from "./pages/Chat.jsx";
 import Documents from "./pages/Documents.jsx";
-import { getToken, getUser } from "./lib/auth.js";
+import { isAuthenticated, getUser } from "./lib/auth.js";
 import NoAccess from "./pages/NoAccess.jsx";
 import Map from "./pages/Map.jsx";
 import PersonalData from "./pages/PersonalData.jsx";
@@ -18,17 +18,15 @@ import ConsentAuthors from "./pages/ConsentAuthors.jsx";
 import BadgeCheckIn from "./pages/BadgeCheckIn.jsx";
 
 function ProtectedRoute({ children }) {
-  const token = getToken();
-  if (!token) {
+  if (!isAuthenticated()) {
     return <Navigate to="/login" replace />;
   }
   return children;
 }
 
 function AdminRoute({ children }) {
-  const token = getToken();
   const user = getUser();
-  if (!token) {
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
   if (!user || !["admin", "org"].includes(user.role)) {

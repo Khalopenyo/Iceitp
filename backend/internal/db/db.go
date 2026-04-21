@@ -1,7 +1,6 @@
 package db
 
 import (
-	"conferenceplatforma/internal/models"
 	"log"
 
 	"gorm.io/driver/postgres"
@@ -9,42 +8,12 @@ import (
 )
 
 func Connect(databaseURL string) *gorm.DB {
-	db, err := gorm.Open(postgres.Open(databaseURL), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(databaseURL), &gorm.Config{TranslateError: true})
 	if err != nil {
 		log.Fatalf("failed to connect database: %v", err)
 	}
-	if err := db.AutoMigrate(
-		&models.User{},
-		&models.Profile{},
-		&models.RegistrationAttempt{},
-		&models.PasswordResetToken{},
-		&models.PhoneAuthCode{},
-		&models.ProgramAssignment{},
-		&models.AntiplagiatConfig{},
-		&models.ArticleSubmission{},
-		&models.Section{},
-		&models.Room{},
-		&models.Conference{},
-		&models.CheckIn{},
-		&models.Certificate{},
-		&models.ConsentLog{},
-		&models.MapMarker{},
-		&models.MapRoute{},
-		&models.Feedback{},
-		&models.ChatMessage{},
-		&models.ChatAttachment{},
-	); err != nil {
-		log.Fatalf("failed to migrate: %v", err)
-	}
-	if err := db.Model(&models.ChatMessage{}).
-		Where("(channel = '' OR channel IS NULL) AND section_id IS NOT NULL").
-		Update("channel", models.ChatChannelSection).Error; err != nil {
-		log.Fatalf("failed to backfill section chat channels: %v", err)
-	}
-	if err := db.Model(&models.ChatMessage{}).
-		Where("(channel = '' OR channel IS NULL) AND section_id IS NULL").
-		Update("channel", models.ChatChannelConference).Error; err != nil {
-		log.Fatalf("failed to backfill conference chat channels: %v", err)
+	if err := RunMigrations(db); err != nil {
+		log.Fatalf("failed to run migrations: %v", err)
 	}
 	return db
 }

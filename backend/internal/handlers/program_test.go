@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"conferenceplatforma/internal/models"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -60,7 +61,7 @@ func seedParticipant(t *testing.T, db *gorm.DB, email string, userType models.Us
 			Degree:       "Кандидат наук",
 			SectionID:    sectionID,
 			TalkTitle:    talkTitle,
-			Phone:        "+79990000000",
+			Phone:        uniqueTestPhoneFromSeed(email),
 			ConsentGiven: true,
 		},
 	}
@@ -68,6 +69,14 @@ func seedParticipant(t *testing.T, db *gorm.DB, email string, userType models.Us
 		t.Fatalf("create participant: %v", err)
 	}
 	return user
+}
+
+func uniqueTestPhoneFromSeed(seed string) string {
+	hash := 0
+	for _, r := range seed {
+		hash = (hash*33 + int(r)) % 1_000_000_000
+	}
+	return fmt.Sprintf("+79%09d", hash)
 }
 
 func seedRoom(t *testing.T, db *gorm.DB, name string) models.Room {

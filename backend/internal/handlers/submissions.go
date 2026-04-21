@@ -4,36 +4,21 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
-	"conferenceplatforma/internal/antiplagiat"
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/objectstore"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
 type SubmissionHandler struct {
-	DB      *gorm.DB
-	Service *antiplagiat.Service
-}
-
-type antiplagiatConfigPayload struct {
-	SiteURL             string   `json:"site_url"`
-	WSDLURL             string   `json:"wsdl_url"`
-	APILogin            string   `json:"api_login"`
-	APIPassword         string   `json:"api_password"`
-	Enabled             bool     `json:"enabled"`
-	AddToIndex          bool     `json:"add_to_index"`
-	CheckServices       []string `json:"check_services"`
-	AllowShortReport    bool     `json:"allow_short_report"`
-	AllowReadonlyReport bool     `json:"allow_readonly_report"`
-	AllowEditableReport bool     `json:"allow_editable_report"`
-	AllowPdfReport      bool     `json:"allow_pdf_report"`
+	DB    *gorm.DB
+	Store objectstore.Store
 }
 
 const maxSubmissionFileSize = 20 * 1024 * 1024
@@ -47,46 +32,16 @@ func (h *SubmissionHandler) ListSubmissions(c *gin.Context) {
 		return
 	}
 
-	cfg, err := h.Service.LoadConfig()
-	response := gin.H{
-		"items":      submissions,
-		"configured": false,
-		"enabled":    false,
-		"permissions": gin.H{
-			"editable_report": false,
-			"readonly_report": false,
-			"short_report":    false,
-			"pdf_report":      false,
-		},
-	}
-	if err == nil {
-		response["configured"] = true
-		response["enabled"] = cfg.Enabled
-		response["permissions"] = gin.H{
-			"editable_report": cfg.AllowEditableReport,
-			"readonly_report": cfg.AllowReadonlyReport,
-			"short_report":    cfg.AllowShortReport,
-			"pdf_report":      cfg.AllowPdfReport,
-		}
-	} else if !errors.Is(err, antiplagiat.ErrConfigNotFound) {
-		response["message"] = err.Error()
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, gin.H{
+		"items":               submissions,
+		"storage_configured":  h.Store != nil,
+		"max_file_size_bytes": maxSubmissionFileSize,
+	})
 }
 
 func (h *SubmissionHandler) CreateSubmission(c *gin.Context) {
-	cfg, err := h.Service.LoadConfig()
-	if err != nil {
-		if errors.Is(err, antiplagiat.ErrConfigNotFound) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "antiplagiat is not configured"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load antiplagiat config"})
-		return
-	}
-	if !cfg.Enabled {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "antiplagiat integration is disabled"})
+	if h.Store == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "object storage is not configured"})
 		return
 	}
 
@@ -116,163 +71,79 @@ func (h *SubmissionHandler) CreateSubmission(c *gin.Context) {
 		title = strings.TrimSuffix(file.Filename, filepath.Ext(file.Filename))
 	}
 
-	targetPath, err := antiplagiat.StoragePath(userID, file.Filename)
+	src, err := file.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare upload storage"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to open uploaded file"})
 		return
 	}
-	if err := c.SaveUploadedFile(file, targetPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save uploaded file"})
-		return
-	}
+	defer src.Close()
 
 	submission := models.ArticleSubmission{
-		UserID:    userID,
-		Title:     title,
-		FileName:  filepath.Base(file.Filename),
-		FileType:  fileType,
-		FilePath:  targetPath,
-		FileSize:  file.Size,
-		Status:    models.SubmissionStatusUploaded,
-		PDFStatus: models.PDFStatusNone,
+		UserID:   userID,
+		Title:    title,
+		FileName: filepath.Base(file.Filename),
+		FileType: fileType,
+		FileSize: file.Size,
+		Status:   models.SubmissionStatusUploaded,
 	}
 	if err := h.DB.Create(&submission).Error; err != nil {
-		_ = removeFileQuietly(targetPath)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create submission"})
 		return
 	}
-	submission.ExternalUserID = buildExternalUserID(userID, submission.ID)
-	if err := h.DB.Model(&submission).Update("external_user_id", submission.ExternalUserID).Error; err != nil {
-		_ = removeFileQuietly(targetPath)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to finalize submission metadata"})
+
+	objectKey := buildSubmissionObjectKey(userID, submission.ID, submission.FileName)
+	if err := h.Store.Put(c.Request.Context(), objectKey, src, file.Size, file.Header.Get("Content-Type")); err != nil {
+		_ = h.DB.Delete(&models.ArticleSubmission{}, submission.ID).Error
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to upload file to object storage"})
 		return
 	}
 
-	h.Service.QueueSubmission(submission.ID)
+	submission.ObjectKey = objectKey
+	submission.Status = models.SubmissionStatusReady
+	if err := h.DB.Model(&submission).Updates(map[string]any{
+		"file_path": submission.ObjectKey,
+		"status":    submission.Status,
+	}).Error; err != nil {
+		_ = h.Store.Delete(c.Request.Context(), objectKey)
+		_ = h.DB.Delete(&models.ArticleSubmission{}, submission.ID).Error
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to finalize submission"})
+		return
+	}
+
 	c.JSON(http.StatusCreated, submission)
 }
 
-func (h *SubmissionHandler) RetrySubmission(c *gin.Context) {
+func (h *SubmissionHandler) DownloadSubmissionFile(c *gin.Context) {
 	submission, err := h.loadOwnedSubmission(c)
 	if err != nil {
 		return
 	}
-	updated, err := h.Service.RetrySubmission(submission.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to restart check", "details": err.Error()})
+	if h.Store == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "object storage is not configured"})
 		return
 	}
-	c.JSON(http.StatusOK, updated)
-}
+	if strings.TrimSpace(submission.ObjectKey) == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "submission file not found"})
+		return
+	}
 
-func (h *SubmissionHandler) RefreshSubmission(c *gin.Context) {
-	submission, err := h.loadOwnedSubmission(c)
+	obj, err := h.Store.Get(c.Request.Context(), submission.ObjectKey)
 	if err != nil {
-		return
-	}
-	updated, err := h.Service.RefreshSubmission(submission.ID)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to refresh results", "details": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, updated)
-}
-
-func (h *SubmissionHandler) RequestPDF(c *gin.Context) {
-	submission, err := h.loadOwnedSubmission(c)
-	if err != nil {
-		return
-	}
-	updated, err := h.Service.RequestPDF(submission.ID)
-	if err != nil {
-		switch {
-		case errors.Is(err, antiplagiat.ErrSubmissionNotReady):
-			c.JSON(http.StatusConflict, gin.H{"error": "submission is not ready yet"})
-		case errors.Is(err, antiplagiat.ErrPDFNotAllowed):
-			c.JSON(http.StatusForbidden, gin.H{"error": "pdf reports are disabled"})
-		default:
-			c.JSON(http.StatusBadGateway, gin.H{"error": "failed to request pdf report", "details": err.Error()})
-		}
-		return
-	}
-	c.JSON(http.StatusOK, updated)
-}
-
-func (h *SubmissionHandler) GetConfig(c *gin.Context) {
-	envOverrides := h.Service.GetEnvOverrideState()
-	cfg, err := h.Service.LoadConfig()
-	if err != nil {
-		if errors.Is(err, antiplagiat.ErrConfigNotFound) {
-			c.JSON(http.StatusOK, gin.H{
-				"site_url":              "",
-				"wsdl_url":              "",
-				"api_login":             "",
-				"enabled":               false,
-				"add_to_index":          false,
-				"check_services":        []string{},
-				"allow_short_report":    true,
-				"allow_readonly_report": true,
-				"allow_editable_report": false,
-				"allow_pdf_report":      true,
-				"has_password":          false,
-				"env_overrides":         envOverrides,
-			})
+		if errors.Is(err, objectstore.ErrObjectNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "submission file not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load antiplagiat config"})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to load submission file"})
 		return
 	}
+	defer obj.Body.Close()
 
-	c.JSON(http.StatusOK, buildAntiplagiatConfigResponse(cfg, envOverrides))
-}
-
-func (h *SubmissionHandler) SaveConfig(c *gin.Context) {
-	var payload antiplagiatConfigPayload
-	if err := c.ShouldBindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
-		return
+	if obj.ContentType != "" {
+		c.Header("Content-Type", obj.ContentType)
 	}
-
-	cfg, err := h.Service.SaveConfig(antiplagiat.ConfigInput{
-		SiteURL:             payload.SiteURL,
-		WSDLURL:             payload.WSDLURL,
-		APILogin:            payload.APILogin,
-		APIPassword:         payload.APIPassword,
-		Enabled:             payload.Enabled,
-		AddToIndex:          payload.AddToIndex,
-		CheckServices:       payload.CheckServices,
-		AllowShortReport:    payload.AllowShortReport,
-		AllowReadonlyReport: payload.AllowReadonlyReport,
-		AllowEditableReport: payload.AllowEditableReport,
-		AllowPdfReport:      payload.AllowPdfReport,
-	})
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to save antiplagiat config", "details": err.Error()})
-		return
-	}
-	if resolved, loadErr := h.Service.LoadConfig(); loadErr == nil {
-		cfg = resolved
-	}
-
-	c.JSON(http.StatusOK, buildAntiplagiatConfigResponse(cfg, h.Service.GetEnvOverrideState()))
-}
-
-func (h *SubmissionHandler) PingConfig(c *gin.Context) {
-	result, err := h.Service.PingSavedConfig(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to ping antiplagiat", "details": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "result": result})
-}
-
-func (h *SubmissionHandler) ListCheckServices(c *gin.Context) {
-	items, err := h.Service.GetAvailableCheckServices(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to load check services", "details": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"items": items})
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", submission.FileName))
+	c.Header("Content-Length", strconv.FormatInt(obj.Size, 10))
+	_, _ = c.Writer.ReadFrom(obj.Body)
 }
 
 func (h *SubmissionHandler) loadOwnedSubmission(c *gin.Context) (*models.ArticleSubmission, error) {
@@ -315,54 +186,6 @@ func isSupportedSubmissionType(fileType string) bool {
 	}
 }
 
-func buildExternalUserID(userID, submissionID uint) string {
-	value := fmt.Sprintf("u%d-s%d-%d", userID, submissionID, time.Now().UnixNano())
-	if len(value) > 40 {
-		return value[:40]
-	}
-	return value
-}
-
-func removeFileQuietly(path string) error {
-	if strings.TrimSpace(path) == "" {
-		return nil
-	}
-	err := os.Remove(path)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	return nil
-}
-
-func buildAntiplagiatConfigResponse(cfg *models.AntiplagiatConfig, envOverrides antiplagiat.EnvOverrideState) gin.H {
-	return gin.H{
-		"site_url":              cfg.SiteURL,
-		"wsdl_url":              cfg.WSDLURL,
-		"api_login":             cfg.APILogin,
-		"enabled":               cfg.Enabled,
-		"add_to_index":          cfg.AddToIndex,
-		"check_services":        parseCheckServicesCSV(cfg.CheckServices),
-		"allow_short_report":    cfg.AllowShortReport,
-		"allow_readonly_report": cfg.AllowReadonlyReport,
-		"allow_editable_report": cfg.AllowEditableReport,
-		"allow_pdf_report":      cfg.AllowPdfReport,
-		"has_password":          strings.TrimSpace(cfg.APIPassword) != "",
-		"env_overrides":         envOverrides,
-	}
-}
-
-func parseCheckServicesCSV(value string) []string {
-	if strings.TrimSpace(value) == "" {
-		return []string{}
-	}
-	parts := strings.Split(value, ",")
-	result := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		result = append(result, part)
-	}
-	return result
+func buildSubmissionObjectKey(userID, submissionID uint, fileName string) string {
+	return fmt.Sprintf("submissions/user-%d/submission-%d/%d-%s", userID, submissionID, time.Now().UnixNano(), filepath.Base(fileName))
 }

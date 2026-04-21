@@ -6,6 +6,7 @@ import (
 	"conferenceplatforma/internal/config"
 	"conferenceplatforma/internal/handlers"
 	"conferenceplatforma/internal/mail"
+	"conferenceplatforma/internal/ratelimit"
 	"conferenceplatforma/internal/sms"
 	"time"
 
@@ -40,6 +41,7 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 	authHandler := &handlers.AuthHandler{
 		DB:                      db,
 		JWTSecret:               cfg.JWTSecret,
+		AccessTokenTTL:          cfg.AccessTokenTTL,
 		AppBaseURL:              cfg.AppBaseURL,
 		PasswordResetTTL:        cfg.PasswordResetTTL,
 		PhoneAuthCodeTTL:        cfg.PhoneAuthCodeTTL,
@@ -65,14 +67,21 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 
 	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 
+	registrationLimiter := ratelimit.New(5, 10*time.Minute)
+	verificationLimiter := ratelimit.New(10, 10*time.Minute)
+	loginLimiter := ratelimit.New(10, 10*time.Minute)
+	resetLimiter := ratelimit.New(5, 15*time.Minute)
+	qrScanLimiter := ratelimit.New(20, time.Minute)
+
 	api := r.Group("/api")
-	api.POST("/auth/register", authHandler.RequestRegistrationCode)
-	api.POST("/auth/register/request-code", authHandler.RequestRegistrationCode)
-	api.POST("/auth/register/verify", authHandler.VerifyRegistrationCode)
-	api.POST("/auth/login", authHandler.Login)
-	api.POST("/auth/phone-code/request", authHandler.RequestPhoneCode)
-	api.POST("/auth/phone-code/verify", authHandler.VerifyPhoneCode)
-	api.POST("/auth/forgot-password", authHandler.ForgotPassword)
+	api.POST("/auth/register", registrationLimiter.Middleware("auth_register"), authHandler.RequestRegistrationCode)
+	api.POST("/auth/register/request-code", registrationLimiter.Middleware("auth_register_request_code"), authHandler.RequestRegistrationCode)
+	api.POST("/auth/register/verify", verificationLimiter.Middleware("auth_register_verify"), authHandler.VerifyRegistrationCode)
+	api.POST("/auth/login", loginLimiter.Middleware("auth_login"), authHandler.Login)
+	api.POST("/auth/logout", authHandler.Logout)
+	api.POST("/auth/phone-code/request", registrationLimiter.Middleware("auth_phone_request"), authHandler.RequestPhoneCode)
+	api.POST("/auth/phone-code/verify", verificationLimiter.Middleware("auth_phone_verify"), authHandler.VerifyPhoneCode)
+	api.POST("/auth/forgot-password", resetLimiter.Middleware("auth_forgot_password"), authHandler.ForgotPassword)
 	api.POST("/auth/reset-password", authHandler.ResetPassword)
 	api.GET("/sections", sectionHandler.ListSections)
 	api.GET("/rooms", roomHandler.ListRooms)
@@ -80,7 +89,7 @@ func Setup(db *gorm.DB, cfg config.Config, antiplagiatService *antiplagiat.Servi
 	api.GET("/map/routes", mapRouteHandler.ListRoutes)
 	api.GET("/conference", conferenceHandler.GetConference)
 	api.GET("/certificates/:number", docHandler.VerifyCertificate)
-	api.POST("/checkin/scan", checkInHandler.ScanBadge)
+	api.POST("/checkin/scan", qrScanLimiter.Middleware("checkin_scan"), checkInHandler.ScanBadge)
 
 	protected := api.Group("")
 	protected.Use(auth.Middleware(cfg.JWTSecret))

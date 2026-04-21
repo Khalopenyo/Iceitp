@@ -1,7 +1,50 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiPost } from "../lib/api.js";
-import { setToken } from "../lib/auth.js";
+import { setUser } from "../lib/auth.js";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+
+function normalizeRussianPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) {
+    return "";
+  }
+  let normalized = digits;
+  if (normalized.length === 10) {
+    normalized = `7${normalized}`;
+  } else if (normalized.length === 11 && normalized.startsWith("8")) {
+    normalized = `7${normalized.slice(1)}`;
+  }
+  if (normalized.length !== 11 || !normalized.startsWith("7") || normalized[1] !== "9") {
+    return "";
+  }
+  return `+${normalized}`;
+}
+
+function formatRussianPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) {
+    return "";
+  }
+  let normalized = digits;
+  if (normalized.startsWith("8")) {
+    normalized = `7${normalized.slice(1)}`;
+  }
+  if (!normalized.startsWith("7")) {
+    normalized = `7${normalized}`;
+  }
+  normalized = normalized.slice(0, 11);
+  const country = normalized.slice(0, 1);
+  const part1 = normalized.slice(1, 4);
+  const part2 = normalized.slice(4, 7);
+  const part3 = normalized.slice(7, 9);
+  const part4 = normalized.slice(9, 11);
+  let result = `+${country}`;
+  if (part1) result += ` ${part1}`;
+  if (part2) result += ` ${part2}`;
+  if (part3) result += `-${part3}`;
+  if (part4) result += `-${part4}`;
+  return result;
+}
 
 export default function Register() {
   const navigate = useNavigate();
@@ -15,7 +58,11 @@ export default function Register() {
   const [verificationCode, setVerificationCode] = useState("");
   const [verificationToken, setVerificationToken] = useState("");
   const [cooldown, setCooldown] = useState(0);
-  const degreeOptions = ["Кандидат наук", "Доктор наук", "Доцент", "Профессор"];
+  const degreeOptions = [
+    "Кандидат наук, доцент",
+    "Доктор наук, доцент",
+    "Доктор наук, профессор",
+  ];
   const cityOptions = [
     "Москва",
     "Санкт-Петербург",
@@ -153,12 +200,15 @@ export default function Register() {
     [sections, form.section_id]
   );
 
+  const normalizedPhone = useMemo(() => normalizeRussianPhone(form.phone), [form.phone]);
+
   const payload = useMemo(
     () => ({
       ...form,
+      phone: normalizedPhone || form.phone,
       section_id: form.section_id ? Number(form.section_id) : null,
     }),
-    [form]
+    [form, normalizedPhone]
   );
 
   const requestCode = async (e) => {
@@ -169,6 +219,10 @@ export default function Register() {
       setErrorMessage("Выберите секцию конференции перед отправкой анкеты.");
       return;
     }
+    if (!normalizedPhone) {
+      setErrorMessage("Введите российский мобильный номер в формате +7 999 123-45-67.");
+      return;
+    }
     setRequestingCode(true);
     setErrorMessage("");
     setStatusMessage("");
@@ -177,7 +231,7 @@ export default function Register() {
       setVerificationToken(data.verification_token);
       setVerificationCode("");
       setCooldown(Number(data.cooldown_seconds) || 60);
-      setStatusMessage(data.message || "Код отправлен по SMS");
+      setStatusMessage(data.message || "Код отправлен в Telegram");
       setStep(4);
     } catch (err) {
       setErrorMessage(err.message || "Не удалось отправить код подтверждения.");
@@ -195,7 +249,9 @@ export default function Register() {
         verification_token: verificationToken,
         code: verificationCode,
       });
-      setToken(data.token);
+      if (data.user) {
+        setUser(data.user);
+      }
       navigate("/dashboard");
     } catch (err) {
       setErrorMessage(err.message || "Не удалось подтвердить код.");
@@ -337,7 +393,15 @@ export default function Register() {
             </label>
             <label>
               Телефон
-              <input value={form.phone} onChange={(e) => update("phone", e.target.value)} required />
+              <input
+                type="tel"
+                inputMode="tel"
+                placeholder="+7 999 123-45-67"
+                value={form.phone}
+                onChange={(e) => update("phone", formatRussianPhone(e.target.value))}
+                required
+              />
+              <small className="muted">Допустимые варианты: `+7 999 123-45-67`, `89991234567`, `9991234567`.</small>
             </label>
           </>
         )}
@@ -381,7 +445,7 @@ export default function Register() {
         {step === 4 && (
           <>
             <p className="muted">
-              Мы отправили SMS-код на номер <strong>{form.phone}</strong>. Введите его, чтобы завершить регистрацию.
+              Мы отправили код подтверждения для номера <strong>{normalizedPhone || form.phone}</strong>. Проверьте Telegram и введите код, чтобы завершить регистрацию.
             </p>
             <label>
               Код подтверждения
@@ -390,9 +454,10 @@ export default function Register() {
                 onChange={(e) => setVerificationCode(e.target.value)}
                 inputMode="numeric"
                 pattern="[0-9]*"
-                placeholder="5 цифр"
+                placeholder="4 цифры"
                 required
               />
+              <small className="muted">Код подтверждения придет в Telegram, привязанный к этому номеру телефона.</small>
             </label>
             <div className="auth-inline-actions">
               <button
@@ -430,7 +495,7 @@ export default function Register() {
               }}
               disabled={
                 (step === 1 && !form.full_name.trim()) ||
-                (step === 2 && (!form.section_id || !form.talk_title.trim() || !form.phone.trim()))
+                (step === 2 && (!form.section_id || !form.talk_title.trim() || !normalizedPhone))
               }
             >
               Далее
@@ -442,7 +507,7 @@ export default function Register() {
               type="submit"
               disabled={requestingCode || !form.consent_personal_data || !form.consent_publication}
             >
-              {requestingCode ? "Отправка..." : "Получить код"}
+              {requestingCode ? "Отправка..." : "Получить код в Telegram"}
             </button>
           )}
           {step === 4 && (

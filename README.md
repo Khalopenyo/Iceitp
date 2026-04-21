@@ -64,6 +64,7 @@ cp .env.production.example .env.production
 - `APP_BASE_URL=http://SERVER_IP`
 - `CORS_ORIGINS=http://SERVER_IP`
 - `JWT_SECRET=` длинный случайный секрет
+- `ACCESS_TOKEN_TTL=12h`
 - `SMTP_*` заполнить, если хотите реальные письма для восстановления пароля
 
 Быстро сгенерировать `JWT_SECRET` можно так:
@@ -141,10 +142,14 @@ docker compose --env-file .env.production -f docker-compose.prod.yml down
    npm run dev
    ```
 
-## Данные по умолчанию
+## Первый админ
 
-- Админ: `admin@conf.local`
-- Пароль: `Admin123!`
+Автоматического дефолтного админа больше нет. Первый админ создается отдельной командой:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm api \
+  bootstrap-admin -email admin@example.com -password 'StrongPassword123!'
+```
 
 ## Документы и check-in
 

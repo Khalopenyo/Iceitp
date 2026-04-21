@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { apiPost } from "../lib/api.js";
-import { setToken } from "../lib/auth.js";
+import { setUser } from "../lib/auth.js";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 export default function Login() {
@@ -21,7 +21,9 @@ export default function Login() {
     setErrorMessage("");
     try {
       const data = await apiPost("/auth/login", { email, password });
-      setToken(data.token);
+      if (data.user) {
+        setUser(data.user);
+      }
       navigate(safeNext || "/dashboard");
     } catch (err) {
       setErrorMessage(err.message || "Неверные учетные данные");

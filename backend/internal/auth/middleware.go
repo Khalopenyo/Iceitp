@@ -2,6 +2,7 @@ package auth
 
 import (
 	"conferenceplatforma/internal/models"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -11,21 +12,19 @@ import (
 
 func Middleware(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
+		tokenStr, err := tokenFromRequest(c)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+		if tokenStr == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
 			return
 		}
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header"})
-			return
-		}
-		tokenStr := parts[1]
 		claims := &Claims{}
 		token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 			return []byte(secret), nil
-		})
+		}, jwt.WithValidMethods([]string{"HS256"}))
 		if err != nil || !token.Valid {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
@@ -34,6 +33,23 @@ func Middleware(secret string) gin.HandlerFunc {
 		c.Set("role", claims.Role)
 		c.Next()
 	}
+}
+
+func tokenFromRequest(c *gin.Context) (string, error) {
+	authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+	if authHeader != "" {
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
+			return "", errors.New("invalid authorization header")
+		}
+		return strings.TrimSpace(parts[1]), nil
+	}
+
+	cookie, err := c.Cookie(DefaultSessionCookieName)
+	if err != nil {
+		return "", nil
+	}
+	return strings.TrimSpace(cookie), nil
 }
 
 func RequireRole(roles ...models.Role) gin.HandlerFunc {

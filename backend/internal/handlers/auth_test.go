@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	appdb "conferenceplatforma/internal/db"
 	"conferenceplatforma/internal/models"
 	"conferenceplatforma/internal/sms"
 	"context"
@@ -26,8 +27,8 @@ func newAuthTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite db: %v", err)
 	}
-	if err := db.AutoMigrate(&models.User{}, &models.Profile{}, &models.Section{}, &models.ConsentLog{}, &models.PhoneAuthCode{}, &models.RegistrationAttempt{}); err != nil {
-		t.Fatalf("auto migrate: %v", err)
+	if err := appdb.RunMigrations(db); err != nil {
+		t.Fatalf("run migrations: %v", err)
 	}
 	return db
 }
@@ -421,7 +422,7 @@ func TestRequestPhoneCodeSendsSMSMessage(t *testing.T) {
 	}
 }
 
-func TestVerifyPhoneCodeReturnsJWT(t *testing.T) {
+func TestVerifyPhoneCodeEstablishesSession(t *testing.T) {
 	db := newAuthTestDB(t)
 	sender := &stubAuthCodeSender{}
 	router := newPhoneAuthTestRouter(db, sender)
@@ -441,15 +442,8 @@ func TestVerifyPhoneCodeReturnsJWT(t *testing.T) {
 	if verifyRecorder.Code != http.StatusOK {
 		t.Fatalf("expected verify status %d, got %d: %s", http.StatusOK, verifyRecorder.Code, verifyRecorder.Body.String())
 	}
-
-	var response struct {
-		Token string `json:"token"`
-	}
-	if err := json.Unmarshal(verifyRecorder.Body.Bytes(), &response); err != nil {
-		t.Fatalf("unmarshal verify response: %v", err)
-	}
-	if strings.TrimSpace(response.Token) == "" {
-		t.Fatalf("expected JWT token in verify response")
+	if len(verifyRecorder.Result().Cookies()) == 0 {
+		t.Fatalf("expected session cookie in verify response")
 	}
 
 	var codes []models.PhoneAuthCode
