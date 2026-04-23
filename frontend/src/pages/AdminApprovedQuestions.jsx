@@ -52,34 +52,17 @@ export default function AdminApprovedQuestions() {
     <section className="panel">
       <h2>Вопросы</h2>
       {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
-
-      <div className="dashboard-layout">
-        <aside className="dashboard-tabs">
-          <button className="tab-btn active" type="button">
-            Одобренные вопросы
-          </button>
-          <button className="tab-btn" onClick={() => navigate("/admin/questions")}>
-            К модерации
-          </button>
-          <button className="tab-btn" onClick={() => navigate("/admin")}>
-            Назад в админку
-          </button>
-        </aside>
-
-        <div className="dashboard-content">
-          <div className="card">
-            <div className="question-board">
-              {questionsPage.items.length > 0 ? (
-                questionsPage.items.map((question) => (
-                  <article key={question.id} className="question-board-item">
-                    <p>{question.text}</p>
-                  </article>
-                ))
-              ) : (
-                <p className="muted">Пока нет одобренных вопросов.</p>
-              )}
-            </div>
-          </div>
+      <div className="card">
+        <div className="question-board">
+          {questionsPage.items.length > 0 ? (
+            questionsPage.items.map((question) => (
+              <article key={question.id} className="question-board-item">
+                <p>{question.text}</p>
+              </article>
+            ))
+          ) : (
+            <p className="muted">Пока нет одобренных вопросов.</p>
+          )}
         </div>
       </div>
     </section>

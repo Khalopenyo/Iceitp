@@ -328,6 +328,30 @@ func (h *QuestionHandler) UpdateQuestionStatus(c *gin.Context) {
 	})
 }
 
+func (h *QuestionHandler) DeleteQuestion(c *gin.Context) {
+	id := c.Param("id")
+
+	var question models.Question
+	if err := h.DB.First(&question, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "question not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load question"})
+		return
+	}
+
+	if err := h.DB.Delete(&question).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete question"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":      question.ID,
+		"deleted": true,
+	})
+}
+
 func (h *QuestionHandler) generateQuestionToken(conferenceID uint) (string, error) {
 	claims := jwt.MapClaims{
 		"type":          "question",

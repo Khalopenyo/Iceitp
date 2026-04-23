@@ -83,6 +83,14 @@ func newQuestionTestRouter(db *gorm.DB) *gin.Engine {
 		}
 		handler.UpdateQuestionStatus(c)
 	})
+	router.DELETE("/api/admin/questions/:id", func(c *gin.Context) {
+		role, _ := c.Get("role")
+		if role != models.RoleAdmin && role != models.RoleOrg {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+		handler.DeleteQuestion(c)
+	})
 	return router
 }
 
@@ -372,5 +380,34 @@ func TestAdminCanModerateQuestion(t *testing.T) {
 	}
 	if question.ModeratedByID == nil || *question.ModeratedByID != admin.ID {
 		t.Fatalf("expected moderator id %d, got %+v", admin.ID, question.ModeratedByID)
+	}
+}
+
+func TestAdminCanDeleteQuestion(t *testing.T) {
+	db := newQuestionTestDB(t)
+	router := newQuestionTestRouter(db)
+	admin := seedQuestionUser(t, db, "admin@example.com", models.RoleAdmin, "Администратор")
+	conf := seedQuestionConference(t, db)
+
+	question := models.Question{
+		ConferenceID: conf.ID,
+		Text:         "Нужно ли распечатывать бейдж?",
+		Status:       models.QuestionStatusPending,
+	}
+	if err := db.Create(&question).Error; err != nil {
+		t.Fatalf("create question: %v", err)
+	}
+
+	recorder := performQuestionJSONRequest(t, router, http.MethodDelete, "/api/admin/questions/"+strconv.FormatUint(uint64(question.ID), 10), nil, &admin)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, recorder.Code, recorder.Body.String())
+	}
+
+	var count int64
+	if err := db.Model(&models.Question{}).Where("id = ?", question.ID).Count(&count).Error; err != nil {
+		t.Fatalf("count deleted question: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected question to be deleted, got count %d", count)
 	}
 }

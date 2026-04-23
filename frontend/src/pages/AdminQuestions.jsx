@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiGet, apiPatch } from "../lib/api.js";
+import { apiDelete, apiGet, apiPatch } from "../lib/api.js";
 
 const emptyPage = {
   items: [],
@@ -67,7 +67,7 @@ export default function AdminQuestions() {
   const [questionsPage, setQuestionsPage] = useState(emptyPage);
   const [questionQr, setQuestionQr] = useState(null);
   const [questionQuery, setQuestionQuery] = useState("");
-  const [questionStatusFilter, setQuestionStatusFilter] = useState("pending");
+  const [questionStatusFilter, setQuestionStatusFilter] = useState("");
   const [questionActionKey, setQuestionActionKey] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -147,6 +147,25 @@ export default function AdminQuestions() {
     }
   };
 
+  const deleteQuestion = async (id) => {
+    if (!window.confirm("Удалить этот вопрос?")) {
+      return;
+    }
+
+    setQuestionActionKey(`delete:${id}`);
+    setErrorMessage("");
+    try {
+      await apiDelete(`/admin/questions/${id}`);
+      setStatusMessage("Вопрос удален.");
+      await loadQuestions(questionsPage.page);
+    } catch (error) {
+      setStatusMessage("");
+      setErrorMessage(error.message || "Не удалось удалить вопрос.");
+    } finally {
+      setQuestionActionKey("");
+    }
+  };
+
   return (
     <section className="panel">
       <h2>Вопросы</h2>
@@ -169,7 +188,7 @@ export default function AdminQuestions() {
         <div className="dashboard-content">
           <div className="card">
             <h3>Модерация вопросов</h3>
-            <p className="muted">Новые вопросы подтягиваются автоматически. Сначала идут вопросы на модерации.</p>
+            <p className="muted">Здесь отображаются все заданные вопросы. Новые вопросы подтягиваются автоматически.</p>
 
             {questionQr ? (
               <div className="question-qr-admin-card">
@@ -245,6 +264,13 @@ export default function AdminQuestions() {
                       disabled={questionActionKey !== "" && questionActionKey !== `${question.id}:pending`}
                     >
                       {questionActionKey === `${question.id}:pending` ? "..." : "В очередь"}
+                    </button>
+                    <button
+                      className="btn btn-danger"
+                      onClick={() => deleteQuestion(question.id)}
+                      disabled={questionActionKey !== "" && questionActionKey !== `delete:${question.id}`}
+                    >
+                      {questionActionKey === `delete:${question.id}` ? "Удаление..." : "Удалить"}
                     </button>
                   </div>
                 </div>

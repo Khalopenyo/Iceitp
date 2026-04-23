@@ -138,6 +138,7 @@ func Setup(db *gorm.DB, cfg config.Config, store objectstore.Store) *gin.Engine 
 	admin.GET("/questions/qr", questionHandler.QuestionQR)
 	admin.GET("/questions", questionHandler.ListQuestions)
 	admin.PATCH("/questions/:id", questionHandler.UpdateQuestionStatus)
+	admin.DELETE("/questions/:id", questionHandler.DeleteQuestion)
 	admin.GET("/conference", conferenceHandler.GetConference)
 	admin.PUT("/conference", conferenceHandler.UpdateConference)
 	admin.POST("/checkin/verify", checkInHandler.VerifyBadge)
