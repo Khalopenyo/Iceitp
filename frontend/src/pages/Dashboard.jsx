@@ -2,20 +2,20 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiGet, apiPostForm, apiPut } from "../lib/api.js";
 import { setUser } from "../lib/auth.js";
-import { getSessionStatus } from "../lib/sessionStatus.js";
 
 const defaultSubmissionState = {
   items: [],
   storage_configured: false,
   max_file_size_bytes: 20 * 1024 * 1024,
 };
-
-const formatTimeOnly = (value) => {
-  if (!value) return "Не указано";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Не указано";
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-};
+const conferenceScheduleItems = [
+  { id: "registration", time: "10:00 - 10:30", title: "Регистрация участников" },
+  { id: "plenary", time: "10:30 - 12:30", title: "Пленарное заседание" },
+  { id: "buffet", time: "12:30 - 14:00", title: "Фуршет" },
+  { id: "sections", time: "14:00 - 16:30", title: "Работа секций" },
+  { id: "closing", time: "16:30", title: "Подведение итогов в Квазаре" },
+];
+const conferenceScheduleRange = "10:00 - 16:30";
 
 const formatDateTime = (value) => {
   if (!value) return "Не указано";
@@ -30,26 +30,6 @@ const formatMegabytes = (bytes) => {
 };
 
 const participationLabel = (userType) => (userType === "online" ? "Онлайн-участник" : "Очный участник");
-
-const assignmentStatusMeta = (status) => {
-  if (status === "approved") {
-    return { label: "Программа утверждена", tone: "success" };
-  }
-  return { label: "Ожидает подтверждения", tone: "warning" };
-};
-
-const liveStatusMeta = (status) => {
-  switch (status) {
-    case "current":
-      return { label: "Идет сейчас", tone: "success" };
-    case "upcoming":
-      return { label: "Скоро начнется", tone: "warning" };
-    case "finished":
-      return { label: "Сессия завершена", tone: "neutral" };
-    default:
-      return { label: "Расписание уточняется", tone: "neutral" };
-  }
-};
 
 const submissionStatusLabel = (status) => {
   switch (status) {
@@ -88,11 +68,6 @@ const submissionOverviewMeta = (items) => {
   };
 };
 
-const openExternal = (url) => {
-  if (!url) return;
-  window.open(url, "_blank", "noopener,noreferrer");
-};
-
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -101,7 +76,6 @@ export default function Dashboard() {
   const [profileStatusMessage, setProfileStatusMessage] = useState("");
   const [profileErrorMessage, setProfileErrorMessage] = useState("");
   const [tab, setTab] = useState("profile");
-  const [nowTs, setNowTs] = useState(() => Date.now());
   const [submissions, setSubmissions] = useState(defaultSubmissionState);
   const [submissionMessage, setSubmissionMessage] = useState("");
   const [uploadTitle, setUploadTitle] = useState("");
@@ -123,11 +97,11 @@ export default function Dashboard() {
     }
   };
 
-  const loadSchedule = async () => {
+  const loadDashboard = async () => {
     try {
-      const response = await apiGet("/schedule");
+      const response = await apiGet("/me");
       setData(response);
-      setProfile(response.user.profile);
+      setProfile(response.profile);
     } catch {
       setData(null);
       setProfile(null);
@@ -144,14 +118,9 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    loadSchedule();
+    loadDashboard();
     loadSections();
     loadSubmissions();
-  }, []);
-
-  useEffect(() => {
-    const timer = setInterval(() => setNowTs(Date.now()), 30000);
-    return () => clearInterval(timer);
   }, []);
 
   if (!data) {
@@ -164,24 +133,8 @@ export default function Dashboard() {
   }
 
   const update = (field, value) => setProfile((prev) => ({ ...prev, [field]: value }));
-  const assignmentStatus = data?.assignment_status || "pending";
-  const currentUserType = data?.current_user_type || data?.user?.user_type || "offline";
-  const schedulePlacement = data?.schedule || null;
-  const scheduleStatus =
-    assignmentStatus === "approved"
-      ? getSessionStatus(
-          {
-            start_at: schedulePlacement?.starts_at,
-            end_at: schedulePlacement?.ends_at,
-          },
-          nowTs
-        )
-      : "unknown";
-  const startTime = assignmentStatus === "approved" ? formatTimeOnly(schedulePlacement?.starts_at) : "Не указано";
-  const endTime = assignmentStatus === "approved" ? formatTimeOnly(schedulePlacement?.ends_at) : "Не указано";
+  const currentUserType = data?.user_type || "offline";
   const selectedSection = sections.find((section) => String(section.id) === String(profile?.section_id));
-  const assignmentMeta = assignmentStatusMeta(assignmentStatus);
-  const liveMeta = liveStatusMeta(scheduleStatus);
   const submissionMeta = submissionOverviewMeta(submissions.items);
 
   const save = async () => {
@@ -193,10 +146,10 @@ export default function Dashboard() {
         ...profile,
         section_id: profile?.section_id ? Number(profile.section_id) : null,
       });
-      const [freshUser, freshSchedule] = await Promise.all([apiGet("/me"), apiGet("/schedule")]);
+      const freshUser = await apiGet("/me");
       setUser(freshUser);
-      setData(freshSchedule);
-      setProfile(freshSchedule.user.profile);
+      setData(freshUser);
+      setProfile(freshUser.profile);
       setProfileStatusMessage("Профиль обновлен. Новые данные сохранены в личном кабинете.");
     } catch (err) {
       setProfileErrorMessage(err.message || "Не удалось сохранить профиль");
@@ -254,23 +207,11 @@ export default function Dashboard() {
 
           <article className="dashboard-summary-card">
             <div className="dashboard-summary-head">
-              <span className="dashboard-summary-label">Программа</span>
-              <span className={`status-chip status-chip-${assignmentMeta.tone}`}>{assignmentMeta.label}</span>
+              <span className="dashboard-summary-label">Общее расписание</span>
+              <span className="status-chip status-chip-neutral">{conferenceScheduleItems.length} этапов</span>
             </div>
-            <strong>
-              {assignmentStatus === "approved"
-                ? `${startTime}${endTime !== "Не указано" ? ` - ${endTime}` : ""}`
-                : "Время уточняется"}
-            </strong>
-            <p className="muted">
-              {assignmentStatus === "approved"
-                ? currentUserType === "online"
-                  ? schedulePlacement?.join_url
-                    ? "Ссылка на подключение уже добавлена."
-                    : "Оргкомитет скоро добавит ссылку на видеоконференцию."
-                  : schedulePlacement?.room_name || "Аудитория будет указана после публикации."
-                : liveMeta.label}
-            </p>
+            <strong>{conferenceScheduleRange}</strong>
+            <p className="muted">Регистрация, пленарное заседание, фуршет, работа секций и подведение итогов.</p>
           </article>
 
           <article className="dashboard-summary-card">
@@ -301,15 +242,10 @@ export default function Dashboard() {
             <Link className="btn btn-ghost" to="/documents">
               Открыть документы
             </Link>
-            {assignmentStatus === "approved" && currentUserType !== "online" ? (
+            {currentUserType !== "online" ? (
               <Link className="btn btn-ghost" to="/map">
                 Маршрут по площадке
               </Link>
-            ) : null}
-            {assignmentStatus === "approved" && currentUserType === "online" && schedulePlacement?.join_url ? (
-              <button className="btn btn-primary" onClick={() => openExternal(schedulePlacement.join_url)}>
-                Подключиться к сессии
-              </button>
             ) : null}
           </div>
         </div>
@@ -395,66 +331,40 @@ export default function Dashboard() {
 
           {tab === "schedule" ? (
             <div className="card">
-              <h3>Моя секция и расписание</h3>
-              {assignmentStatus === "approved" ? (
-                <div className="session-item highlighted">
-                  <div className="session-head">
-                    <div className="session-title">{schedulePlacement?.section_title || "Секция не указана"}</div>
-                    {scheduleStatus === "current" ? <span className="pill pill-current">Текущая сессия</span> : null}
-                  </div>
-                  <div className="schedule-row-grid">
-                    <div className="schedule-field">
-                      <span className="schedule-label">Имя спикера</span>
-                      <strong>{schedulePlacement?.full_name || profile?.full_name || "Не указано"}</strong>
+              <h3>Общее расписание конференции</h3>
+              <p className="muted">Для всех участников действует единое расписание дня.</p>
+
+              <div className="common-schedule-list">
+                {conferenceScheduleItems.map((item) => (
+                  <article key={item.id} className="common-schedule-item">
+                    <div className="common-schedule-time">{item.time}</div>
+                    <div className="common-schedule-content">
+                      <div className="common-schedule-title">{item.title}</div>
                     </div>
-                    <div className="schedule-field">
-                      <span className="schedule-label">Время начала</span>
-                      <span>{startTime}</span>
-                    </div>
-                    <div className="schedule-field">
-                      <span className="schedule-label">Время конца</span>
-                      <span>{endTime}</span>
-                    </div>
-                    <div className="schedule-field schedule-field-wide">
-                      <span className="schedule-label">Тема</span>
-                      <span>{schedulePlacement?.talk_title || "Без темы"}</span>
-                    </div>
-                  </div>
-                  {currentUserType === "online" ? (
-                    <>
-                      <div className="session-room">Формат: онлайн-участие</div>
-                      {schedulePlacement?.join_url ? (
-                        <div className="form-actions">
-                          <button className="btn btn-primary" onClick={() => openExternal(schedulePlacement.join_url)}>
-                            Подключиться к видеоконференции
-                          </button>
-                        </div>
-                      ) : (
-                        <p className="muted">Оргкомитет еще не добавил ссылку для подключения.</p>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <div className="session-room">Аудитория: {schedulePlacement?.room_name || "Без аудитории"}</div>
-                      <p className="muted">Этаж: {schedulePlacement?.room_floor || "Не указан"}</p>
-                      <div className="form-actions">
-                        <Link className="btn btn-ghost" to="/map">
-                          Открыть карту площадки
-                        </Link>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ) : (
-                <div className="session-item">
-                  <div className="session-head">
-                    <div className="session-title">Официальная программа еще не утверждена</div>
-                  </div>
+                  </article>
+                ))}
+              </div>
+
+              <div className="schedule-general-note">
+                {selectedSection ? (
                   <p className="muted">
-                    Оргкомитет еще не назначил итоговые время, формат участия и площадку. Проверьте вкладку позже.
+                    Во время блока <strong>«Работа секций»</strong> вы участвуете в секции{" "}
+                    <strong>{selectedSection.title}</strong>.
                   </p>
-                </div>
-              )}
+                ) : (
+                  <p className="muted">
+                    Секцию можно выбрать во вкладке <strong>«Личные данные»</strong>.
+                  </p>
+                )}
+
+                {currentUserType !== "online" ? (
+                  <div className="form-actions">
+                    <Link className="btn btn-ghost" to="/map">
+                      Открыть карту площадки
+                    </Link>
+                  </div>
+                ) : null}
+              </div>
             </div>
           ) : null}
 

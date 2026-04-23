@@ -101,14 +101,19 @@ func loadDotEnv() {
 
 func Load() Config {
 	loadDotEnv()
+	appBaseURL := loadAppBaseURL()
+	corsOrigins := splitEnvList(os.Getenv("CORS_ORIGINS"))
+	if len(corsOrigins) == 0 {
+		corsOrigins = defaultCORSOrigins(appBaseURL)
+	}
 	cfg := Config{
 		DatabaseURL:             os.Getenv("DATABASE_URL"),
 		JWTSecret:               os.Getenv("JWT_SECRET"),
 		Port:                    os.Getenv("PORT"),
 		AccessTokenTTL:          envDuration("ACCESS_TOKEN_TTL", defaultAccessTokenTTL),
-		CORSOrigins:             splitEnvList(os.Getenv("CORS_ORIGINS")),
+		CORSOrigins:             corsOrigins,
 		TrustedProxies:          splitEnvList(os.Getenv("TRUSTED_PROXIES")),
-		AppBaseURL:              loadAppBaseURL(),
+		AppBaseURL:              appBaseURL,
 		SMTPHost:                strings.TrimSpace(os.Getenv("SMTP_HOST")),
 		SMTPPort:                envInt("SMTP_PORT", defaultSMTPPort),
 		SMTPUsername:            strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
@@ -140,6 +145,34 @@ func Load() Config {
 		cfg.Port = "8080"
 	}
 	return cfg
+}
+
+func defaultCORSOrigins(appBaseURL string) []string {
+	origins := []string{
+		"http://localhost:5173",
+		"http://127.0.0.1:5173",
+		"http://localhost",
+		"http://127.0.0.1",
+	}
+
+	if parsed, err := url.Parse(appBaseURL); err == nil && parsed.Scheme != "" && parsed.Host != "" {
+		origins = append([]string{parsed.Scheme + "://" + parsed.Host}, origins...)
+	}
+
+	seen := make(map[string]struct{}, len(origins))
+	result := make([]string, 0, len(origins))
+	for _, origin := range origins {
+		origin = strings.TrimSpace(origin)
+		if origin == "" {
+			continue
+		}
+		if _, exists := seen[origin]; exists {
+			continue
+		}
+		seen[origin] = struct{}{}
+		result = append(result, origin)
+	}
+	return result
 }
 
 func defaultFileStorageRoot() string {

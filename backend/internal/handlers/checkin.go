@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
 )
 
@@ -67,40 +66,15 @@ func bindBadgePayload(c *gin.Context) (verifyBadgePayload, bool) {
 }
 
 func (h *CheckInHandler) processBadgeCheckIn(rawToken string, verifierID *uint, source string) (*checkInResponse, error) {
-	claims := jwt.MapClaims{}
-	token, err := jwt.ParseWithClaims(rawToken, claims, func(t *jwt.Token) (interface{}, error) {
-		return []byte(h.JWTSecret), nil
-	}, jwt.WithValidMethods([]string{"HS256"}))
-	if err != nil || !token.Valid {
-		return nil, errInvalidBadgeToken
-	}
-
-	tokenType, _ := claims["type"].(string)
-	if tokenType != "badge" {
-		return nil, errInvalidTokenType
-	}
-
-	userIDFloat, userIDOk := claims["user_id"].(float64)
-	confIDFloat, confIDOk := claims["conference_id"].(float64)
-	if !userIDOk || !confIDOk {
-		return nil, errInvalidTokenPayload
-	}
-
-	userID := uint(userIDFloat)
-	conferenceID := uint(confIDFloat)
-
-	var user models.User
-	if err := h.DB.Preload("Profile").First(&user, userID).Error; err != nil {
+	context, err := loadBadgeTokenContext(h.DB, h.JWTSecret, rawToken)
+	if err != nil {
 		return nil, err
 	}
-
-	var conf models.Conference
-	if err := h.DB.First(&conf, conferenceID).Error; err != nil {
-		return nil, err
-	}
+	user := context.User
+	conf := context.Conference
 
 	var checkIn models.CheckIn
-	err = h.DB.Where("conference_id = ? AND user_id = ?", conferenceID, userID).First(&checkIn).Error
+	err = h.DB.Where("conference_id = ? AND user_id = ?", conf.ID, user.ID).First(&checkIn).Error
 	if err == nil {
 		return buildCheckInResponse(checkIn.CheckedInAt, true, user, conf), nil
 	}
@@ -109,8 +83,8 @@ func (h *CheckInHandler) processBadgeCheckIn(rawToken string, verifierID *uint, 
 	}
 
 	checkIn = models.CheckIn{
-		ConferenceID:     conferenceID,
-		UserID:           userID,
+		ConferenceID:     conf.ID,
+		UserID:           user.ID,
 		CheckedInAt:      time.Now(),
 		VerifiedByUserID: verifierID,
 		Source:           source,
@@ -121,13 +95,6 @@ func (h *CheckInHandler) processBadgeCheckIn(rawToken string, verifierID *uint, 
 
 	return buildCheckInResponse(checkIn.CheckedInAt, false, user, conf), nil
 }
-
-var (
-	errInvalidBadgeToken   = errors.New("invalid badge token")
-	errInvalidTokenType    = errors.New("invalid token type")
-	errInvalidTokenPayload = errors.New("invalid token payload")
-)
-
 func buildCheckInResponse(checkedInAt time.Time, alreadyCheckedIn bool, user models.User, conf models.Conference) *checkInResponse {
 	return &checkInResponse{
 		Status:           "ok",

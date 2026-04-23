@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { clearAuth, getUser, setUser } from "../lib/auth.js";
+import { AUTH_CHANGED_EVENT, clearAuth, getUser, setUser } from "../lib/auth.js";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "../lib/api.js";
 import {
@@ -31,6 +31,20 @@ export default function Layout() {
         setUserState(null);
       });
   }, [user?.id]);
+
+  useEffect(() => {
+    const syncUser = () => {
+      setUserState(getUser());
+    };
+
+    window.addEventListener(AUTH_CHANGED_EVENT, syncUser);
+    window.addEventListener("storage", syncUser);
+
+    return () => {
+      window.removeEventListener(AUTH_CHANGED_EVENT, syncUser);
+      window.removeEventListener("storage", syncUser);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -187,6 +201,9 @@ export default function Layout() {
                   {item.mobileLabel || item.label}
                 </NavLink>
               ))}
+              <button type="button" className="mobile-header-logout" onClick={logout}>
+                Выйти
+              </button>
               <button
                 type="button"
                 className={`nav-toggle${navOpen ? " open" : ""}`}

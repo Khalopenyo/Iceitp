@@ -138,9 +138,13 @@ func loadDocumentStatus(db *gorm.DB, user models.User, conf models.Conference) (
 	if err != nil {
 		return nil, err
 	}
-	fullView, err := loadProgramPDFView(db, user.ID, "full")
-	if err != nil {
-		return nil, err
+	hasStaticFullProgram := fullProgramPDFPath() != ""
+	var fullView *programPDFView
+	if !hasStaticFullProgram {
+		fullView, err = loadProgramPDFView(db, user.ID, "full")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	effectiveUserType := user.UserType
@@ -164,7 +168,7 @@ func loadDocumentStatus(db *gorm.DB, user models.User, conf models.Conference) (
 		status.PersonalProgram = blockedDocumentStatus("program-personal.pdf", officialProgramPendingText)
 	}
 
-	if fullView.StatusMessage != "" || len(fullView.Groups) == 0 {
+	if !hasStaticFullProgram && (fullView.StatusMessage != "" || len(fullView.Groups) == 0) {
 		status.FullProgram = blockedDocumentStatus("program-full.pdf", officialProgramPendingText)
 	}
 
@@ -245,6 +249,10 @@ func (h *DocumentHandler) ProgramPDF(c *gin.Context) {
 	case "full":
 		if !context.Status.FullProgram.Available {
 			writeBlockedDocumentError(c, context.Status.FullProgram)
+			return
+		}
+		if staticPath := fullProgramPDFPath(); staticPath != "" {
+			writePDFFile(c, staticPath, "program-full.pdf")
 			return
 		}
 	default:
@@ -441,8 +449,8 @@ func (h *DocumentHandler) AdminBadgePDF(c *gin.Context) {
 		return
 	}
 
-	if !context.Status.Badge.Available {
-		writeBlockedDocumentError(c, context.Status.Badge)
+	if context.Status.CurrentUserType == models.UserTypeOnline {
+		writeBlockedDocumentError(c, notApplicableDocumentStatus("badge.pdf", "QR-бейдж нужен только офлайн-участникам для регистрации на площадке."))
 		return
 	}
 
@@ -681,6 +689,14 @@ func certificateTemplatePath() string {
 	})
 }
 
+func fullProgramPDFPath() string {
+	return firstExistingFile([]string{
+		"backend/assets/certificates/programa.pdf",
+		"assets/certificates/programa.pdf",
+		"/app/assets/certificates/programa.pdf",
+	})
+}
+
 func badgeTemplatePath() string {
 	return firstExistingFile([]string{
 		"backend/assets/badges/badge-template.png",
@@ -914,4 +930,15 @@ func writePDF(c *gin.Context, pdf *gofpdf.Fpdf, filename string) {
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	c.Data(http.StatusOK, "application/pdf", buf.Bytes())
+}
+
+func writePDFFile(c *gin.Context, path, filename string) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read pdf"})
+		return
+	}
+	c.Header("Content-Type", "application/pdf")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	c.Data(http.StatusOK, "application/pdf", content)
 }

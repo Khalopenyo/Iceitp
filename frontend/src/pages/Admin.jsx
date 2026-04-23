@@ -13,6 +13,22 @@ const emptyPage = {
   page_size: 20,
 };
 
+function buildPreviewSrc(url) {
+  if (!url) {
+    return "";
+  }
+  return `${url}#toolbar=0&navpanes=0&scrollbar=0&zoom=page-width&view=FitH`;
+}
+
+function formatBadgeFilename(id, fullName) {
+  const safeName = String(fullName || `user-${id}`)
+    .trim()
+    .replace(/[^\p{L}\p{N}\-_]+/gu, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `badge-${safeName || id}.pdf`;
+}
+
 const toInputDateTime = (value) => {
   if (!value) return "";
   const date = new Date(value);
@@ -214,6 +230,14 @@ export default function Admin() {
 
   const [feedbackQuery, setFeedbackQuery] = useState("");
   const [feedbackRatingFilter, setFeedbackRatingFilter] = useState("");
+  const [badgeActionKey, setBadgeActionKey] = useState("");
+  const [previewBadge, setPreviewBadge] = useState(null);
+
+  useEffect(() => () => {
+    if (previewBadge?.url) {
+      window.URL.revokeObjectURL(previewBadge.url);
+    }
+  }, [previewBadge]);
 
   const setAdminStatus = (message) => {
     setAdminErrorMessage("");
@@ -319,7 +343,12 @@ export default function Admin() {
   }, [feedbackQuery, feedbackRatingFilter]);
 
   const reloadEverything = async () => {
-    await Promise.all([loadBase(), loadUsers(usersPage.page), loadConsents(consentsPage.page), loadFeedback(feedbackPage.page)]);
+    await Promise.all([
+      loadBase(),
+      loadUsers(usersPage.page),
+      loadConsents(consentsPage.page),
+      loadFeedback(feedbackPage.page),
+    ]);
   };
 
   const createSection = async (e) => {
@@ -370,19 +399,49 @@ export default function Admin() {
   };
 
   const downloadUserBadge = async (id, fullName) => {
+    setBadgeActionKey(`download:${id}`);
     try {
       const response = await apiGet(`/admin/users/${id}/badge`);
       const blob = await response.blob();
-      const safeName = String(fullName || `user-${id}`)
-        .trim()
-        .replace(/[^\p{L}\p{N}\-_]+/gu, "-")
-        .replace(/-+/g, "-")
-        .replace(/^-|-$/g, "");
-      triggerBlobDownload(blob, `badge-${safeName || id}.pdf`);
+      triggerBlobDownload(blob, formatBadgeFilename(id, fullName));
       setAdminStatus("Бейдж скачан из админки.");
     } catch (err) {
       setAdminError(err.message || "Не удалось скачать бейдж.");
+    } finally {
+      setBadgeActionKey("");
     }
+  };
+
+  const openUserBadge = async (id, fullName) => {
+    setBadgeActionKey(`preview:${id}`);
+    setAdminErrorMessage("");
+    try {
+      const response = await apiGet(`/admin/users/${id}/badge`);
+      const blob = await response.blob();
+      const nextUrl = window.URL.createObjectURL(blob);
+      if (previewBadge?.url) {
+        window.URL.revokeObjectURL(previewBadge.url);
+      }
+      setPreviewBadge({
+        userId: id,
+        fullName,
+        title: `Бейдж участника: ${fullName || `#${id}`}`,
+        filename: formatBadgeFilename(id, fullName),
+        url: nextUrl,
+      });
+      setAdminStatus("Бейдж открыт для просмотра.");
+    } catch (err) {
+      setAdminError(err.message || "Не удалось открыть бейдж.");
+    } finally {
+      setBadgeActionKey("");
+    }
+  };
+
+  const closeBadgePreview = () => {
+    if (previewBadge?.url) {
+      window.URL.revokeObjectURL(previewBadge.url);
+    }
+    setPreviewBadge(null);
   };
 
   const deleteUser = async (id) => {
@@ -506,6 +565,9 @@ export default function Admin() {
           <button className={`tab-btn ${tab === "feedback" ? "active" : ""}`} onClick={() => setTab("feedback")}>
             Отзывы
           </button>
+          <button className="tab-btn" onClick={() => navigate("/admin/questions")}>
+            Вопросы
+          </button>
           <button className={`tab-btn ${tab === "tools" ? "active" : ""}`} onClick={() => setTab("tools")}>
             Инструменты
           </button>
@@ -583,11 +645,18 @@ export default function Admin() {
                             {user.badge_issued ? "Снять бейдж" : "Подготовить бейдж"}
                           </button>
                           <button
+                            className="btn btn-ghost"
+                            onClick={() => openUserBadge(user.id, user.profile?.full_name || user.email)}
+                            disabled={badgeActionKey === `preview:${user.id}` || badgeActionKey === `download:${user.id}`}
+                          >
+                            {badgeActionKey === `preview:${user.id}` ? "Открытие..." : "Открыть бейдж"}
+                          </button>
+                          <button
                             className="btn btn-primary"
                             onClick={() => downloadUserBadge(user.id, user.profile?.full_name || user.email)}
-                            disabled={!user.badge_issued}
+                            disabled={badgeActionKey === `preview:${user.id}` || badgeActionKey === `download:${user.id}`}
                           >
-                            Скачать бейдж
+                            {badgeActionKey === `download:${user.id}` ? "Скачивание..." : "Скачать бейдж"}
                           </button>
                         </>
                       ) : null}
@@ -958,6 +1027,37 @@ export default function Admin() {
         onClose={() => setShowRoomMap(false)}
         onSelect={(roomName) => setSectionForm((prev) => ({ ...prev, room: roomName }))}
       />
+
+      {previewBadge ? (
+        <div className="modal-backdrop" onClick={closeBadgePreview}>
+          <div className="modal document-preview-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>{previewBadge.title}</h3>
+                <p className="muted">Просмотр PDF бейджа с ФИО и QR-кодом без скачивания</p>
+              </div>
+              <div className="form-actions">
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => downloadUserBadge(previewBadge.userId, previewBadge.fullName)}
+                >
+                  Скачать
+                </button>
+                <button className="btn btn-primary" onClick={closeBadgePreview}>
+                  Закрыть
+                </button>
+              </div>
+            </div>
+            <div className="modal-body">
+              <iframe
+                className="document-preview-frame"
+                src={buildPreviewSrc(previewBadge.url)}
+                title={previewBadge.title}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

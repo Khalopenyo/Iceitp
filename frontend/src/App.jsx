@@ -16,6 +16,8 @@ import Map from "./pages/Map.jsx";
 import PersonalData from "./pages/PersonalData.jsx";
 import ConsentAuthors from "./pages/ConsentAuthors.jsx";
 import BadgeCheckIn from "./pages/BadgeCheckIn.jsx";
+import QuestionPrompt from "./pages/QuestionPrompt.jsx";
+import AdminQuestions from "./pages/AdminQuestions.jsx";
 
 function ProtectedRoute({ children }) {
   if (!isAuthenticated()) {
@@ -44,6 +46,7 @@ export default function App() {
         <Route path="forgot-password" element={<ForgotPassword />} />
         <Route path="reset-password" element={<ResetPassword />} />
         <Route path="badge/:token" element={<BadgeCheckIn />} />
+        <Route path="questions/:token" element={<QuestionPrompt />} />
         <Route index element={<Welcome />} />
         <Route
           path="dashboard"
@@ -83,6 +86,14 @@ export default function App() {
             <ProtectedRoute>
               <Map />
             </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/questions"
+          element={
+            <AdminRoute>
+              <AdminQuestions />
+            </AdminRoute>
           }
         />
         <Route

@@ -106,6 +106,28 @@ var migrations = []migration{
 			return db.Exec(createIndexSQL).Error
 		},
 	},
+	{
+		Version: "202604220004",
+		Name:    "add_questions",
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(&models.Question{})
+		},
+	},
+	{
+		Version: "202604220005",
+		Name:    "question_author_name_and_optional_user",
+		Up: func(db *gorm.DB) error {
+			if err := db.AutoMigrate(&models.Question{}); err != nil {
+				return err
+			}
+			if db.Dialector.Name() == "postgres" {
+				if err := db.Exec("ALTER TABLE questions ALTER COLUMN user_id DROP NOT NULL").Error; err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	},
 }
 
 func RunMigrations(db *gorm.DB) error {

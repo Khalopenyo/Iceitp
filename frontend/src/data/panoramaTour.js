@@ -11,6 +11,8 @@ const meanAngle = (angles) => {
   const y = angles.reduce((sum, angle) => sum + Math.sin((angle * Math.PI) / 180), 0);
   return (Math.atan2(y, x) * 180) / Math.PI;
 };
+const domAfricaHint = "Пройдите по коридору к стеклянной двери слева — там вход в Дом Африки.";
+const assemblyHallHint = "Поднимитесь на второй этаж.";
 
 const createPanoramaHotspotTooltip = (hotSpotDiv, args = {}) => {
   hotSpotDiv.textContent = "";
@@ -24,7 +26,18 @@ const createPanoramaHotspotTooltip = (hotSpotDiv, args = {}) => {
   label.className = "panorama-hotspot-label";
   label.textContent = args.label || "";
 
-  hotSpotDiv.append(marker, label);
+  const caption = document.createElement("span");
+  caption.className = "panorama-hotspot-caption";
+  caption.append(label);
+
+  if (args.description) {
+    const description = document.createElement("span");
+    description.className = "panorama-hotspot-description";
+    description.textContent = args.description;
+    caption.append(description);
+  }
+
+  hotSpotDiv.append(marker, caption);
 };
 
 const decorateHotSpot = (hotSpot) => ({
@@ -33,32 +46,37 @@ const decorateHotSpot = (hotSpot) => ({
   createTooltipFunc: createPanoramaHotspotTooltip,
   createTooltipArgs: {
     label: hotSpot.text || "",
+    description: hotSpot.hint || "",
   },
 });
 
 const getSceneInitialView = (scene) => {
-  const transitions = (scene.hotSpots || []).filter(
+  const positionedHotSpots = (scene.hotSpots || []).filter(
+    (spot) => Number.isFinite(spot.pitch) && Number.isFinite(spot.yaw)
+  );
+  const transitions = positionedHotSpots.filter(
     (spot) => spot.type === "scene" && Number.isFinite(spot.pitch) && Number.isFinite(spot.yaw)
   );
+  const viewTargets = transitions.length ? transitions : positionedHotSpots;
 
-  if (!transitions.length) {
+  if (!viewTargets.length) {
     return { pitch: scene.pitch, yaw: scene.yaw };
   }
 
-  if (transitions.length === 1) {
-    return { pitch: transitions[0].pitch, yaw: transitions[0].yaw };
+  if (viewTargets.length === 1) {
+    return { pitch: viewTargets[0].pitch, yaw: viewTargets[0].yaw };
   }
 
-  const anchor = transitions.reduce((best, candidate) => {
+  const anchor = viewTargets.reduce((best, candidate) => {
     const candidateScore =
-      transitions.reduce((sum, item) => sum + circularDistance(candidate.yaw, item.yaw), 0) / transitions.length;
+      viewTargets.reduce((sum, item) => sum + circularDistance(candidate.yaw, item.yaw), 0) / viewTargets.length;
     const bestScore =
-      transitions.reduce((sum, item) => sum + circularDistance(best.yaw, item.yaw), 0) / transitions.length;
+      viewTargets.reduce((sum, item) => sum + circularDistance(best.yaw, item.yaw), 0) / viewTargets.length;
     return candidateScore < bestScore ? candidate : best;
   });
 
-  const cluster = transitions.filter((item) => circularDistance(anchor.yaw, item.yaw) <= 60);
-  const relevantTransitions = cluster.length ? cluster : transitions;
+  const cluster = viewTargets.filter((item) => circularDistance(anchor.yaw, item.yaw) <= 60);
+  const relevantTransitions = cluster.length ? cluster : viewTargets;
 
   return {
     pitch: relevantTransitions.reduce((sum, item) => sum + item.pitch, 0) / relevantTransitions.length,
@@ -83,7 +101,7 @@ export const panoramaScenes = {
         yaw: 115.15171623569356,
         type: "scene",
         text: "Хайпарк",
-        sceneId: "highpark",
+        sceneId: "highparkroad",
         targetPitch: "same",
         targetYaw: "same",
         targetHfov: "same",
@@ -94,6 +112,67 @@ export const panoramaScenes = {
         type: "scene",
         text: "Дом Африки",
         sceneId: "domafrica",
+        targetPitch: "same",
+        targetYaw: "same",
+        targetHfov: "same",
+      },
+      {
+        pitch: -1.2944,
+        yaw: -64.2597,
+        type: "scene",
+        text: "Актовый зал",
+        sceneId: "akt",
+        targetPitch: "same",
+        targetYaw: "same",
+        targetHfov: "same",
+      },
+    ],
+  },
+  akt: {
+    id: "akt",
+    title: "Актовый зал",
+    shortTitle: "Актовый зал",
+    description: "Панорама актового зала.",
+    panorama: "/panoramas/akt.jpeg",
+    pitch: 0,
+    yaw: 0,
+    hfov: initialHfov,
+    hotSpots: [
+      {
+        pitch: 3.4595,
+        yaw: -159.2162,
+        type: "info",
+        text: "Актовый зал",
+        hint: assemblyHallHint,
+      },
+    ],
+  },
+  highparkroad: {
+    id: "highparkroad",
+    title: "Переход к Хайпарку",
+    shortTitle: "К Хайпарку",
+    description: "Промежуточная точка маршрута из холла в Хайпарк.",
+    panorama: "/panoramas/highparkroad.jpeg",
+    pitch: 0,
+    yaw: 0,
+    hfov: initialHfov,
+    hotSpots: [
+      {
+        pitch: -0.0612,
+        yaw: -168.5889,
+        type: "scene",
+        text: "Хайпарк",
+        sceneId: "highpark",
+        targetPitch: "same",
+        targetYaw: "same",
+        targetHfov: "same",
+      },
+      {
+        pitch: 0.984,
+        yaw: 62.5551,
+        type: "scene",
+        text: "Холл",
+        sceneId: "hall",
         targetPitch: "same",
         targetYaw: "same",
         targetHfov: "same",
@@ -130,6 +209,51 @@ export const panoramaScenes = {
     title: "Дом Африки",
     shortTitle: "Дом Африки",
     description: "Панорама Дома Африки.",
+    panorama: "/panoramas/houseafrica.jpeg",
+    pitch: 0,
+    yaw: 0,
+    hfov: initialHfov,
+    hotSpots: [
+      {
+        pitch: 1.8762,
+        yaw: -173.1565,
+        type: "scene",
+        text: "Дом Африки",
+        sceneId: "africa1",
+        targetPitch: "same",
+        targetYaw: "same",
+        targetHfov: "same",
+      },
+    ],
+  },
+  africa1: {
+    id: "africa1",
+    title: "Дом Африки 2",
+    shortTitle: "Дом Африки 2",
+    description: "Следующая панорама после Дома Африки.",
+    panorama: "/panoramas/africa1.jpeg",
+    pitch: 0,
+    yaw: 0,
+    hfov: initialHfov,
+    hotSpots: [
+      {
+        pitch: 0.2081,
+        yaw: 157.5248,
+        type: "scene",
+        text: "Дом Африки",
+        hint: domAfricaHint,
+        sceneId: "domafricafinal",
+        targetPitch: "same",
+        targetYaw: "same",
+        targetHfov: "same",
+      },
+    ],
+  },
+  domafricafinal: {
+    id: "domafricafinal",
+    title: "Дом Африки",
+    shortTitle: "Дом Африки",
+    description: "Финальная панорама Дома Африки.",
     panorama: "/panoramas/domafriki.jpeg",
     pitch: 0,
     yaw: 0,
@@ -203,12 +327,14 @@ Object.values(panoramaScenes).forEach((scene) => {
 });
 
 export const panoramaSceneList = sceneOrder.map((sceneId) => panoramaScenes[sceneId]);
+export const panoramaViewerSceneList = Object.values(panoramaScenes);
 const debugSceneIds = new Set();
 
 export const defaultPanoramaSceneId = sceneOrder[0];
 
 export const roomSceneMap = {
   "холл": "hall",
+  "актовый зал": "akt",
   "хайпарк": "highpark",
   "квазар": "kvazar",
   "дом африки": "domafrica",
@@ -228,7 +354,7 @@ export const getPanoramaViewerConfig = (initialSceneId = defaultPanoramaSceneId)
     maxHfov: initialHfov,
   },
   scenes: Object.fromEntries(
-    panoramaSceneList.map((scene) => [
+    panoramaViewerSceneList.map((scene) => [
       scene.id,
       {
         title: scene.title,

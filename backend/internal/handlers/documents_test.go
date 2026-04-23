@@ -50,6 +50,7 @@ func newDocumentsTestRouter(db *gorm.DB) *gin.Engine {
 	router.GET("/api/documents/status", handler.DocumentStatus)
 	router.GET("/api/documents/program", handler.ProgramPDF)
 	router.GET("/api/documents/badge", handler.BadgePDF)
+	router.GET("/api/admin/users/:id/badge", handler.AdminBadgePDF)
 	router.GET("/api/documents/certificate", handler.CertificatePDF)
 	router.GET("/api/documents/proceedings", handler.Proceedings)
 	return router
@@ -249,6 +250,38 @@ func TestBadgePDFRequiresAdminPreparationForOfflineParticipant(t *testing.T) {
 	}
 }
 
+func TestAdminBadgePDFAllowsOfflinePreviewWithoutParticipantAccess(t *testing.T) {
+	db := newDocumentsTestDB(t)
+	router := newDocumentsTestRouter(db)
+	section := seedSection(t, db, "Аудитория 403B")
+	seedConferenceRecord(t, db, models.ConferenceStatusLive, "")
+	user := seedParticipant(t, db, "admin-offline-badge@example.com", models.UserTypeOffline, &section.ID, "Офлайн доклад")
+
+	recorder := performDocumentsRequest(t, router, "/api/admin/users/"+strconv.FormatUint(uint64(user.ID), 10)+"/badge", user)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, recorder.Code, recorder.Body.String())
+	}
+	if contentType := recorder.Header().Get("Content-Type"); !strings.Contains(contentType, "application/pdf") {
+		t.Fatalf("expected pdf content type, got %q", contentType)
+	}
+}
+
+func TestAdminBadgePDFRejectsOnlineParticipant(t *testing.T) {
+	db := newDocumentsTestDB(t)
+	router := newDocumentsTestRouter(db)
+	section := seedSection(t, db, "Аудитория 403C")
+	seedConferenceRecord(t, db, models.ConferenceStatusLive, "")
+	user := seedParticipant(t, db, "admin-online-badge@example.com", models.UserTypeOnline, &section.ID, "Онлайн доклад")
+
+	recorder := performDocumentsRequest(t, router, "/api/admin/users/"+strconv.FormatUint(uint64(user.ID), 10)+"/badge", user)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusConflict, recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "только офлайн") {
+		t.Fatalf("unexpected body %s", recorder.Body.String())
+	}
+}
+
 func TestCertificatePDFAllowsEligibleOnlineParticipant(t *testing.T) {
 	db := newDocumentsTestDB(t)
 	router := newDocumentsTestRouter(db)
@@ -307,5 +340,28 @@ func TestProgramPDFRejectsPendingPersonalProgram(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), "Официальная программа") {
 		t.Fatalf("unexpected body %s", recorder.Body.String())
+	}
+}
+
+func TestProgramPDFFullServesStaticAssetWhenAvailable(t *testing.T) {
+	db := newDocumentsTestDB(t)
+	router := newDocumentsTestRouter(db)
+	section := seedSection(t, db, "Аудитория 407")
+	user := seedParticipant(t, db, "program-full@example.com", models.UserTypeOffline, &section.ID, "Доклад")
+	seedConferenceRecord(t, db, models.ConferenceStatusLive, "")
+
+	if fullProgramPDFPath() == "" {
+		t.Skip("static full program asset is not available")
+	}
+
+	recorder := performDocumentsRequest(t, router, "/api/documents/program?type=full", user)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, recorder.Code, recorder.Body.String())
+	}
+	if contentType := recorder.Header().Get("Content-Type"); !strings.Contains(contentType, "application/pdf") {
+		t.Fatalf("expected pdf content type, got %q", contentType)
+	}
+	if bodyLen := recorder.Body.Len(); bodyLen == 0 {
+		t.Fatalf("expected static pdf body, got empty response")
 	}
 }

@@ -18,18 +18,20 @@ import (
 func Setup(db *gorm.DB, cfg config.Config, store objectstore.Store) *gin.Engine {
 	r := gin.Default()
 	corsConfig := cors.Config{
-		AllowOrigins:     []string{"*"},
+		AllowOrigins:     cfg.CORSOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type"},
 		ExposeHeaders:    []string{"Content-Disposition"},
-		AllowCredentials: false,
+		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}
+	if len(corsConfig.AllowOrigins) == 0 {
+		corsConfig.AllowOrigins = []string{"http://localhost:5173", "http://127.0.0.1:5173"}
+	}
 	if len(cfg.CORSOrigins) == 1 && cfg.CORSOrigins[0] == "*" {
+		corsConfig.AllowCredentials = false
 		corsConfig.AllowAllOrigins = true
 		corsConfig.AllowOrigins = nil
-	} else if len(cfg.CORSOrigins) > 0 {
-		corsConfig.AllowOrigins = cfg.CORSOrigins
 	}
 	r.Use(cors.New(corsConfig))
 	if len(cfg.TrustedProxies) == 0 {
@@ -54,6 +56,7 @@ func Setup(db *gorm.DB, cfg config.Config, store objectstore.Store) *gin.Engine 
 	sectionHandler := &handlers.SectionHandler{DB: db}
 	scheduleHandler := &handlers.ScheduleHandler{DB: db}
 	feedbackHandler := &handlers.FeedbackHandler{DB: db}
+	questionHandler := &handlers.QuestionHandler{DB: db, JWTSecret: cfg.JWTSecret, AppBaseURL: cfg.AppBaseURL}
 	chatHandler := &handlers.ChatHandler{DB: db, Store: store}
 	docHandler := &handlers.DocumentHandler{DB: db, JWTSecret: cfg.JWTSecret, AppBaseURL: cfg.AppBaseURL}
 	consentHandler := &handlers.ConsentHandler{DB: db}
@@ -71,6 +74,7 @@ func Setup(db *gorm.DB, cfg config.Config, store objectstore.Store) *gin.Engine 
 	verificationLimiter := ratelimit.New(10, 10*time.Minute)
 	loginLimiter := ratelimit.New(10, 10*time.Minute)
 	resetLimiter := ratelimit.New(5, 15*time.Minute)
+	questionLimiter := ratelimit.New(8, 5*time.Minute)
 
 	api := r.Group("/api")
 	api.POST("/auth/register", registrationLimiter.Middleware("auth_register"), authHandler.RequestRegistrationCode)
@@ -86,6 +90,8 @@ func Setup(db *gorm.DB, cfg config.Config, store objectstore.Store) *gin.Engine 
 	api.GET("/map/routes", mapRouteHandler.ListRoutes)
 	api.GET("/conference", conferenceHandler.GetConference)
 	api.GET("/certificates/:number", docHandler.VerifyCertificate)
+	api.GET("/questions/public", questionHandler.PublicQuestionContext)
+	api.POST("/questions/public", questionLimiter.Middleware("public_questions"), questionHandler.CreatePublicQuestion)
 	protected := api.Group("")
 	protected.Use(auth.Middleware(cfg.JWTSecret))
 	protected.GET("/me", userHandler.Me)
@@ -128,6 +134,9 @@ func Setup(db *gorm.DB, cfg config.Config, store objectstore.Store) *gin.Engine 
 	admin.PUT("/program/:userID", programHandler.UpsertProgramAssignment)
 	admin.GET("/consents", consentHandler.ListConsents)
 	admin.GET("/feedback", feedbackHandler.ListFeedback)
+	admin.GET("/questions/qr", questionHandler.QuestionQR)
+	admin.GET("/questions", questionHandler.ListQuestions)
+	admin.PATCH("/questions/:id", questionHandler.UpdateQuestionStatus)
 	admin.GET("/conference", conferenceHandler.GetConference)
 	admin.PUT("/conference", conferenceHandler.UpdateConference)
 	admin.POST("/checkin/verify", checkInHandler.VerifyBadge)
