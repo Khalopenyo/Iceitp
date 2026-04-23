@@ -58,10 +58,23 @@ export default function Register() {
   const [verificationCode, setVerificationCode] = useState("");
   const [verificationToken, setVerificationToken] = useState("");
   const [cooldown, setCooldown] = useState(0);
-  const degreeOptions = [
-    "Кандидат наук, доцент",
-    "Доктор наук, доцент",
-    "Доктор наук, профессор",
+  const degreeGroups = [
+    {
+      label: "Основное",
+      options: ["Преподаватель"],
+    },
+    {
+      label: "Учащийся",
+      options: ["Студент", "Магистрант", "Аспирант"],
+    },
+    {
+      label: "Ученая степень/звание",
+      options: [
+        "Кандидат наук, доцент",
+        "Доктор наук, доцент",
+        "Доктор наук, профессор",
+      ],
+    },
   ];
   const cityOptions = [
     "Москва",
@@ -302,18 +315,23 @@ export default function Register() {
                 </button>
                 {showDegreeDropdown && (
                   <div className="dropdown-menu">
-                    {degreeOptions.map((degree) => (
-                      <button
-                        type="button"
-                        key={degree}
-                        className="dropdown-item"
-                        onClick={() => {
-                          update("degree", degree);
-                          setShowDegreeDropdown(false);
-                        }}
-                      >
-                        {degree}
-                      </button>
+                    {degreeGroups.map((group) => (
+                      <div key={group.label} className="dropdown-group">
+                        <div className="dropdown-group-title">{group.label}</div>
+                        {group.options.map((degree) => (
+                          <button
+                            type="button"
+                            key={degree}
+                            className="dropdown-item"
+                            onClick={() => {
+                              update("degree", degree);
+                              setShowDegreeDropdown(false);
+                            }}
+                          >
+                            {degree}
+                          </button>
+                        ))}
+                      </div>
                     ))}
                   </div>
                 )}

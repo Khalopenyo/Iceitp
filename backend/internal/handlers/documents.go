@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode"
@@ -683,6 +684,12 @@ func configureDocumentFont(pdf *gofpdf.Fpdf) string {
 
 func certificateTemplatePath() string {
 	return firstExistingFile([]string{
+		"backend/assets/certificates/sert.jpeg",
+		"assets/certificates/sert.jpeg",
+		"/app/assets/certificates/sert.jpeg",
+		"backend/assets/certificates/sert.jpg",
+		"assets/certificates/sert.jpg",
+		"/app/assets/certificates/sert.jpg",
 		"backend/assets/certificates/certificate-template.png",
 		"assets/certificates/certificate-template.png",
 		"/app/assets/certificates/certificate-template.png",
@@ -742,6 +749,7 @@ func renderCertificateTemplate(pdf *gofpdf.Fpdf, fontFamily, fullName string, ce
 		return false
 	}
 
+	imageOptions := imageOptionsForPath(templatePath)
 	pdf.ImageOptions(
 		templatePath,
 		0,
@@ -749,10 +757,20 @@ func renderCertificateTemplate(pdf *gofpdf.Fpdf, fontFamily, fullName string, ce
 		297,
 		210,
 		false,
-		gofpdf.ImageOptions{ImageType: "PNG", ReadDpi: true},
+		imageOptions,
 		0,
 		"",
 	)
+
+	baseName := strings.ToLower(filepath.Base(templatePath))
+	if baseName == "sert.jpeg" || baseName == "sert.jpg" {
+		pdf.SetTextColor(38, 38, 38)
+		nameFontSize := fitTextToWidth(pdf, fontFamily, "B", fullName, 200, 26, 14)
+		pdf.SetFont(fontFamily, "B", nameFontSize)
+		pdf.SetXY(48, 103)
+		pdf.CellFormat(200, 12, fullName, "", 0, "C", false, 0, "")
+		return true
+	}
 
 	pdf.SetTextColor(33, 61, 135)
 	nameFontSize := fitTextToWidth(pdf, fontFamily, "B", fullName, 195, 30, 16)
@@ -803,6 +821,15 @@ func firstExistingFile(paths []string) string {
 		}
 	}
 	return ""
+}
+
+func imageOptionsForPath(path string) gofpdf.ImageOptions {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".jpg", ".jpeg":
+		return gofpdf.ImageOptions{ImageType: "JPG", ReadDpi: true}
+	default:
+		return gofpdf.ImageOptions{ImageType: "PNG", ReadDpi: true}
+	}
 }
 
 func minFloat(a, b float64) float64 {
