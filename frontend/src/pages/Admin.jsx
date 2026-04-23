@@ -44,6 +44,24 @@ const toISOOrUndefined = (value) => {
   return date.toISOString();
 };
 
+const roleLabels = {
+  participant: "Участник",
+  org: "Оргкомитет",
+  admin: "Администратор",
+};
+
+const userTypeLabels = {
+  offline: "Оффлайн",
+  online: "Онлайн",
+};
+
+const conferenceStatusLabels = {
+  draft: "Черновик",
+  registration_open: "Регистрация открыта",
+  in_progress: "Конференция идет",
+  completed: "Завершена",
+};
+
 function RoomDropdown({ value, onChange, rooms, placeholder }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -253,6 +271,14 @@ export default function Admin() {
     navigate("/forbidden", { replace: true });
   };
 
+  const handleAdminRequestError = (error, fallbackMessage) => {
+    if (error?.status === 403) {
+      handleForbidden();
+      return;
+    }
+    setAdminError(error?.message || fallbackMessage);
+  };
+
   const loadUsers = async (page = usersPage.page) => {
     try {
       const response = await apiGet(
@@ -266,8 +292,8 @@ export default function Admin() {
         })}`
       );
       setUsersPage(response);
-    } catch {
-      handleForbidden();
+    } catch (error) {
+      handleAdminRequestError(error, "Не удалось загрузить пользователей.");
     }
   };
 
@@ -282,8 +308,13 @@ export default function Admin() {
         })}`
       );
       setConsentsPage(response);
-    } catch {
+    } catch (error) {
       setConsentsPage(emptyPage);
+      if (error?.status === 403) {
+        handleForbidden();
+        return;
+      }
+      setAdminError(error?.message || "Не удалось загрузить согласия.");
     }
   };
 
@@ -298,8 +329,13 @@ export default function Admin() {
         })}`
       );
       setFeedbackPage(response);
-    } catch {
+    } catch (error) {
       setFeedbackPage(emptyPage);
+      if (error?.status === 403) {
+        handleForbidden();
+        return;
+      }
+      setAdminError(error?.message || "Не удалось загрузить отзывы.");
     }
   };
 
@@ -321,8 +357,8 @@ export default function Admin() {
         proceedings_url: conferenceResponse.proceedings_url || "",
         support_email: conferenceResponse.support_email || "",
       });
-    } catch {
-      handleForbidden();
+    } catch (error) {
+      handleAdminRequestError(error, "Не удалось загрузить параметры конференции.");
     }
   };
 
@@ -363,18 +399,8 @@ export default function Admin() {
       setSectionForm({ title: "", description: "", room: "", capacity: 10, start_at: "", end_at: "" });
       setAdminStatus("Секция добавлена в программу конференции.");
       loadBase();
-    } catch {
-      handleForbidden();
-    }
-  };
-
-  const seedDemo = async () => {
-    try {
-      await apiPost("/admin/seed-demo", {});
-      setAdminStatus("Тестовые данные созданы.");
-      loadBase();
-    } catch {
-      handleForbidden();
+    } catch (error) {
+      handleAdminRequestError(error, "Не удалось создать секцию.");
     }
   };
 
@@ -383,8 +409,8 @@ export default function Admin() {
       await apiPut(`/admin/users/${id}/role`, { role });
       setAdminStatus("Роль пользователя обновлена.");
       loadUsers(usersPage.page);
-    } catch {
-      handleForbidden();
+    } catch (error) {
+      handleAdminRequestError(error, "Не удалось обновить роль пользователя.");
     }
   };
 
@@ -450,8 +476,8 @@ export default function Admin() {
       await apiDelete(`/admin/users/${id}`);
       setAdminStatus("Пользователь удален.");
       loadUsers(Math.max(1, usersPage.page));
-    } catch {
-      handleForbidden();
+    } catch (error) {
+      handleAdminRequestError(error, "Не удалось удалить пользователя.");
     }
   };
 
@@ -461,8 +487,8 @@ export default function Admin() {
       await apiDelete(`/admin/sections/${id}`);
       setAdminStatus("Секция удалена.");
       loadBase();
-    } catch {
-      handleForbidden();
+    } catch (error) {
+      handleAdminRequestError(error, "Не удалось удалить секцию.");
     }
   };
 
@@ -476,8 +502,8 @@ export default function Admin() {
       setRoomForm({ floor, name: "" });
       setAdminStatus(`Аудитория "${name}" добавлена.`);
       loadBase();
-    } catch {
-      handleForbidden();
+    } catch (error) {
+      handleAdminRequestError(error, "Не удалось добавить аудиторию.");
     }
   };
 
@@ -487,8 +513,8 @@ export default function Admin() {
       await apiDelete(`/admin/rooms/${id}`);
       setAdminStatus("Аудитория удалена.");
       loadBase();
-    } catch {
-      handleForbidden();
+    } catch (error) {
+      handleAdminRequestError(error, "Не удалось удалить аудиторию.");
     }
   };
 
@@ -513,8 +539,8 @@ export default function Admin() {
       notifyConferenceUpdated();
       setAdminStatus("Параметры конференции сохранены.");
       loadBase();
-    } catch {
-      handleForbidden();
+    } catch (error) {
+      handleAdminRequestError(error, "Не удалось сохранить параметры конференции.");
     } finally {
       setSavingConference(false);
     }
@@ -590,17 +616,17 @@ export default function Admin() {
                   Роль
                   <select value={userRoleFilter} onChange={(e) => setUserRoleFilter(e.target.value)}>
                     <option value="">Все</option>
-                    <option value="participant">participant</option>
-                    <option value="org">org</option>
-                    <option value="admin">admin</option>
+                    <option value="participant">{roleLabels.participant}</option>
+                    <option value="org">{roleLabels.org}</option>
+                    <option value="admin">{roleLabels.admin}</option>
                   </select>
                 </label>
                 <label>
                   Формат участия
                   <select value={userTypeFilter} onChange={(e) => setUserTypeFilter(e.target.value)}>
                     <option value="">Все</option>
-                    <option value="offline">offline</option>
-                    <option value="online">online</option>
+                    <option value="offline">{userTypeLabels.offline}</option>
+                    <option value="online">{userTypeLabels.online}</option>
                   </select>
                 </label>
                 <label>
@@ -619,12 +645,12 @@ export default function Admin() {
                     <div>
                       <strong>{user.profile?.full_name || user.email}</strong>
                       <div className="muted">
-                        {user.email} · {user.user_type === "offline" ? "оффлайн" : "онлайн"}
+                        {user.email} · {userTypeLabels[user.user_type] || "Участник"}
                       </div>
                       {user.profile?.organization ? <div className="muted">{user.profile.organization}</div> : null}
                     </div>
                     <div className="row-actions">
-                      <span className="pill">{user.role}</span>
+                      <span className="pill">{roleLabels[user.role] || user.role}</span>
                       {user.user_type === "offline" ? (
                         <span className="pill">{user.badge_issued ? "Бейдж готов" : "Бейдж не подготовлен"}</span>
                       ) : (
@@ -925,10 +951,10 @@ export default function Admin() {
                     value={conferenceForm.status}
                     onChange={(e) => setConferenceForm({ ...conferenceForm, status: e.target.value })}
                   >
-                    <option value="draft">draft</option>
-                    <option value="registration_open">registration_open</option>
-                    <option value="in_progress">in_progress</option>
-                    <option value="completed">completed</option>
+                    <option value="draft">{conferenceStatusLabels.draft}</option>
+                    <option value="registration_open">{conferenceStatusLabels.registration_open}</option>
+                    <option value="in_progress">{conferenceStatusLabels.in_progress}</option>
+                    <option value="completed">{conferenceStatusLabels.completed}</option>
                   </select>
                 </label>
                 <label>
@@ -978,23 +1004,20 @@ export default function Admin() {
 
               <hr />
 
-              <h4>Ручной check-in по токену</h4>
+              <h4>Ручная отметка по бейджу</h4>
               <form className="form-grid" onSubmit={verifyCheckin}>
                 <label>
-                  JWT из бейджа
+                  Код из QR-бейджа
                   <textarea
                     rows="4"
                     value={checkinToken}
                     onChange={(e) => setCheckinToken(e.target.value)}
-                    placeholder="Вставьте токен из QR-ссылки или PDF-бейджа"
+                    placeholder="Вставьте код из ссылки или PDF-бейджа"
                   />
                 </label>
                 <div className="admin-tool-actions">
                   <button className="btn btn-primary" type="submit" disabled={verifyingCheckin}>
                     {verifyingCheckin ? "Проверка..." : "Отметить присутствие"}
-                  </button>
-                  <button className="btn btn-ghost" type="button" onClick={seedDemo}>
-                    Создать демо-данные
                   </button>
                   <button className="btn btn-ghost" type="button" onClick={reloadEverything}>
                     Обновить данные

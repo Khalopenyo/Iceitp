@@ -3938,6 +3938,40 @@ h4 {
   word-break: break-all;
 }
 
+.question-board {
+  display: grid;
+  gap: 16px;
+}
+
+.question-board-item {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(180, 35, 24, 0.12);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 24px rgba(122, 35, 28, 0.06);
+}
+
+.question-board-item p {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.question-board-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.question-board-meta span {
+  color: var(--text-muted);
+  font-size: 0.94rem;
+}
+
 .admin-tool-actions {
   justify-content: flex-start;
 }

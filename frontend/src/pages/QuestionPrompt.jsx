@@ -11,7 +11,6 @@ export default function QuestionPrompt() {
   const [context, setContext] = useState(emptyContext);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [authorName, setAuthorName] = useState("");
   const [questionText, setQuestionText] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -22,7 +21,7 @@ export default function QuestionPrompt() {
     async function loadContext() {
       if (!token) {
         setLoading(false);
-        setErrorMessage("В ссылке отсутствует токен формы вопросов.");
+        setErrorMessage("Ссылка на форму вопросов недействительна.");
         return;
       }
 
@@ -57,12 +56,7 @@ export default function QuestionPrompt() {
 
   const submitQuestion = async (event) => {
     event.preventDefault();
-    const trimmedName = authorName.trim();
     const trimmedQuestion = questionText.trim();
-    if (!trimmedName) {
-      setErrorMessage("Укажите имя.");
-      return;
-    }
     if (!trimmedQuestion) {
       setErrorMessage("Введите вопрос.");
       return;
@@ -76,7 +70,6 @@ export default function QuestionPrompt() {
         "/questions/public",
         {
           token,
-          author_name: trimmedName,
           text: trimmedQuestion,
         },
         {
@@ -96,7 +89,7 @@ export default function QuestionPrompt() {
     return (
       <section className="panel narrow">
         <h2>Задать вопрос</h2>
-        <p className="form-status error">В ссылке отсутствует токен формы вопросов.</p>
+        <p className="form-status error">Ссылка на форму вопросов недействительна.</p>
       </section>
     );
   }
@@ -112,21 +105,10 @@ export default function QuestionPrompt() {
         <>
           <div className="question-badge-context">
             <strong>{context.conference?.title || "Конференция"}</strong>
-            <p className="muted">
-              Укажите имя и отправьте вопрос. Он сразу попадет в админскую модерацию.
-            </p>
+            <p className="muted">Введите вопрос и отправьте его. Он сразу попадет в админскую модерацию.</p>
           </div>
 
           <form className="form-grid" onSubmit={submitQuestion}>
-            <label>
-              Ваше имя
-              <input
-                value={authorName}
-                onChange={(event) => setAuthorName(event.target.value)}
-                placeholder="Как к вам обращаться"
-                maxLength={255}
-              />
-            </label>
             <label>
               Ваш вопрос
               <textarea

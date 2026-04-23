@@ -118,7 +118,6 @@ export default function Layout() {
     navigate("/");
   };
 
-  const isPrivileged = !!user && ["admin", "org"].includes(user.role);
   const showMapLink = !!user;
   const marketingNavItems = [
     { href: "/#university", label: "О вузе" },
@@ -154,6 +153,14 @@ export default function Layout() {
         ...(["admin", "org"].includes(user.role) ? [{ to: "/admin", label: "Админка" }] : []),
       ]
     : [];
+  const adminQuestionNavItem =
+    user?.role === "admin" ? { to: "/admin/questions/approved", label: "Вопросы", mobileLabel: "Вопросы" } : null;
+  const desktopNavItemsWithQuestions = adminQuestionNavItem
+    ? [...desktopNavItems, adminQuestionNavItem]
+    : desktopNavItems;
+  const mobilePrimaryNavItemsWithQuestions = adminQuestionNavItem
+    ? [...mobilePrimaryNavItems, adminQuestionNavItem]
+    : mobilePrimaryNavItems;
   const conferenceTitle = getConferenceTitle(conference);
   const conferenceSupportEmail = getConferenceSupportEmail(conference);
   const conferenceDateLabel = formatConferenceDateRange(conference?.starts_at, conference?.ends_at);
@@ -190,7 +197,7 @@ export default function Layout() {
         <div className={`mobile-header-bar ${user ? "mobile-header-bar-auth" : "mobile-header-bar-guest"}`}>
           {user ? (
             <nav className="mobile-header-nav" aria-label="Навигация по страницам">
-              {mobilePrimaryNavItems.map((item) => (
+              {mobilePrimaryNavItemsWithQuestions.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
@@ -244,7 +251,7 @@ export default function Layout() {
           {user ? (
             <>
               <nav id="site-navigation" className="nav desktop-nav">
-                {desktopNavItems.map((item) => (
+                {desktopNavItemsWithQuestions.map((item) => (
                   <NavLink key={item.to} to={item.to} end={item.end}>
                     {item.label}
                   </NavLink>

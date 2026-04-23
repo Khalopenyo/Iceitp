@@ -328,7 +328,6 @@ Object.values(panoramaScenes).forEach((scene) => {
 
 export const panoramaSceneList = sceneOrder.map((sceneId) => panoramaScenes[sceneId]);
 export const panoramaViewerSceneList = Object.values(panoramaScenes);
-const debugSceneIds = new Set();
 
 export const defaultPanoramaSceneId = sceneOrder[0];
 
@@ -364,7 +363,6 @@ export const getPanoramaViewerConfig = (initialSceneId = defaultPanoramaSceneId)
         yaw: scene.yaw,
         hfov: scene.hfov,
         maxHfov: initialHfov,
-        hotSpotDebug: debugSceneIds.has(scene.id),
         hotSpots: scene.hotSpots,
       },
     ])

@@ -9,6 +9,12 @@ const emptyPage = {
   page_size: 20,
 };
 
+const questionStatusLabels = {
+  pending: "На модерации",
+  approved: "Одобрен",
+  rejected: "Отклонен",
+};
+
 function normalizePageResponse(response) {
   return {
     items: Array.isArray(response?.items) ? response.items : [],
@@ -83,7 +89,7 @@ export default function AdminQuestions() {
       );
       setQuestionsPage(normalizePageResponse(response));
     } catch (error) {
-      if ((error?.message || "") === "Forbidden") {
+      if (error?.status === 403) {
         handleForbidden();
         return;
       }
@@ -97,7 +103,7 @@ export default function AdminQuestions() {
       const response = await apiGet("/admin/questions/qr");
       setQuestionQr(response);
     } catch (error) {
-      if ((error?.message || "") === "Forbidden") {
+      if (error?.status === 403) {
         handleForbidden();
         return;
       }
@@ -149,11 +155,14 @@ export default function AdminQuestions() {
 
       <div className="dashboard-layout">
         <aside className="dashboard-tabs">
+          <button className="tab-btn" onClick={() => navigate("/admin/questions/approved")}>
+            Одобренные вопросы
+          </button>
           <button className="tab-btn" onClick={() => navigate("/admin")}>
             Назад в админку
           </button>
           <button className="tab-btn active" type="button">
-            Вопросы
+            Модерация вопросов
           </button>
         </aside>
 
@@ -196,9 +205,9 @@ export default function AdminQuestions() {
                 Статус
                 <select value={questionStatusFilter} onChange={(e) => setQuestionStatusFilter(e.target.value)}>
                   <option value="">Все</option>
-                  <option value="pending">pending</option>
-                  <option value="approved">approved</option>
-                  <option value="rejected">rejected</option>
+                  <option value="pending">{questionStatusLabels.pending}</option>
+                  <option value="approved">{questionStatusLabels.approved}</option>
+                  <option value="rejected">{questionStatusLabels.rejected}</option>
                 </select>
               </label>
             </div>
@@ -215,7 +224,7 @@ export default function AdminQuestions() {
                     <p>{question.text}</p>
                   </div>
                   <div className="row-actions">
-                    <span className="pill">{question.status}</span>
+                    <span className="pill">{questionStatusLabels[question.status] || question.status}</span>
                     <button
                       className="btn btn-ghost"
                       onClick={() => updateQuestionStatus(question.id, "approved")}

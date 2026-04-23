@@ -10,10 +10,6 @@ import {
 
 const getViewer = () => (typeof window !== "undefined" ? window.pannellum : null);
 const preloadedPanoramas = new Set();
-const isPanoramaDebugEnabled = () =>
-  import.meta.env.DEV ||
-  (typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("debugPanorama") === "1");
 const emptyHotspotHints = { left: "", back: "", right: "" };
 
 const getSignedYawDelta = (fromYaw, toYaw) => {
@@ -31,27 +27,6 @@ const formatHintLabel = (hotSpots) => {
   }
   return `${labels[0]} и еще ${labels.length - 1}`;
 };
-
-function logPanoramaClickCoords(viewer, event) {
-  if (!viewer?.mouseEventToCoords || typeof window === "undefined") {
-    return;
-  }
-
-  const coords = viewer.mouseEventToCoords(event);
-  if (!Array.isArray(coords) || coords.length < 2) {
-    return;
-  }
-
-  const [pitch, yaw] = coords;
-  const payload = {
-    sceneId: viewer.getScene?.(),
-    pitch: Number(pitch.toFixed(4)),
-    yaw: Number(yaw.toFixed(4)),
-  };
-
-  window.__panoramaLastClick = payload;
-  console.log("[panorama-coords]", payload);
-}
 
 export default function PanoramaViewer({ sceneId, onSceneChange }) {
   const containerIdRef = useRef(`panorama-${Math.random().toString(36).slice(2, 10)}`);
@@ -113,32 +88,6 @@ export default function PanoramaViewer({ sceneId, onSceneChange }) {
 
     const nextScene = getPanoramaScene(stableSceneId);
     viewer.loadScene(nextScene.id, nextScene.pitch, nextScene.yaw, nextScene.hfov);
-  }, [stableSceneId]);
-
-  useEffect(() => {
-    if (!isPanoramaDebugEnabled()) {
-      return undefined;
-    }
-
-    const viewer = viewerRef.current;
-    const container = document.getElementById(containerIdRef.current);
-    const debugTarget = container?.querySelector(".pnlm-dragfix") ?? container;
-    if (!viewer || !debugTarget) {
-      return undefined;
-    }
-
-    const handleClick = (event) => {
-      logPanoramaClickCoords(viewer, event);
-    };
-
-    debugTarget.addEventListener("click", handleClick, true);
-    console.info(
-      "[panorama-debug] click panorama to log coordinates; last click is also stored in window.__panoramaLastClick"
-    );
-
-    return () => {
-      debugTarget.removeEventListener("click", handleClick, true);
-    };
   }, [stableSceneId]);
 
   useEffect(() => {

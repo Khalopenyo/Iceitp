@@ -91,6 +91,7 @@ func Setup(db *gorm.DB, cfg config.Config, store objectstore.Store) *gin.Engine 
 	api.GET("/conference", conferenceHandler.GetConference)
 	api.GET("/certificates/:number", docHandler.VerifyCertificate)
 	api.GET("/questions/public", questionHandler.PublicQuestionContext)
+	api.GET("/questions/approved", questionHandler.ApprovedQuestions)
 	api.POST("/questions/public", questionLimiter.Middleware("public_questions"), questionHandler.CreatePublicQuestion)
 	protected := api.Group("")
 	protected.Use(auth.Middleware(cfg.JWTSecret))

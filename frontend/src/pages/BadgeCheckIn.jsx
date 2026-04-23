@@ -28,9 +28,9 @@ function createCheckInRequestOptions() {
 
 function formatCheckInError(error) {
   if (error?.name === "AbortError") {
-    return "Сервер слишком долго отвечает. Проверьте backend и попробуйте еще раз.";
+    return "Сервер слишком долго отвечает. Попробуйте еще раз чуть позже.";
   }
-  if ((error?.message || "") === "Forbidden") {
+  if (error?.status === 403) {
     return "Отмечать присутствие могут только администратор или оргкомитет.";
   }
   return error?.message || "Не удалось проверить бейдж.";
@@ -48,7 +48,7 @@ export default function BadgeCheckIn() {
 
     async function verifyBadge() {
       if (!token) {
-        setErrorMessage("В ссылке отсутствует токен бейджа.");
+        setErrorMessage("Ссылка на бейдж недействительна.");
         setLoading(false);
         return;
       }
@@ -112,7 +112,7 @@ export default function BadgeCheckIn() {
     return (
       <section className="panel narrow">
         <h2>Проверка бейджа</h2>
-        <p className="form-status error">В ссылке отсутствует токен бейджа.</p>
+        <p className="form-status error">Ссылка на бейдж недействительна.</p>
       </section>
     );
   }

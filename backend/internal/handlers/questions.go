@@ -36,6 +36,14 @@ type questionEntry struct {
 	ModeratedAt  string                `json:"moderated_at,omitempty"`
 }
 
+type publicApprovedQuestionEntry struct {
+	ID          uint   `json:"id"`
+	AuthorName  string `json:"author_name"`
+	Text        string `json:"text"`
+	CreatedAt   string `json:"created_at"`
+	ModeratedAt string `json:"moderated_at,omitempty"`
+}
+
 func (h *QuestionHandler) PublicQuestionContext(c *gin.Context) {
 	token := strings.TrimSpace(c.Query("token"))
 	if token == "" {
@@ -75,15 +83,11 @@ func (h *QuestionHandler) CreatePublicQuestion(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "token is required"})
 		return
 	}
-	if authorName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "author name is required"})
-		return
-	}
 	if text == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "question is required"})
 		return
 	}
-	if utf8.RuneCountInString(authorName) > 255 {
+	if authorName != "" && utf8.RuneCountInString(authorName) > 255 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "author name is too long"})
 		return
 	}
@@ -119,6 +123,52 @@ func (h *QuestionHandler) CreatePublicQuestion(c *gin.Context) {
 	})
 }
 
+func (h *QuestionHandler) ApprovedQuestions(c *gin.Context) {
+	token := strings.TrimSpace(c.Query("token"))
+	if token == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "token is required"})
+		return
+	}
+
+	context, err := loadQuestionTokenContext(h.DB, h.JWTSecret, token)
+	if err != nil {
+		writeQuestionTokenError(c, err)
+		return
+	}
+
+	response := make([]publicApprovedQuestionEntry, 0)
+	if err := h.DB.Model(&models.Question{}).
+		Where("conference_id = ? AND status = ?", context.Conference.ID, models.QuestionStatusApproved).
+		Select("id, author_name, text, created_at, moderated_at").
+		Order("COALESCE(moderated_at, created_at) desc").
+		Order("created_at desc").
+		Scan(&response).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load approved questions"})
+		return
+	}
+
+	for i := range response {
+		if response[i].CreatedAt != "" {
+			if parsed, err := time.Parse(time.RFC3339Nano, response[i].CreatedAt); err == nil {
+				response[i].CreatedAt = parsed.Format(time.RFC3339)
+			}
+		}
+		if response[i].ModeratedAt != "" {
+			if parsed, err := time.Parse(time.RFC3339Nano, response[i].ModeratedAt); err == nil {
+				response[i].ModeratedAt = parsed.Format(time.RFC3339)
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"conference": gin.H{
+			"id":    context.Conference.ID,
+			"title": context.Conference.Title,
+		},
+		"items": response,
+	})
+}
+
 func (h *QuestionHandler) QuestionQR(c *gin.Context) {
 	var conf models.Conference
 	if err := h.DB.Order("id asc").First(&conf).Error; err != nil {
@@ -148,9 +198,10 @@ func (h *QuestionHandler) QuestionQR(c *gin.Context) {
 			"id":    conf.ID,
 			"title": conf.Title,
 		},
-		"token":       token,
-		"url":         pageURL,
-		"qr_data_url": "data:image/png;base64," + base64.StdEncoding.EncodeToString(qrBytes),
+		"token":        token,
+		"url":          pageURL,
+		"approved_url": h.approvedQuestionsPageURL(token),
+		"qr_data_url":  "data:image/png;base64," + base64.StdEncoding.EncodeToString(qrBytes),
 	})
 }
 
@@ -294,6 +345,14 @@ func (h *QuestionHandler) questionPageURL(token string) string {
 		return "/questions/" + url.PathEscape(token)
 	}
 	return strings.TrimSuffix(base, "/") + "/questions/" + url.PathEscape(token)
+}
+
+func (h *QuestionHandler) approvedQuestionsPageURL(token string) string {
+	base := strings.TrimSpace(h.AppBaseURL)
+	if base == "" {
+		return "/questions/" + url.PathEscape(token) + "/approved"
+	}
+	return strings.TrimSuffix(base, "/") + "/questions/" + url.PathEscape(token) + "/approved"
 }
 
 func writeQuestionTokenError(c *gin.Context, err error) {

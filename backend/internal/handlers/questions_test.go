@@ -57,6 +57,7 @@ func newQuestionTestRouter(db *gorm.DB) *gin.Engine {
 		AppBaseURL: "http://localhost:5173",
 	}
 	router.GET("/api/questions/public", handler.PublicQuestionContext)
+	router.GET("/api/questions/approved", handler.ApprovedQuestions)
 	router.POST("/api/questions/public", handler.CreatePublicQuestion)
 	router.GET("/api/admin/questions/qr", func(c *gin.Context) {
 		role, _ := c.Get("role")
@@ -195,6 +196,32 @@ func TestCreatePublicQuestion(t *testing.T) {
 	}
 }
 
+func TestCreatePublicQuestionWithoutAuthorName(t *testing.T) {
+	db := newQuestionTestDB(t)
+	router := newQuestionTestRouter(db)
+	conf := seedQuestionConference(t, db)
+	token := signQuestionToken(t, conf.ID)
+
+	recorder := performQuestionJSONRequest(t, router, http.MethodPost, "/api/questions/public", map[string]any{
+		"token": token,
+		"text":  "Можно ли подключиться онлайн?",
+	}, nil)
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusCreated, recorder.Code, recorder.Body.String())
+	}
+
+	var question models.Question
+	if err := db.First(&question).Error; err != nil {
+		t.Fatalf("load question: %v", err)
+	}
+	if question.AuthorName != "" {
+		t.Fatalf("expected empty author name, got %q", question.AuthorName)
+	}
+	if question.Text != "Можно ли подключиться онлайн?" {
+		t.Fatalf("expected question text, got %q", question.Text)
+	}
+}
+
 func TestPublicQuestionContextReturnsConference(t *testing.T) {
 	db := newQuestionTestDB(t)
 	router := newQuestionTestRouter(db)
@@ -231,9 +258,10 @@ func TestAdminQuestionQRReturnsPublicURL(t *testing.T) {
 	}
 
 	var response struct {
-		URL        string `json:"url"`
-		QRDataURL  string `json:"qr_data_url"`
-		Conference struct {
+		URL         string `json:"url"`
+		ApprovedURL string `json:"approved_url"`
+		QRDataURL   string `json:"qr_data_url"`
+		Conference  struct {
 			ID uint `json:"id"`
 		} `json:"conference"`
 	}
@@ -246,8 +274,70 @@ func TestAdminQuestionQRReturnsPublicURL(t *testing.T) {
 	if !strings.Contains(response.URL, "/questions/") {
 		t.Fatalf("expected public question url, got %q", response.URL)
 	}
+	if !strings.Contains(response.ApprovedURL, "/questions/") || !strings.HasSuffix(response.ApprovedURL, "/approved") {
+		t.Fatalf("expected approved questions url, got %q", response.ApprovedURL)
+	}
 	if !strings.HasPrefix(response.QRDataURL, "data:image/png;base64,") {
 		t.Fatalf("expected png data url, got %q", response.QRDataURL)
+	}
+}
+
+func TestApprovedQuestionsReturnsOnlyApprovedItems(t *testing.T) {
+	db := newQuestionTestDB(t)
+	router := newQuestionTestRouter(db)
+	conf := seedQuestionConference(t, db)
+	token := signQuestionToken(t, conf.ID)
+
+	approvedAt := time.Now().UTC()
+	approved := models.Question{
+		ConferenceID: conf.ID,
+		AuthorName:   "Мария Иванова",
+		Text:         "Когда начнется пленарное заседание?",
+		Status:       models.QuestionStatusApproved,
+		ModeratedAt:  &approvedAt,
+	}
+	pending := models.Question{
+		ConferenceID: conf.ID,
+		AuthorName:   "Иван Петров",
+		Text:         "Будет ли запись докладов?",
+		Status:       models.QuestionStatusPending,
+	}
+	if err := db.Create(&approved).Error; err != nil {
+		t.Fatalf("create approved question: %v", err)
+	}
+	if err := db.Create(&pending).Error; err != nil {
+		t.Fatalf("create pending question: %v", err)
+	}
+
+	recorder := performQuestionJSONRequest(t, router, http.MethodGet, "/api/questions/approved?token="+token, nil, nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, recorder.Code, recorder.Body.String())
+	}
+
+	var response struct {
+		Conference struct {
+			ID uint `json:"id"`
+		} `json:"conference"`
+		Items []struct {
+			AuthorName string `json:"author_name"`
+			Text       string `json:"text"`
+			Status     string `json:"status"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if response.Conference.ID != conf.ID {
+		t.Fatalf("expected conference id %d, got %d", conf.ID, response.Conference.ID)
+	}
+	if len(response.Items) != 1 {
+		t.Fatalf("expected 1 approved question, got %d", len(response.Items))
+	}
+	if response.Items[0].AuthorName != approved.AuthorName {
+		t.Fatalf("expected author %q, got %q", approved.AuthorName, response.Items[0].AuthorName)
+	}
+	if response.Items[0].Text != approved.Text {
+		t.Fatalf("expected text %q, got %q", approved.Text, response.Items[0].Text)
 	}
 }
 

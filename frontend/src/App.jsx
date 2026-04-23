@@ -18,6 +18,8 @@ import ConsentAuthors from "./pages/ConsentAuthors.jsx";
 import BadgeCheckIn from "./pages/BadgeCheckIn.jsx";
 import QuestionPrompt from "./pages/QuestionPrompt.jsx";
 import AdminQuestions from "./pages/AdminQuestions.jsx";
+import ApprovedQuestions from "./pages/ApprovedQuestions.jsx";
+import AdminApprovedQuestions from "./pages/AdminApprovedQuestions.jsx";
 
 function ProtectedRoute({ children }) {
   if (!isAuthenticated()) {
@@ -47,6 +49,7 @@ export default function App() {
         <Route path="reset-password" element={<ResetPassword />} />
         <Route path="badge/:token" element={<BadgeCheckIn />} />
         <Route path="questions/:token" element={<QuestionPrompt />} />
+        <Route path="questions/:token/approved" element={<ApprovedQuestions />} />
         <Route index element={<Welcome />} />
         <Route
           path="dashboard"
@@ -86,6 +89,14 @@ export default function App() {
             <ProtectedRoute>
               <Map />
             </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/questions/approved"
+          element={
+            <AdminRoute>
+              <AdminApprovedQuestions />
+            </AdminRoute>
           }
         />
         <Route
