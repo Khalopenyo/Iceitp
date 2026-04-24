@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"conferenceplatforma/internal/config"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
+	"net"
 	"net/smtp"
 	"strings"
 	"time"
@@ -34,6 +36,7 @@ type SMTPPasswordResetSender struct {
 	from     string
 	username string
 	password string
+	timeout  time.Duration
 }
 
 func NewPasswordResetSender(cfg config.Config) PasswordResetSender {
@@ -46,6 +49,7 @@ func NewPasswordResetSender(cfg config.Config) PasswordResetSender {
 		from:     cfg.SMTPFrom,
 		username: cfg.SMTPUsername,
 		password: cfg.SMTPPassword,
+		timeout:  15 * time.Second,
 	}
 }
 
@@ -75,5 +79,79 @@ func (s *SMTPPasswordResetSender) SendPasswordReset(ctx context.Context, message
 	fmt.Fprintf(&payload, "Content-Type: text/plain; charset=UTF-8\r\n")
 	fmt.Fprintf(&payload, "\r\n%s", body)
 
-	return smtp.SendMail(s.addr, auth, s.from, []string{message.To}, payload.Bytes())
+	return sendMailWithTimeout(ctx, s.addr, s.host, auth, s.from, []string{message.To}, payload.Bytes(), s.timeout)
+}
+
+func sendMailWithTimeout(
+	ctx context.Context,
+	addr string,
+	host string,
+	auth smtp.Auth,
+	from string,
+	to []string,
+	msg []byte,
+	timeout time.Duration,
+) error {
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if remaining > 0 && (timeout <= 0 || remaining < timeout) {
+			timeout = remaining
+		}
+	}
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+
+	dialer := &net.Dialer{Timeout: timeout}
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return err
+	}
+
+	deadline := time.Now().Add(timeout)
+	_ = conn.SetDeadline(deadline)
+
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		_ = conn.Close()
+		return err
+	}
+	defer client.Close()
+
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		if err := client.StartTLS(&tls.Config{ServerName: host}); err != nil {
+			return err
+		}
+	}
+
+	if auth != nil {
+		if ok, _ := client.Extension("AUTH"); ok {
+			if err := client.Auth(auth); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := client.Mail(from); err != nil {
+		return err
+	}
+	for _, recipient := range to {
+		if err := client.Rcpt(recipient); err != nil {
+			return err
+		}
+	}
+
+	writer, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := writer.Write(msg); err != nil {
+		_ = writer.Close()
+		return err
+	}
+	if err := writer.Close(); err != nil {
+		return err
+	}
+
+	return client.Quit()
 }
