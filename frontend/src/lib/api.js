@@ -3,6 +3,8 @@ import { clearAuth } from "./auth.js";
 const rawBaseUrl = typeof import.meta.env.VITE_API_URL === "string" ? import.meta.env.VITE_API_URL.trim() : "";
 const baseUrl = rawBaseUrl.replace(/\/+$/, "");
 
+export const buildApiUrl = (path) => `${baseUrl}/api${path}`;
+
 class ApiError extends Error {
   constructor(message, { status, path, rawMessage, details } = {}) {
     super(message);
@@ -27,6 +29,8 @@ function mapKnownApiMessage(path, status, rawMessage, details) {
     "invalid payload": "Проверьте заполнение формы и попробуйте еще раз.",
     "invalid credentials": "Неверный email или пароль.",
     "invalid phone": "Укажите корректный номер телефона.",
+    "too many requests": "Слишком много запросов на регистрацию с этого подключения. Подождите немного и попробуйте снова.",
+    "повторную отправку пока нельзя запрашивать": "Код уже отправлен. Подождите немного перед повторной отправкой.",
     "user already exists": "Пользователь с таким email уже зарегистрирован.",
     "phone already in use": "Этот номер телефона уже используется в другом аккаунте.",
     "invalid confirmation code": "Неверный код подтверждения.",
@@ -184,7 +188,7 @@ async function request(path, options = {}) {
     path.startsWith("/auth/logout");
   let res;
   try {
-    res = await fetch(`${baseUrl}/api${path}`, {
+    res = await fetch(buildApiUrl(path), {
       ...fetchOptions,
       headers,
       credentials: "include",

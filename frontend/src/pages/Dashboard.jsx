@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiGet, apiPut } from "../lib/api.js";
 import { setUser } from "../lib/auth.js";
+
 const sectionLocationByTitle = {
   "Экономика, право и управление в условиях цифровой трансформации": "Квазар",
   "Современное общество в цифровую эпоху": "Пульсар",
@@ -30,14 +31,104 @@ const conferenceScheduleItems = [
 ];
 const conferenceScheduleRange = "10:00 - 16:30";
 
-const formatDateTime = (value) => {
-  if (!value) return "Не указано";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Не указано";
-  return date.toLocaleString();
+const participationLabel = (userType) => (userType === "online" ? "Онлайн-участник" : "Очный участник");
+
+const timeLabelToMinutes = (value) => {
+  const [hours, minutes] = String(value || "").split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return null;
+  }
+  return hours * 60 + minutes;
 };
 
-const participationLabel = (userType) => (userType === "online" ? "Онлайн-участник" : "Очный участник");
+const parseScheduleWindow = (timeLabel, fallbackStart = null) => {
+  const matches = String(timeLabel || "").match(/\d{2}:\d{2}/g) || [];
+  if (!matches.length) {
+    return { start: fallbackStart, end: fallbackStart, isPoint: true };
+  }
+
+  if (matches.length === 1) {
+    const start = timeLabelToMinutes(matches[0]);
+    return { start, end: start, isPoint: true };
+  }
+
+  return {
+    start: timeLabelToMinutes(matches[0]),
+    end: timeLabelToMinutes(matches[1]),
+    isPoint: false,
+  };
+};
+
+const getScheduleState = (items, nowMinutes) => {
+  if (!items.length) {
+    return { currentIndex: -1, nextIndex: -1, mode: "empty" };
+  }
+
+  for (let index = 0; index < items.length; index += 1) {
+    const currentWindow = parseScheduleWindow(items[index].time);
+    const nextWindow = index < items.length - 1 ? parseScheduleWindow(items[index + 1].time, currentWindow.start) : null;
+
+    if (currentWindow.start == null) {
+      continue;
+    }
+
+    if (nowMinutes < currentWindow.start) {
+      return { currentIndex: -1, nextIndex: index, mode: "before" };
+    }
+
+    if (!currentWindow.isPoint && currentWindow.end != null && nowMinutes >= currentWindow.start && nowMinutes < currentWindow.end) {
+      return {
+        currentIndex: index,
+        nextIndex: index < items.length - 1 ? index + 1 : -1,
+        mode: "current",
+      };
+    }
+
+    if (currentWindow.isPoint) {
+      const pointEnd = nextWindow?.start != null && nextWindow.start > currentWindow.start
+        ? nextWindow.start
+        : currentWindow.start + 60;
+
+      if (nowMinutes >= currentWindow.start && nowMinutes < pointEnd) {
+        return {
+          currentIndex: index,
+          nextIndex: index < items.length - 1 ? index + 1 : -1,
+          mode: "current",
+        };
+      }
+    }
+  }
+
+  return {
+    currentIndex: items.length - 1,
+    nextIndex: -1,
+    mode: "after",
+  };
+};
+
+const buildScheduleInstruction = (item, userType, sectionTitle, sectionPlace) => {
+  if (!item) {
+    return "Расписание пока недоступно.";
+  }
+
+  if (item.id === "sections") {
+    if (!sectionTitle) {
+      return "Во время блока секций сначала выберите свою секцию во вкладке «Личные данные».";
+    }
+
+    if (userType === "online") {
+      return `Во время секционного блока у вас секция «${sectionTitle}». Ориентируйтесь на это время для подключения онлайн.`;
+    }
+
+    return `Во время секционного блока вам нужно пройти в секцию «${sectionTitle}», место проведения — ${sectionPlace}.`;
+  }
+
+  if (userType === "online") {
+    return `Сейчас ориентируйтесь на блок «${item.title}» по общему времени конференции.`;
+  }
+
+  return `Сейчас вам нужно пройти в локацию «${item.place}» на блок «${item.title}».`;
+};
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
@@ -47,6 +138,7 @@ export default function Dashboard() {
   const [profileStatusMessage, setProfileStatusMessage] = useState("");
   const [profileErrorMessage, setProfileErrorMessage] = useState("");
   const [tab, setTab] = useState("profile");
+  const [now, setNow] = useState(() => new Date());
 
   const loadDashboard = async () => {
     try {
@@ -73,6 +165,16 @@ export default function Dashboard() {
     loadSections();
   }, []);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNow(new Date());
+    }, 30000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
+
   if (!data) {
     return (
       <section className="panel">
@@ -85,6 +187,33 @@ export default function Dashboard() {
   const update = (field, value) => setProfile((prev) => ({ ...prev, [field]: value }));
   const currentUserType = data?.user_type || "offline";
   const selectedSection = sections.find((section) => String(section.id) === String(profile?.section_id));
+  const selectedSectionTitle = selectedSection?.title || profile?.section_title || "";
+  const selectedSectionPlace = selectedSectionTitle ? sectionLocationByTitle[selectedSectionTitle] || "Место уточняется" : "";
+  const personalizedScheduleItems = conferenceScheduleItems.map((item) => {
+    if (item.id !== "sections") {
+      return {
+        ...item,
+        userTitle: item.title,
+        userPlace: item.place,
+        userDescription: buildScheduleInstruction(item, currentUserType, selectedSectionTitle, selectedSectionPlace),
+      };
+    }
+
+    return {
+      ...item,
+      userTitle: selectedSectionTitle ? "Работа вашей секции" : item.title,
+      userPlace: selectedSectionPlace || item.place,
+      userDescription: buildScheduleInstruction(item, currentUserType, selectedSectionTitle, selectedSectionPlace),
+    };
+  });
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const scheduleState = getScheduleState(personalizedScheduleItems, nowMinutes);
+  const currentScheduleItem =
+    scheduleState.currentIndex >= 0 ? personalizedScheduleItems[scheduleState.currentIndex] : null;
+  const nextScheduleItem =
+    scheduleState.nextIndex >= 0 ? personalizedScheduleItems[scheduleState.nextIndex] : null;
+  const liveSummaryItem = scheduleState.mode === "before" ? nextScheduleItem : currentScheduleItem;
+  const liveSummaryLabel = scheduleState.mode === "before" ? "Следующий этап" : "Сейчас по расписанию";
 
   const save = async () => {
     setSaving(true);
@@ -125,11 +254,15 @@ export default function Dashboard() {
 
           <article className="dashboard-summary-card">
             <div className="dashboard-summary-head">
-              <span className="dashboard-summary-label">Общее расписание</span>
-              <span className="status-chip status-chip-neutral">{conferenceScheduleItems.length} этапов</span>
+              <span className="dashboard-summary-label">{liveSummaryLabel}</span>
+              <span className="status-chip status-chip-neutral">{liveSummaryItem?.time || conferenceScheduleRange}</span>
             </div>
-            <strong>{conferenceScheduleRange}</strong>
-            <p className="muted">Холл, актовый зал, музей ГГНТУ, секционные аудитории и Квазар.</p>
+            <strong>{liveSummaryItem?.userTitle || "Общее расписание дня"}</strong>
+            <p className="muted">
+              {liveSummaryItem
+                ? `Место: ${liveSummaryItem.userPlace}.`
+                : "Холл, актовый зал, музей ГГНТУ, секционные аудитории и Квазар."}
+            </p>
           </article>
         </div>
 
@@ -237,17 +370,79 @@ export default function Dashboard() {
               <h3>Общее расписание конференции</h3>
               <p className="muted">Для всех участников действует единое расписание дня.</p>
 
+              <div className="schedule-live-grid">
+                <article className="schedule-live-card schedule-live-card-current">
+                  <span className="dashboard-summary-label">
+                    {scheduleState.mode === "before" ? "Ближайший этап" : "Сейчас вам нужно"}
+                  </span>
+                  <strong>{liveSummaryItem?.userTitle || "Ожидаем начало программы"}</strong>
+                  <p className="muted">
+                    {liveSummaryItem ? `${liveSummaryItem.time} • ${liveSummaryItem.userPlace}` : conferenceScheduleRange}
+                  </p>
+                  <p>{liveSummaryItem?.userDescription || "Ориентируйтесь на общее расписание дня."}</p>
+                </article>
+
+                <article className="schedule-live-card">
+                  <span className="dashboard-summary-label">Дальше по расписанию</span>
+                  <strong>{nextScheduleItem?.userTitle || "После этого новых этапов нет"}</strong>
+                  <p className="muted">
+                    {nextScheduleItem ? `${nextScheduleItem.time} • ${nextScheduleItem.userPlace}` : "Основная программа дня завершится после текущего блока."}
+                  </p>
+                  <p>
+                    {nextScheduleItem
+                      ? nextScheduleItem.userDescription
+                      : "После завершения текущего блока дополнительных перемещений по расписанию не предусмотрено."}
+                  </p>
+                </article>
+
+                <article className="schedule-live-card">
+                  <span className="dashboard-summary-label">Ваша секция</span>
+                  <strong>{selectedSectionTitle || "Секция пока не выбрана"}</strong>
+                  <p className="muted">
+                    {selectedSectionTitle ? `14:00 - 16:30 • ${selectedSectionPlace}` : "Выберите секцию в личных данных."}
+                  </p>
+                  <p>
+                    {selectedSectionTitle
+                      ? `Во время секционного блока вам нужно ориентироваться на аудиторию «${selectedSectionPlace}».`
+                      : "Без выбранной секции кабинет не сможет подсказать, куда идти во время работы секций."}
+                  </p>
+                </article>
+              </div>
+
               <div className="common-schedule-list">
-                {conferenceScheduleItems.map((item) => (
-                  <article key={item.id} className="common-schedule-item">
+                {personalizedScheduleItems.map((item, index) => (
+                  <article
+                    key={item.id}
+                    className={[
+                      "common-schedule-item",
+                      scheduleState.currentIndex === index ? "common-schedule-item-active" : "",
+                      scheduleState.nextIndex === index ? "common-schedule-item-next" : "",
+                      scheduleState.currentIndex > index ? "common-schedule-item-completed" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
                     <div className="common-schedule-time">{item.time}</div>
                     <div className="common-schedule-content">
-                      <div className="common-schedule-title">{item.title}</div>
-                      {item.place ? <div className="muted">Место: {item.place}</div> : null}
+                      <div className="common-schedule-title">{item.userTitle}</div>
+                      <div className="session-meta-inline">
+                        {scheduleState.currentIndex === index ? <span className="status-chip status-chip-success">Сейчас</span> : null}
+                        {scheduleState.nextIndex === index ? <span className="status-chip status-chip-warning">Дальше</span> : null}
+                        {scheduleState.currentIndex > index ? <span className="status-chip status-chip-neutral">Пройдено</span> : null}
+                      </div>
+                      {item.userPlace ? <div className="muted">Место: {item.userPlace}</div> : null}
+                      <p className="muted">{item.userDescription}</p>
                       {item.sessions?.length ? (
                         <div className="question-history">
                           {item.sessions.map((session) => (
-                            <div key={session} className="muted">
+                            <div
+                              key={session}
+                              className={
+                                selectedSectionTitle && session.startsWith(selectedSectionTitle)
+                                  ? "common-schedule-session-selected"
+                                  : "muted"
+                              }
+                            >
                               {session}
                             </div>
                           ))}

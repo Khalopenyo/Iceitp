@@ -16,6 +16,21 @@ export function triggerBlobDownload(blob, filename) {
   }, 1000);
 }
 
+export function openUrlInNewTab(url) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noopener,noreferrer";
+  link.style.display = "none";
+
+  document.body.appendChild(link);
+  link.click();
+
+  window.setTimeout(() => {
+    document.body.removeChild(link);
+  }, 1000);
+}
+
 export function openBlobPreview(blob, previewWindow = null) {
   const objectUrl = window.URL.createObjectURL(blob);
 

@@ -106,13 +106,17 @@ func Load() Config {
 	if len(corsOrigins) == 0 {
 		corsOrigins = defaultCORSOrigins(appBaseURL)
 	}
+	trustedProxies := splitEnvList(os.Getenv("TRUSTED_PROXIES"))
+	if len(trustedProxies) == 0 {
+		trustedProxies = defaultTrustedProxies()
+	}
 	cfg := Config{
 		DatabaseURL:             os.Getenv("DATABASE_URL"),
 		JWTSecret:               os.Getenv("JWT_SECRET"),
 		Port:                    os.Getenv("PORT"),
 		AccessTokenTTL:          envDuration("ACCESS_TOKEN_TTL", defaultAccessTokenTTL),
 		CORSOrigins:             corsOrigins,
-		TrustedProxies:          splitEnvList(os.Getenv("TRUSTED_PROXIES")),
+		TrustedProxies:          trustedProxies,
 		AppBaseURL:              appBaseURL,
 		SMTPHost:                strings.TrimSpace(os.Getenv("SMTP_HOST")),
 		SMTPPort:                envInt("SMTP_PORT", defaultSMTPPort),
@@ -173,6 +177,16 @@ func defaultCORSOrigins(appBaseURL string) []string {
 		result = append(result, origin)
 	}
 	return result
+}
+
+func defaultTrustedProxies() []string {
+	return []string{
+		"127.0.0.1/32",
+		"::1/128",
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+	}
 }
 
 func defaultFileStorageRoot() string {

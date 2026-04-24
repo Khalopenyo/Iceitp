@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { apiGet } from "../lib/api.js";
-import { triggerBlobDownload } from "../lib/download.js";
+import { apiGet, buildApiUrl } from "../lib/api.js";
+import { openUrlInNewTab, triggerBlobDownload } from "../lib/download.js";
 
 const materialCards = [
   {
@@ -47,18 +47,6 @@ async function downloadPdf(path, filename) {
   triggerBlobDownload(blob, filename);
 }
 
-async function openPdfPreview(path) {
-  const res = await apiGet(path);
-  return res.blob();
-}
-
-function buildPreviewSrc(url) {
-  if (!url) {
-    return "";
-  }
-  return `${url}#toolbar=0&navpanes=0&scrollbar=0&zoom=page-width&view=FitH`;
-}
-
 const documentStatusMeta = (material) => {
   if (material?.available) {
     return { label: "Доступно", tone: "success" };
@@ -76,7 +64,6 @@ export default function Documents() {
   const [busyKey, setBusyKey] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [previewDocument, setPreviewDocument] = useState(null);
   const availableCount = materialCards.filter((card) => materials?.[card.key]?.available).length;
   const waitingCount = materialCards.filter(
     (card) => materials?.[card.key] && !materials?.[card.key]?.available && materials?.[card.key]?.status !== "not_applicable"
@@ -108,17 +95,8 @@ export default function Documents() {
     };
   }, []);
 
-  useEffect(() => () => {
-    if (previewDocument?.url) {
-      window.URL.revokeObjectURL(previewDocument.url);
-    }
-  }, [previewDocument]);
-
-  const closePreview = () => {
-    if (previewDocument?.url) {
-      window.URL.revokeObjectURL(previewDocument.url);
-    }
-    setPreviewDocument(null);
+  const openPdfDocument = (path) => {
+    openUrlInNewTab(buildApiUrl(path));
   };
 
   const handleAction = async (card, action = "download") => {
@@ -136,22 +114,12 @@ export default function Documents() {
         if (!targetUrl) {
           throw new Error("Сборник пока недоступен.");
         }
-        window.open(targetUrl, "_blank", "noopener,noreferrer");
+        openUrlInNewTab(targetUrl);
         setStatusMessage("Сборник открыт в новой вкладке.");
       } else {
         if (action === "preview") {
-          const blob = await openPdfPreview(card.path);
-          const nextUrl = window.URL.createObjectURL(blob);
-          if (previewDocument?.url) {
-            window.URL.revokeObjectURL(previewDocument.url);
-          }
-          setPreviewDocument({
-            title: card.title,
-            filename: card.filename,
-            path: card.path,
-            url: nextUrl,
-          });
-          setStatusMessage(`Документ "${card.title}" открыт для просмотра.`);
+          openPdfDocument(card.path);
+          setStatusMessage(`Документ "${card.title}" открыт в новой вкладке.`);
         } else {
           await downloadPdf(card.path, card.filename);
           setStatusMessage(`Документ "${card.title}" подготовлен для скачивания.`);
@@ -241,30 +209,6 @@ export default function Documents() {
           );
         })}
       </div>
-
-      {previewDocument ? (
-        <div className="modal-backdrop" onClick={closePreview}>
-          <div className="modal document-preview-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <h3>{previewDocument.title}</h3>
-                <p className="muted">Просмотр PDF без скачивания</p>
-              </div>
-              <div className="form-actions">
-                <button className="btn btn-ghost" onClick={() => downloadPdf(previewDocument.path, previewDocument.filename)}>
-                  Скачать
-                </button>
-                <button className="btn btn-primary" onClick={closePreview}>
-                  Закрыть
-                </button>
-              </div>
-            </div>
-            <div className="modal-body">
-              <iframe className="document-preview-frame" src={buildPreviewSrc(previewDocument.url)} title={previewDocument.title} />
-            </div>
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }

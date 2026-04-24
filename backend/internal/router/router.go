@@ -70,7 +70,7 @@ func Setup(db *gorm.DB, cfg config.Config, store objectstore.Store) *gin.Engine 
 
 	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 
-	registrationLimiter := ratelimit.New(5, 10*time.Minute)
+	registrationLimiter := ratelimit.New(20, 10*time.Minute)
 	verificationLimiter := ratelimit.New(10, 10*time.Minute)
 	loginLimiter := ratelimit.New(10, 10*time.Minute)
 	resetLimiter := ratelimit.New(5, 15*time.Minute)
