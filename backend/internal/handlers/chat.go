@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"context"
 	"conferenceplatforma/internal/models"
 	"conferenceplatforma/internal/objectstore"
+	"context"
 	"errors"
 	"fmt"
 	"io"
