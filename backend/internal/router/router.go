@@ -8,6 +8,7 @@ import (
 	"conferenceplatforma/internal/objectstore"
 	"conferenceplatforma/internal/ratelimit"
 	"conferenceplatforma/internal/sms"
+	"conferenceplatforma/internal/tenant"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -77,6 +78,9 @@ func Setup(db *gorm.DB, cfg config.Config, store objectstore.Store) *gin.Engine 
 	questionLimiter := ratelimit.New(8, 5*time.Minute)
 
 	api := r.Group("/api")
+	// Phase 0: no-op resolver — maps every request to the single existing org.
+	// Phase 2 replaces it with subdomain/Host + JWT org-claim resolution.
+	api.Use(tenant.Middleware())
 	api.POST("/auth/register", registrationLimiter.Middleware("auth_register"), authHandler.RequestRegistrationCode)
 	api.POST("/auth/register/request-code", registrationLimiter.Middleware("auth_register_request_code"), authHandler.RequestRegistrationCode)
 	api.POST("/auth/register/verify", verificationLimiter.Middleware("auth_register_verify"), authHandler.VerifyRegistrationCode)
