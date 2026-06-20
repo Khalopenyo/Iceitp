@@ -17,6 +17,9 @@ import (
 func main() {
 	cfg := config.Load()
 	database := db.Connect(cfg.DatabaseURL)
+	if err := db.EnsureFirstRun(database); err != nil {
+		log.Fatalf("first run: %v", err)
+	}
 	seed(database)
 	store, err := objectstore.NewFilesystemStore(cfg.FileStorageRoot)
 	if err != nil {
