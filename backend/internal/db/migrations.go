@@ -128,6 +128,14 @@ var migrations = []migration{
 			return nil
 		},
 	},
+	{
+		Version: "202606200006",
+		Name:    "add_conference_soft_delete",
+		Up: func(db *gorm.DB) error {
+			// Additive: adds nullable conferences.deleted_at + index (ADR-0004).
+			return db.AutoMigrate(&models.Conference{})
+		},
+	},
 }
 
 func RunMigrations(db *gorm.DB) error {

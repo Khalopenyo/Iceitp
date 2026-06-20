@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 type ConferenceStatus string
 
@@ -21,4 +25,8 @@ type Conference struct {
 	SupportEmail   string           `json:"support_email"`
 	CreatedAt      time.Time        `json:"created_at"`
 	UpdatedAt      time.Time        `json:"updated_at"`
+	// Soft-delete (ADR-0004): Conference only in Phase 0. Inert column —
+	// no code path soft-deletes a conference; First()/Order() queries auto-add
+	// `deleted_at IS NULL` and the live row (NULL) still resolves.
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }
