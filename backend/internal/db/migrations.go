@@ -147,6 +147,70 @@ var migrations = []migration{
 		Name:    "tenant_composite_uniqueness",
 		Up:      tenantCompositeUniqueness,
 	},
+	{
+		Version: "202606200009",
+		Name:    "tenant_row_level_security",
+		Up:      tenantRowLevelSecurity,
+	},
+}
+
+// rlsConfTables are the conference_id-scoped tables; rlsOrgTables the
+// organization_id-scoped ones. Parent-scoped tables (profiles, consent_logs,
+// chat_attachments) need subquery policies and are deferred to a follow-up.
+var rlsConfTables = []string{
+	"sections", "rooms", "map_markers", "map_routes", "program_assignments",
+	"feedbacks", "chat_messages", "article_submissions", "questions",
+	"check_ins", "certificates",
+}
+
+var rlsOrgTables = []string{"users", "conferences"}
+
+// tenantRowLevelSecurity installs fail-closed Postgres RLS as a defense-in-depth
+// backstop under the application-layer scoping. Each tenant-scoped table gets a
+// tenant_isolation policy keyed on a per-request session variable
+// (app.conf_id / app.org_id). When the variable is unset or empty the predicate
+// is NULL → zero rows (fail-closed).
+//
+// RLS is NOT forced, so the table owner (the role that runs migrations and the
+// current single-tenant app connection) bypasses it — behaviour is unchanged
+// until the app connects as a non-owner role WITHOUT BYPASSRLS and sets the
+// session variables per request (see RLS_ENFORCED + docs/adr/0006). No-op on
+// SQLite (RLS is a Postgres feature; tests rely on the app-layer scoping).
+func tenantRowLevelSecurity(db *gorm.DB) error {
+	if db.Dialector.Name() != "postgres" {
+		return nil
+	}
+
+	apply := func(table, column, setting string) error {
+		stmts := []string{
+			fmt.Sprintf("ALTER TABLE %s ENABLE ROW LEVEL SECURITY", table),
+			fmt.Sprintf("DROP POLICY IF EXISTS tenant_isolation ON %s", table),
+			fmt.Sprintf(
+				"CREATE POLICY tenant_isolation ON %s "+
+					"USING (%s = NULLIF(current_setting('%s', true), '')::bigint) "+
+					"WITH CHECK (%s = NULLIF(current_setting('%s', true), '')::bigint)",
+				table, column, setting, column, setting,
+			),
+		}
+		for _, s := range stmts {
+			if err := db.Exec(s).Error; err != nil {
+				return fmt.Errorf("rls %s: %w", table, err)
+			}
+		}
+		return nil
+	}
+
+	for _, t := range rlsConfTables {
+		if err := apply(t, "conference_id", "app.conf_id"); err != nil {
+			return err
+		}
+	}
+	for _, t := range rlsOrgTables {
+		if err := apply(t, "organization_id", "app.org_id"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // tenantCompositeUniqueness widens the catalog uniqueness constraints from
