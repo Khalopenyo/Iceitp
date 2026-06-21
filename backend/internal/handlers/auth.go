@@ -5,6 +5,7 @@ import (
 	"conferenceplatforma/internal/mail"
 	"conferenceplatforma/internal/models"
 	"conferenceplatforma/internal/sms"
+	"conferenceplatforma/internal/tenant"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -131,6 +132,12 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			Phone:        normalized.Phone,
 			ConsentGiven: normalized.ConsentPersonalData && normalized.ConsentPublication,
 		},
+	}
+	// Stamp the resolving organization so the new user is immediately visible to
+	// org-scoped reads (ByOrg) without waiting for the boot backfill. OrgID falls
+	// back to DefaultOrgID, so single-tenant registrations land in org#1.
+	if oid := tenant.OrgID(c); oid != 0 {
+		user.OrganizationID = &oid
 	}
 	if err := h.DB.Create(&user).Error; err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "user already exists"})
@@ -309,6 +316,9 @@ func (h *AuthHandler) VerifyRegistrationCode(c *gin.Context) {
 				Phone:        attempt.Phone,
 				ConsentGiven: attempt.ConsentPersonalData && attempt.ConsentPublication,
 			},
+		}
+		if oid := tenant.OrgID(c); oid != 0 {
+			user.OrganizationID = &oid
 		}
 		if err := tx.Create(&user).Error; err != nil {
 			return errors.New("user already exists")
