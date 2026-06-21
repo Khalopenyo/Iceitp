@@ -60,7 +60,16 @@ func (h *MapMarkerHandler) ReplaceMarkers(c *gin.Context) {
 		confID = &cid
 	}
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec("DELETE FROM map_markers").Error; err != nil {
+		// Replace only the current tenant's markers. A global "DELETE FROM
+		// map_markers" would wipe every conference's markers; scope it to the
+		// resolved conference. With no scope (single-tenant / unit tests) we keep
+		// the legacy replace-all behaviour. "1 = 1" satisfies GORM's
+		// missing-WHERE guard for that fallback.
+		del := tx.Where("1 = 1")
+		if confID != nil {
+			del = tx.Where("conference_id = ?", *confID)
+		}
+		if err := del.Delete(&models.MapMarker{}).Error; err != nil {
 			return err
 		}
 		for _, m := range payload {

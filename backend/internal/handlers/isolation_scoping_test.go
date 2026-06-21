@@ -37,6 +37,7 @@ func setupTwoTenants(t *testing.T, dbName string) (*gorm.DB, twoTenants) {
 		&models.Organization{}, &models.Conference{}, &models.User{}, &models.Profile{},
 		&models.Section{}, &models.Room{}, &models.Question{}, &models.Feedback{},
 		&models.ProgramAssignment{}, &models.ChatMessage{}, &models.ConsentLog{},
+		&models.MapMarker{}, &models.MapRoute{},
 	); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -277,6 +278,37 @@ func TestCrossTenantByIDMutationIsolation(t *testing.T) {
 	w = tenantReq(t, r, http.MethodPut, "alpha.platform.ru", idA(f.userA.ID)+"/role", map[string]string{"role": "admin"})
 	if w.Code != http.StatusOK {
 		t.Errorf("same-tenant UpdateUserRole -> %d, want 200 (%s)", w.Code, w.Body.String())
+	}
+}
+
+// TestCrossTenantReplaceMarkersIsolation proves a bulk marker replace by one
+// tenant does not wipe another tenant's markers (the global DELETE bug).
+func TestCrossTenantReplaceMarkersIsolation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, f := setupTwoTenants(t, "iso_markers")
+	mustCreateH(t, db, &models.MapMarker{Key: "a", Label: "A", Color: "primary", ConferenceID: &f.confA.ID})
+	mustCreateH(t, db, &models.MapMarker{Key: "b", Label: "B", Color: "primary", ConferenceID: &f.confB.ID})
+
+	r := gin.New()
+	r.Use(tenant.Middleware(db))
+	r.PUT("/markers", (&MapMarkerHandler{DB: db}).ReplaceMarkers)
+
+	// beta replaces its own markers.
+	w := tenantReq(t, r, http.MethodPut, "beta.platform.ru", "/markers",
+		[]map[string]any{{"key": "b2", "label": "B2", "color": "primary"}})
+	if w.Code != http.StatusOK {
+		t.Fatalf("beta ReplaceMarkers -> %d: %s", w.Code, w.Body.String())
+	}
+
+	// alpha's marker must survive; beta now has exactly its new one.
+	var alphaCount, betaCount int64
+	db.Model(&models.MapMarker{}).Where("conference_id = ?", f.confA.ID).Count(&alphaCount)
+	db.Model(&models.MapMarker{}).Where("conference_id = ?", f.confB.ID).Count(&betaCount)
+	if alphaCount != 1 {
+		t.Errorf("alpha markers wiped by beta replace: count=%d, want 1", alphaCount)
+	}
+	if betaCount != 1 {
+		t.Errorf("beta markers count=%d, want 1 after replace", betaCount)
 	}
 }
 
