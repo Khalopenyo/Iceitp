@@ -2,6 +2,7 @@ package db
 
 import (
 	"conferenceplatforma/internal/models"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -136,6 +137,81 @@ var migrations = []migration{
 			return db.AutoMigrate(&models.Conference{})
 		},
 	},
+	{
+		Version: "202606200007",
+		Name:    "add_organization_and_scoping",
+		Up:      addOrganizationAndScoping,
+	},
+}
+
+// addOrganizationAndScoping introduces the tenant root (Organization) and the
+// nullable scoping columns (organization_id / conference_id), then backfills all
+// existing rows to organization #1 derived from the single live conference.
+// Columns stay NULLABLE — the NOT NULL flip is deferred to Phase 2 (after handlers
+// set conference_id on writes; see docs/phase0-writepath-audit.md and ADR-0003).
+// Idempotent: backfill guards on WHERE ... IS NULL and org #1 via FirstOrCreate.
+func addOrganizationAndScoping(db *gorm.DB) error {
+	if err := db.AutoMigrate(
+		&models.Organization{},
+		&models.User{},
+		&models.Conference{},
+		&models.Section{},
+		&models.Room{},
+		&models.MapMarker{},
+		&models.MapRoute{},
+		&models.ProgramAssignment{},
+		&models.ChatMessage{},
+		&models.Feedback{},
+		&models.ArticleSubmission{},
+	); err != nil {
+		return err
+	}
+
+	var conf models.Conference
+	if err := db.Order("id asc").First(&conf).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil // empty DB: nothing to backfill (EnsureFirstRun/seed bootstraps).
+		}
+		return err
+	}
+
+	displayName := strings.TrimSpace(conf.Title)
+	if displayName == "" {
+		displayName = "Организация #1"
+	}
+	org := models.Organization{}
+	if err := db.Where(models.Organization{Slug: "icetp"}).
+		Attrs(models.Organization{
+			DisplayName: displayName,
+			Status:      models.OrganizationStatusActive,
+			Plan:        models.OrganizationPlanFree,
+		}).
+		FirstOrCreate(&org).Error; err != nil {
+		return err
+	}
+
+	// Tenant-wide tables → organization #1.
+	if err := db.Model(&models.Conference{}).Where("organization_id IS NULL").
+		Update("organization_id", org.ID).Error; err != nil {
+		return err
+	}
+	if err := db.Model(&models.User{}).Where("organization_id IS NULL").
+		Update("organization_id", org.ID).Error; err != nil {
+		return err
+	}
+
+	// Per-event tables → the single existing conference.
+	perEvent := []any{
+		&models.Section{}, &models.Room{}, &models.MapMarker{}, &models.MapRoute{},
+		&models.ProgramAssignment{}, &models.ChatMessage{}, &models.Feedback{}, &models.ArticleSubmission{},
+	}
+	for _, m := range perEvent {
+		if err := db.Model(m).Where("conference_id IS NULL").
+			Update("conference_id", conf.ID).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func RunMigrations(db *gorm.DB) error {
