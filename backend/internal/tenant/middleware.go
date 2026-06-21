@@ -1,19 +1,33 @@
 package tenant
 
-import "github.com/gin-gonic/gin"
+import (
+	"conferenceplatforma/internal/models"
 
-// Middleware resolves the tenant for each request and stores it on the context.
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+// Middleware resolves the tenant for each request and stores the Scope on the
+// context.
 //
-// Phase 0: no-op resolver — every request maps to the single existing
-// organization (DefaultOrgID), so behaviour is identical to the pre-tenant app.
-// No handler reads the scope yet, so responses are byte-identical.
+// Phase 2.1: organization is the single existing org (DefaultOrgID) and the
+// active conference is the one conference in the database. The scope now carries
+// ConfID so write paths can stamp conference_id and reads can scope by it
+// (wired incrementally in later 2.x sub-steps).
 //
-// Phase 2 replaces the body with subdomain/Host + JWT org-claim resolution,
-// rejects unknown/suspended tenants, and the scope becomes the basis for the
-// request-scoped GORM filter and Postgres RLS session variable.
-func Middleware() gin.HandlerFunc {
+// TODO Phase 2.2: resolve the organization from the request subdomain/Host
+// (organizations.slug) and the active conference within it; reject unknown or
+// suspended tenants.
+func Middleware(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		SetScope(c, Scope{OrgID: DefaultOrgID})
+		orgID := DefaultOrgID
+
+		var conf models.Conference
+		// Single-tenant reality: the lowest-id conference. ConfID stays 0 if the
+		// database has no conference yet (fresh install before bootstrap/seed).
+		_ = db.Order("id asc").First(&conf).Error
+
+		SetScope(c, Scope{OrgID: orgID, ConfID: conf.ID})
 		c.Next()
 	}
 }

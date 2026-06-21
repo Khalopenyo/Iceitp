@@ -45,3 +45,13 @@ func OrgID(c *gin.Context) uint {
 	}
 	return DefaultOrgID
 }
+
+// ConfID returns the resolved active-conference id, or 0 if none was resolved
+// (e.g. requests outside the tenant middleware, such as handler unit tests).
+// Write paths must leave conference_id NULL when ConfID is 0.
+func ConfID(c *gin.Context) uint {
+	if s, ok := FromContext(c); ok {
+		return s.ConfID
+	}
+	return 0
+}
