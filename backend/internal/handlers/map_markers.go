@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/tenant"
 	"net/http"
 	"strings"
 
@@ -54,18 +55,23 @@ func (h *MapMarkerHandler) ReplaceMarkers(c *gin.Context) {
 			payload[i].Color = "primary"
 		}
 	}
+	var confID *uint
+	if cid := tenant.ConfID(c); cid != 0 {
+		confID = &cid
+	}
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec("DELETE FROM map_markers").Error; err != nil {
 			return err
 		}
 		for _, m := range payload {
 			marker := models.MapMarker{
-				Key:   m.Key,
-				Label: m.Label,
-				X:     m.X,
-				Y:     m.Y,
-				Floor: m.Floor,
-				Color: m.Color,
+				ConferenceID: confID,
+				Key:          m.Key,
+				Label:        m.Label,
+				X:            m.X,
+				Y:            m.Y,
+				Floor:        m.Floor,
+				Color:        m.Color,
 			}
 			if err := tx.Create(&marker).Error; err != nil {
 				return err

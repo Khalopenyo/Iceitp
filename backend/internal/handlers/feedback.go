@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/tenant"
 	"net/http"
 	"strings"
 	"time"
@@ -51,6 +52,9 @@ func (h *FeedbackHandler) CreateFeedback(c *gin.Context) {
 		return
 	}
 	feedback := models.Feedback{UserID: userID, Rating: payload.Rating, Comment: comment}
+	if cid := tenant.ConfID(c); cid != 0 {
+		feedback.ConferenceID = &cid
+	}
 	if err := h.DB.Create(&feedback).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save feedback"})
 		return

@@ -3,6 +3,7 @@ package handlers
 import (
 	"conferenceplatforma/internal/models"
 	"conferenceplatforma/internal/objectstore"
+	"conferenceplatforma/internal/tenant"
 	"context"
 	"errors"
 	"fmt"
@@ -131,6 +132,9 @@ func (h *ChatHandler) PostMessage(c *gin.Context) {
 	if channel == models.ChatChannelSection {
 		sectionID := section.ID
 		msg.SectionID = &sectionID
+	}
+	if cid := tenant.ConfID(c); cid != 0 {
+		msg.ConferenceID = &cid
 	}
 
 	var attachments []models.ChatAttachment

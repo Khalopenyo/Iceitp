@@ -12,6 +12,7 @@ import (
 
 	"conferenceplatforma/internal/models"
 	"conferenceplatforma/internal/objectstore"
+	"conferenceplatforma/internal/tenant"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -86,6 +87,9 @@ func (h *SubmissionHandler) CreateSubmission(c *gin.Context) {
 		FileType: fileType,
 		FileSize: file.Size,
 		Status:   models.SubmissionStatusUploaded,
+	}
+	if cid := tenant.ConfID(c); cid != 0 {
+		submission.ConferenceID = &cid
 	}
 	if err := h.DB.Create(&submission).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create submission"})

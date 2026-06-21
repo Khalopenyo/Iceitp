@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/tenant"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -26,6 +27,9 @@ func (h *RoomHandler) CreateRoom(c *gin.Context) {
 	if err := c.ShouldBindJSON(&payload); err != nil || payload.Name == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
+	}
+	if cid := tenant.ConfID(c); cid != 0 {
+		payload.ConferenceID = &cid
 	}
 	if err := h.DB.Create(&payload).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create room"})

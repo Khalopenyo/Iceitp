@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/tenant"
 	"net/http"
 	"strings"
 
@@ -32,6 +33,9 @@ func (h *SectionHandler) CreateSection(c *gin.Context) {
 	if err := c.ShouldBindJSON(&section); err != nil || section.Title == "" || section.Room == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
+	}
+	if cid := tenant.ConfID(c); cid != 0 {
+		section.ConferenceID = &cid
 	}
 	if err := h.DB.Create(&section).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create section"})

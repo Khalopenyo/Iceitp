@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/tenant"
 	"errors"
 	"net/http"
 	"net/url"
@@ -196,6 +197,9 @@ func (h *ProgramHandler) UpsertProgramAssignment(c *gin.Context) {
 		StartsAt:  payload.StartsAt,
 		EndsAt:    payload.EndsAt,
 		JoinURL:   payload.JoinURL,
+	}
+	if cid := tenant.ConfID(c); cid != 0 {
+		assignment.ConferenceID = &cid
 	}
 
 	var existing models.ProgramAssignment

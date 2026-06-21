@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/tenant"
 	"errors"
 	"net/http"
 	"strings"
@@ -96,6 +97,8 @@ func (h *ConferenceHandler) getOrCreateConference() (*models.Conference, error) 
 			Status:       models.ConferenceStatusDraft,
 			SupportEmail: "madinaborz@mail.ru",
 		}
+		org := tenant.DefaultOrgID
+		conf.OrganizationID = &org
 		if err := h.DB.Create(&conf).Error; err != nil {
 			return nil, err
 		}

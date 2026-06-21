@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/tenant"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -102,6 +103,9 @@ func (h *MapRouteHandler) UpsertRoute(c *gin.Context) {
 				ToKey:   payload.ToKey,
 				Floor:   payload.Floor,
 				Points:  pointsJSON,
+			}
+			if cid := tenant.ConfID(c); cid != 0 {
+				route.ConferenceID = &cid
 			}
 			if err := h.DB.Create(&route).Error; err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save route", "details": err.Error()})
