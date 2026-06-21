@@ -3,9 +3,9 @@ package models
 import "time"
 
 type ProgramAssignment struct {
-	ConferenceID *uint      `gorm:"index" json:"conference_id"`
+	ConferenceID *uint      `gorm:"index:idx_program_conf_user,unique,priority:1" json:"conference_id"`
 	ID           uint       `gorm:"primaryKey" json:"id"`
-	UserID       uint       `gorm:"uniqueIndex;not null" json:"user_id"`
+	UserID       uint       `gorm:"not null;index:idx_program_conf_user,unique,priority:2" json:"user_id"`
 	UserType     UserType   `gorm:"type:varchar(20);not null" json:"user_type"`
 	SectionID    *uint      `gorm:"index" json:"section_id"`
 	TalkTitle    string     `gorm:"not null" json:"talk_title"`

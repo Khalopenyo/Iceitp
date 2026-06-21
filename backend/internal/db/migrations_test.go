@@ -149,6 +149,66 @@ func TestEnsureFirstRunLinksSeedData(t *testing.T) {
 	}
 }
 
+// TestTenantCompositeUniquenessUpgrade simulates a pre-0008 database carrying the
+// legacy single-column unique indexes, then verifies migration 0008 drops them
+// and installs the per-conference composite indexes — so two conferences may
+// reuse a room name / marker key while duplicates within one conference still
+// violate.
+func TestTenantCompositeUniquenessUpgrade(t *testing.T) {
+	db := newTestDB(t)
+	if err := db.AutoMigrate(
+		&models.Conference{}, &models.Room{}, &models.MapMarker{},
+		&models.MapRoute{}, &models.ProgramAssignment{},
+	); err != nil {
+		t.Fatalf("automigrate: %v", err)
+	}
+
+	// Recreate the legacy pre-0008 index layout (drop the composite forms that the
+	// current struct tags produced, install the old single-column unique indexes).
+	for _, s := range []string{
+		"DROP INDEX IF EXISTS idx_room_conf_name",
+		"DROP INDEX IF EXISTS idx_marker_conf_key",
+		"DROP INDEX IF EXISTS idx_program_conf_user",
+		"DROP INDEX IF EXISTS idx_map_route",
+		"CREATE UNIQUE INDEX idx_rooms_name ON rooms(name)",
+		"CREATE UNIQUE INDEX idx_map_markers_key ON map_markers(key)",
+		"CREATE UNIQUE INDEX idx_program_assignments_user_id ON program_assignments(user_id)",
+		"CREATE UNIQUE INDEX idx_map_route ON map_routes(from_key, to_key, floor)",
+	} {
+		if err := db.Exec(s).Error; err != nil {
+			t.Fatalf("legacy index setup (%s): %v", s, err)
+		}
+	}
+
+	if err := tenantCompositeUniqueness(db); err != nil {
+		t.Fatalf("tenantCompositeUniqueness: %v", err)
+	}
+
+	u := func(v uint) *uint { return &v }
+
+	// Room name: shared across conferences OK, duplicated within one conference not.
+	if err := db.Create(&models.Room{Name: "Зал", ConferenceID: u(1)}).Error; err != nil {
+		t.Fatalf("conf1 room: %v", err)
+	}
+	if err := db.Create(&models.Room{Name: "Зал", ConferenceID: u(2)}).Error; err != nil {
+		t.Errorf("same room name in a different conference should be allowed: %v", err)
+	}
+	if err := db.Create(&models.Room{Name: "Зал", ConferenceID: u(1)}).Error; err == nil {
+		t.Error("duplicate room name within one conference must violate the composite unique index")
+	}
+
+	// Marker key: same enforcement shape.
+	if err := db.Create(&models.MapMarker{Key: "entrance", Label: "A", Color: "primary", ConferenceID: u(1)}).Error; err != nil {
+		t.Fatalf("conf1 marker: %v", err)
+	}
+	if err := db.Create(&models.MapMarker{Key: "entrance", Label: "B", Color: "primary", ConferenceID: u(2)}).Error; err != nil {
+		t.Errorf("same marker key in a different conference should be allowed: %v", err)
+	}
+	if err := db.Create(&models.MapMarker{Key: "entrance", Label: "C", Color: "primary", ConferenceID: u(1)}).Error; err == nil {
+		t.Error("duplicate marker key within one conference must violate the composite unique index")
+	}
+}
+
 func mustCreate(t *testing.T, db *gorm.DB, v any) {
 	t.Helper()
 	if err := db.Create(v).Error; err != nil {

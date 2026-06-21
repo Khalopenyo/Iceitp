@@ -142,6 +142,42 @@ var migrations = []migration{
 		Name:    "add_organization_and_scoping",
 		Up:      addOrganizationAndScoping,
 	},
+	{
+		Version: "202606200008",
+		Name:    "tenant_composite_uniqueness",
+		Up:      tenantCompositeUniqueness,
+	},
+}
+
+// tenantCompositeUniqueness widens the catalog uniqueness constraints from
+// global to per-conference, so two tenants can reuse the same room name, marker
+// key, route tuple or have a per-conference program assignment without colliding.
+// Identity/token uniqueness (User.Email, Profile.Phone, Organization.Slug,
+// Certificate.Number, token hashes) stays GLOBAL by design (hybrid SSO).
+//
+// The old single-column unique indexes are dropped first (IF EXISTS → idempotent
+// and a no-op on fresh DBs that already created the composite form from the
+// current struct tags), then AutoMigrate recreates them as composite
+// (conference_id, …) indexes. Runs after backfill (migration 0007), so every row
+// already carries a conference_id and the composite indexes build without
+// violation.
+func tenantCompositeUniqueness(db *gorm.DB) error {
+	for _, idx := range []string{
+		"idx_map_markers_key",
+		"idx_rooms_name",
+		"idx_program_assignments_user_id",
+		"idx_map_route",
+	} {
+		if err := db.Exec("DROP INDEX IF EXISTS " + idx).Error; err != nil {
+			return err
+		}
+	}
+	return db.AutoMigrate(
+		&models.MapMarker{},
+		&models.Room{},
+		&models.ProgramAssignment{},
+		&models.MapRoute{},
+	)
 }
 
 // addOrganizationAndScoping introduces the tenant root (Organization) and the
