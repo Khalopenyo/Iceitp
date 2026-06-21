@@ -6,17 +6,25 @@ import (
 )
 
 // ByConference returns a GORM scope that filters a query by the request's active
-// conference (conference_id). It is a NO-OP when no conference is resolved
-// (ConfID == 0) — e.g. in handler unit tests that do not install the tenant
-// middleware — so existing tests are unaffected while production requests (which
-// always carry a resolved scope) are isolated by conference.
+// conference (conference_id), with three cases:
+//   - no tenant resolved (FromContext !ok — e.g. handler unit tests without the
+//     middleware): NO-OP, so existing tests/call sites are unaffected;
+//   - a conference is resolved: filter by it;
+//   - a tenant is resolved but has NO active conference (ConfID == 0 — e.g. a
+//     freshly created organization with no conference yet): fail CLOSED
+//     (WHERE 1 = 0). Returning the query unscoped here would leak every tenant's
+//     rows to a conference-less org, so we return zero rows instead.
 func ByConference(c *gin.Context) func(*gorm.DB) *gorm.DB {
-	cid := ConfID(c)
+	s, ok := FromContext(c)
 	return func(db *gorm.DB) *gorm.DB {
-		if cid != 0 {
-			return db.Where("conference_id = ?", cid)
+		switch {
+		case !ok:
+			return db
+		case s.ConfID != 0:
+			return db.Where("conference_id = ?", s.ConfID)
+		default:
+			return db.Where("1 = 0")
 		}
-		return db
 	}
 }
 

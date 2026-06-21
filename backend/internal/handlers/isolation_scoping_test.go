@@ -312,6 +312,32 @@ func TestCrossTenantReplaceMarkersIsolation(t *testing.T) {
 	}
 }
 
+// TestConferenceLessOrgReadsFailClosed proves a resolved organization that has no
+// active conference yet (a normal onboarding state) sees ZERO conference-scoped
+// rows — not every tenant's rows. Guards the ByConference fail-closed behaviour.
+func TestConferenceLessOrgReadsFailClosed(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, _ := setupTwoTenants(t, "iso_confless")
+	// A real organization with no conference (resolves to a scope with ConfID==0).
+	mustCreateH(t, db, &models.Organization{Slug: "gamma", DisplayName: "Gamma"})
+
+	r := gin.New()
+	r.Use(tenant.Middleware(db))
+	r.GET("/sections", (&SectionHandler{DB: db}).ListSections)
+
+	w := tenantReq(t, r, http.MethodGet, "gamma.platform.ru", "/sections", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("gamma /sections -> %d: %s", w.Code, w.Body.String())
+	}
+	var items []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &items); err != nil {
+		t.Fatalf("decode: %v (%s)", err, w.Body.String())
+	}
+	if len(items) != 0 {
+		t.Errorf("conference-less org saw %d sections, want 0 (fail-closed) — other tenants' data leaked", len(items))
+	}
+}
+
 func uintToStr(v uint) string {
 	if v == 0 {
 		return "0"
