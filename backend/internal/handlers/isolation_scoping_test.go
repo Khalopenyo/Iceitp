@@ -363,6 +363,23 @@ func TestConferenceLessOrgReplaceMarkers409(t *testing.T) {
 	}
 }
 
+// TestCrossTenantAdminBadgePDFIsolation proves AdminBadgePDF cannot mint a badge
+// for another tenant's user: a cross-tenant id is rejected with 404 at the
+// org-scoped user load, before any token/PDF is generated.
+func TestCrossTenantAdminBadgePDFIsolation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, f := setupTwoTenants(t, "iso_badge")
+
+	r := gin.New()
+	r.Use(tenant.Middleware(db))
+	r.GET("/admin/users/:id/badge", (&DocumentHandler{DB: db, JWTSecret: "test-secret"}).AdminBadgePDF)
+
+	w := tenantReq(t, r, http.MethodGet, "beta.platform.ru", "/admin/users/"+uintToStr(f.userA.ID)+"/badge", nil)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("cross-tenant AdminBadgePDF -> %d, want 404 (org B must not badge org A's user) (%s)", w.Code, w.Body.String())
+	}
+}
+
 func uintToStr(v uint) string {
 	if v == 0 {
 		return "0"

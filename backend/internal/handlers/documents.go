@@ -432,7 +432,9 @@ func (h *DocumentHandler) BadgePDF(c *gin.Context) {
 func (h *DocumentHandler) AdminBadgePDF(c *gin.Context) {
 	userID := c.Param("id")
 	var user models.User
-	if err := h.DB.Preload("Profile").First(&user, userID).Error; err != nil {
+	// Scope by org: an admin must not mint a badge (with a check-in token) for a
+	// user belonging to another tenant. A cross-tenant id yields 404.
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByOrg(c)).Preload("Profile").First(&user, userID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
