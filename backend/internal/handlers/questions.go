@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/tenant"
 	"encoding/base64"
 	"errors"
 	"net/http"
@@ -171,7 +172,16 @@ func (h *QuestionHandler) ApprovedQuestions(c *gin.Context) {
 
 func (h *QuestionHandler) QuestionQR(c *gin.Context) {
 	var conf models.Conference
-	if err := h.DB.Order("id asc").First(&conf).Error; err != nil {
+	// When a tenant is resolved (prod request via tenant.Middleware), load only
+	// that tenant's active conference; otherwise fall back to the legacy
+	// single-conference behaviour so unit tests / single-tenant are unchanged.
+	query := h.DB
+	if cid := tenant.ConfID(c); cid != 0 {
+		query = query.Scopes(tenant.ByOrg(c)).Where("id = ?", cid)
+	} else {
+		query = query.Order("id asc")
+	}
+	if err := query.First(&conf).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "conference not found"})
 			return
@@ -211,6 +221,7 @@ func (h *QuestionHandler) ListQuestions(c *gin.Context) {
 	statusFilter := models.QuestionStatus(strings.TrimSpace(c.Query("status")))
 
 	tx := h.DB.Table("questions").
+		Scopes(tenant.ByConference(c)).
 		Joins("LEFT JOIN users ON users.id = questions.user_id").
 		Joins("LEFT JOIN profiles ON profiles.user_id = users.id")
 
@@ -301,7 +312,7 @@ func (h *QuestionHandler) UpdateQuestionStatus(c *gin.Context) {
 	}
 
 	var question models.Question
-	if err := h.DB.First(&question, id).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByConference(c)).Where("id = ?", id).First(&question).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "question not found"})
 			return
@@ -332,7 +343,7 @@ func (h *QuestionHandler) DeleteQuestion(c *gin.Context) {
 	id := c.Param("id")
 
 	var question models.Question
-	if err := h.DB.First(&question, id).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByConference(c)).Where("id = ?", id).First(&question).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "question not found"})
 			return
@@ -341,7 +352,7 @@ func (h *QuestionHandler) DeleteQuestion(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Delete(&question).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByConference(c)).Where("id = ?", question.ID).Delete(&models.Question{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete question"})
 		return
 	}
