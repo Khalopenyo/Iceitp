@@ -974,7 +974,11 @@ func (h *AuthHandler) currentTime() time.Time {
 }
 
 func (h *AuthHandler) issueSession(c *gin.Context, user models.User) error {
-	token, err := auth.GenerateToken(user.ID, user.Role, h.JWTSecret, h.accessTokenTTL())
+	orgID := uint(1) // tenant.DefaultOrgID; nullable during Phase 1 backfill
+	if user.OrganizationID != nil {
+		orgID = *user.OrganizationID
+	}
+	token, err := auth.GenerateToken(user.ID, user.Role, orgID, h.JWTSecret, h.accessTokenTTL())
 	if err != nil {
 		return err
 	}
