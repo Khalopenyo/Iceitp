@@ -40,7 +40,7 @@ func (h *ScheduleHandler) SeedDemo(c *gin.Context) {
 	}
 
 	var sectionCount int64
-	h.DB.Model(&models.Section{}).Count(&sectionCount)
+	tenant.DB(c, h.DB).Model(&models.Section{}).Count(&sectionCount)
 	if sectionCount == 0 {
 		sections := []models.Section{
 			{Title: "Экономика, право и управление в условиях цифровой трансформации", Description: "Сессия 1 конференции.", Room: "Хайпарк"},
@@ -50,12 +50,12 @@ func (h *ScheduleHandler) SeedDemo(c *gin.Context) {
 			{Title: "Наука зуммеров и альфа (молодые ученые до 35 лет)", Description: "Сессия 5 конференции.", Room: "Хайпарк"},
 		}
 		for _, s := range sections {
-			h.DB.Create(&s)
+			tenant.DB(c, h.DB).Create(&s)
 		}
 	}
 
 	var sections []models.Section
-	h.DB.Order("start_at asc, id asc").Find(&sections)
+	tenant.DB(c, h.DB).Order("start_at asc, id asc").Find(&sections)
 	if len(sections) < 5 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "not enough sections"})
 		return
@@ -75,7 +75,7 @@ func (h *ScheduleHandler) SeedDemo(c *gin.Context) {
 		sections[i].StartAt = starts[i]
 		sections[i].EndAt = sections[i].StartAt.Add(90 * time.Minute)
 		sections[i].Capacity = 120
-		h.DB.Save(&sections[i])
+		tenant.DB(c, h.DB).Save(&sections[i])
 	}
 
 	demoUsers := []demoUser{
@@ -93,7 +93,7 @@ func (h *ScheduleHandler) SeedDemo(c *gin.Context) {
 
 	for _, u := range demoUsers {
 		var existing models.User
-		if err := h.DB.Where("email = ?", u.Email).First(&existing).Error; err == nil {
+		if err := tenant.DB(c, h.DB).Where("email = ?", u.Email).First(&existing).Error; err == nil {
 			continue
 		}
 		passwordHash, _ := bcrypt.GenerateFromPassword([]byte("Demo123!"), 12)
@@ -114,7 +114,7 @@ func (h *ScheduleHandler) SeedDemo(c *gin.Context) {
 				ConsentGiven: true,
 			},
 		}
-		if err := h.DB.Create(&user).Error; err == nil {
+		if err := tenant.DB(c, h.DB).Create(&user).Error; err == nil {
 			// назначение идёт через выбранную секцию
 		}
 	}
@@ -123,7 +123,7 @@ func (h *ScheduleHandler) SeedDemo(c *gin.Context) {
 }
 
 func (h *ScheduleHandler) AdminSchedule(c *gin.Context) {
-	entries, err := loadAuthoritativeProgramEntries(h.DB.Scopes(tenant.ByConference(c)), authoritativeProgramFilter{})
+	entries, err := loadAuthoritativeProgramEntries(tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)), authoritativeProgramFilter{})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load authoritative schedule"})
 		return
@@ -134,18 +134,18 @@ func (h *ScheduleHandler) AdminSchedule(c *gin.Context) {
 func (h *ScheduleHandler) ParticipantSchedule(c *gin.Context) {
 	currentUserID := c.GetUint("user_id")
 	var user models.User
-	if err := h.DB.Preload("Profile").First(&user, currentUserID).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Preload("Profile").First(&user, currentUserID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
 
-	currentView, err := loadParticipantScheduleView(h.DB.Scopes(tenant.ByConference(c)), user)
+	currentView, err := loadParticipantScheduleView(tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)), user)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load participant schedule"})
 		return
 	}
 
-	entries, err := loadAuthoritativeProgramEntries(h.DB.Scopes(tenant.ByConference(c)), authoritativeProgramFilter{})
+	entries, err := loadAuthoritativeProgramEntries(tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)), authoritativeProgramFilter{})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load authoritative venue schedule"})
 		return
@@ -162,12 +162,12 @@ func (h *ScheduleHandler) ParticipantSchedule(c *gin.Context) {
 func (h *ScheduleHandler) UserSchedule(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	var user models.User
-	if err := h.DB.Preload("Profile").First(&user, userID).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Preload("Profile").First(&user, userID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
 
-	scheduleView, err := loadParticipantScheduleView(h.DB.Scopes(tenant.ByConference(c)), user)
+	scheduleView, err := loadParticipantScheduleView(tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)), user)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load participant schedule"})
 		return

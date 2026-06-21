@@ -29,7 +29,7 @@ func (h *SubmissionHandler) ListSubmissions(c *gin.Context) {
 	userID := c.GetUint("user_id")
 
 	var submissions []models.ArticleSubmission
-	if err := h.DB.Scopes(tenant.ByConference(c)).Where("user_id = ?", userID).Order("created_at desc").Find(&submissions).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Where("user_id = ?", userID).Order("created_at desc").Find(&submissions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load submissions"})
 		return
 	}
@@ -91,26 +91,26 @@ func (h *SubmissionHandler) CreateSubmission(c *gin.Context) {
 	if cid := tenant.ConfID(c); cid != 0 {
 		submission.ConferenceID = &cid
 	}
-	if err := h.DB.Create(&submission).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Create(&submission).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create submission"})
 		return
 	}
 
 	objectKey := buildSubmissionObjectKey(userID, submission.ID, submission.FileName)
 	if err := h.Store.Put(c.Request.Context(), objectKey, src, file.Size, file.Header.Get("Content-Type")); err != nil {
-		_ = h.DB.Delete(&models.ArticleSubmission{}, submission.ID).Error
+		_ = tenant.DB(c, h.DB).Delete(&models.ArticleSubmission{}, submission.ID).Error
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to save uploaded file"})
 		return
 	}
 
 	submission.ObjectKey = objectKey
 	submission.Status = models.SubmissionStatusReady
-	if err := h.DB.Model(&submission).Updates(map[string]any{
+	if err := tenant.DB(c, h.DB).Model(&submission).Updates(map[string]any{
 		"file_path": submission.ObjectKey,
 		"status":    submission.Status,
 	}).Error; err != nil {
 		_ = h.Store.Delete(c.Request.Context(), objectKey)
-		_ = h.DB.Delete(&models.ArticleSubmission{}, submission.ID).Error
+		_ = tenant.DB(c, h.DB).Delete(&models.ArticleSubmission{}, submission.ID).Error
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to finalize submission"})
 		return
 	}
@@ -160,7 +160,7 @@ func (h *SubmissionHandler) loadOwnedSubmission(c *gin.Context) (*models.Article
 	userID := c.GetUint("user_id")
 
 	var submission models.ArticleSubmission
-	if err := h.DB.Scopes(tenant.ByConference(c)).Where("id = ? AND user_id = ?", uint(id), userID).First(&submission).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Where("id = ? AND user_id = ?", uint(id), userID).First(&submission).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "submission not found"})
 			return nil, err

@@ -15,7 +15,7 @@ type RoomHandler struct {
 
 func (h *RoomHandler) ListRooms(c *gin.Context) {
 	var rooms []models.Room
-	if err := h.DB.Scopes(tenant.ByConference(c)).Order("floor asc, name asc").Find(&rooms).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Order("floor asc, name asc").Find(&rooms).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list rooms"})
 		return
 	}
@@ -31,7 +31,7 @@ func (h *RoomHandler) CreateRoom(c *gin.Context) {
 	if cid := tenant.ConfID(c); cid != 0 {
 		payload.ConferenceID = &cid
 	}
-	if err := h.DB.Create(&payload).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Create(&payload).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create room"})
 		return
 	}
@@ -40,7 +40,7 @@ func (h *RoomHandler) CreateRoom(c *gin.Context) {
 
 func (h *RoomHandler) DeleteRoom(c *gin.Context) {
 	id := c.Param("id")
-	err := h.DB.Transaction(func(tx *gorm.DB) error {
+	err := tenant.DB(c, h.DB).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Scopes(tenant.ByConference(c)).Model(&models.ProgramAssignment{}).
 			Where("room_id = ?", id).Update("room_id", nil).Error; err != nil {
 			return err

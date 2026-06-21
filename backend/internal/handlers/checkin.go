@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/tenant"
 	"errors"
 	"net/http"
 	"time"
@@ -33,7 +34,7 @@ func (h *CheckInHandler) ScanBadge(c *gin.Context) {
 		return
 	}
 
-	response, err := h.processBadgeCheckIn(payload.Token, nil, "badge_qr_scan")
+	response, err := h.processBadgeCheckIn(c, payload.Token, nil, "badge_qr_scan")
 	if err != nil {
 		writeCheckInError(c, err)
 		return
@@ -48,7 +49,7 @@ func (h *CheckInHandler) VerifyBadge(c *gin.Context) {
 	}
 
 	verifierID := c.GetUint("user_id")
-	response, err := h.processBadgeCheckIn(payload.Token, &verifierID, "badge_qr_admin")
+	response, err := h.processBadgeCheckIn(c, payload.Token, &verifierID, "badge_qr_admin")
 	if err != nil {
 		writeCheckInError(c, err)
 		return
@@ -65,8 +66,8 @@ func bindBadgePayload(c *gin.Context) (verifyBadgePayload, bool) {
 	return payload, true
 }
 
-func (h *CheckInHandler) processBadgeCheckIn(rawToken string, verifierID *uint, source string) (*checkInResponse, error) {
-	context, err := loadBadgeTokenContext(h.DB, h.JWTSecret, rawToken)
+func (h *CheckInHandler) processBadgeCheckIn(c *gin.Context, rawToken string, verifierID *uint, source string) (*checkInResponse, error) {
+	context, err := loadBadgeTokenContext(tenant.DB(c, h.DB), h.JWTSecret, rawToken)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +75,7 @@ func (h *CheckInHandler) processBadgeCheckIn(rawToken string, verifierID *uint, 
 	conf := context.Conference
 
 	var checkIn models.CheckIn
-	err = h.DB.Where("conference_id = ? AND user_id = ?", conf.ID, user.ID).First(&checkIn).Error
+	err = tenant.DB(c, h.DB).Where("conference_id = ? AND user_id = ?", conf.ID, user.ID).First(&checkIn).Error
 	if err == nil {
 		return buildCheckInResponse(checkIn.CheckedInAt, true, user, conf), nil
 	}
@@ -89,7 +90,7 @@ func (h *CheckInHandler) processBadgeCheckIn(rawToken string, verifierID *uint, 
 		VerifiedByUserID: verifierID,
 		Source:           source,
 	}
-	if err := h.DB.Create(&checkIn).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Create(&checkIn).Error; err != nil {
 		return nil, err
 	}
 

@@ -62,7 +62,7 @@ type programEntry struct {
 
 func (h *ProgramHandler) ListProgram(c *gin.Context) {
 	var users []models.User
-	if err := h.DB.Scopes(tenant.ByOrg(c)).Preload("Profile").
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByOrg(c)).Preload("Profile").
 		Where("role = ?", models.RoleParticipant).
 		Order("created_at asc").
 		Find(&users).Error; err != nil {
@@ -155,14 +155,14 @@ func (h *ProgramHandler) UpsertProgramAssignment(c *gin.Context) {
 	}
 	if payload.SectionID != nil {
 		var section models.Section
-		if err := h.DB.Scopes(tenant.ByConference(c)).First(&section, *payload.SectionID).Error; err != nil {
+		if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).First(&section, *payload.SectionID).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "selected section not found"})
 			return
 		}
 	}
 	if payload.RoomID != nil {
 		var room models.Room
-		if err := h.DB.Scopes(tenant.ByConference(c)).First(&room, *payload.RoomID).Error; err != nil {
+		if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).First(&room, *payload.RoomID).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "selected room not found"})
 			return
 		}
@@ -179,7 +179,7 @@ func (h *ProgramHandler) UpsertProgramAssignment(c *gin.Context) {
 	}
 
 	var user models.User
-	if err := h.DB.Scopes(tenant.ByOrg(c)).Preload("Profile").First(&user, uint(userID)).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByOrg(c)).Preload("Profile").First(&user, uint(userID)).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "selected user not found"})
 		return
 	}
@@ -203,12 +203,12 @@ func (h *ProgramHandler) UpsertProgramAssignment(c *gin.Context) {
 	}
 
 	var existing models.ProgramAssignment
-	if err := h.DB.Scopes(tenant.ByConference(c)).Where("user_id = ?", uint(userID)).First(&existing).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Where("user_id = ?", uint(userID)).First(&existing).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load existing program assignment"})
 			return
 		}
-		if err := h.DB.Create(&assignment).Error; err != nil {
+		if err := tenant.DB(c, h.DB).Create(&assignment).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save program assignment"})
 			return
 		}
@@ -220,7 +220,7 @@ func (h *ProgramHandler) UpsertProgramAssignment(c *gin.Context) {
 		existing.StartsAt = assignment.StartsAt
 		existing.EndsAt = assignment.EndsAt
 		existing.JoinURL = assignment.JoinURL
-		if err := h.DB.Save(&existing).Error; err != nil {
+		if err := tenant.DB(c, h.DB).Save(&existing).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save program assignment"})
 			return
 		}
@@ -248,7 +248,7 @@ func (h *ProgramHandler) loadAssignmentsByUser(c *gin.Context, userIDs []uint) (
 	}
 
 	var assignments []models.ProgramAssignment
-	if err := h.DB.Scopes(tenant.ByConference(c)).Where("user_id IN ?", userIDs).Order("updated_at desc, id desc").Find(&assignments).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Where("user_id IN ?", userIDs).Order("updated_at desc, id desc").Find(&assignments).Error; err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -275,7 +275,7 @@ func (h *ProgramHandler) loadSectionsByID(c *gin.Context, sectionIDs []uint) (ma
 	}
 
 	var sections []models.Section
-	if err := h.DB.Scopes(tenant.ByConference(c)).Where("id IN ?", uniqueIDs).Find(&sections).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Where("id IN ?", uniqueIDs).Find(&sections).Error; err != nil {
 		return nil, err
 	}
 	for _, section := range sections {
@@ -292,7 +292,7 @@ func (h *ProgramHandler) loadRoomsByID(c *gin.Context, roomIDs []uint) (map[uint
 	}
 
 	var rooms []models.Room
-	if err := h.DB.Scopes(tenant.ByConference(c)).Where("id IN ?", uniqueIDs).Find(&rooms).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Where("id IN ?", uniqueIDs).Find(&rooms).Error; err != nil {
 		return nil, err
 	}
 	for _, room := range rooms {

@@ -55,7 +55,7 @@ func (h *FeedbackHandler) CreateFeedback(c *gin.Context) {
 	if cid := tenant.ConfID(c); cid != 0 {
 		feedback.ConferenceID = &cid
 	}
-	if err := h.DB.Create(&feedback).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Create(&feedback).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save feedback"})
 		return
 	}
@@ -67,7 +67,7 @@ func (h *FeedbackHandler) ListFeedback(c *gin.Context) {
 	searchQuery := strings.ToLower(strings.TrimSpace(c.Query("q")))
 	ratingFilter := parsePositiveInt(c.Query("rating"), 0)
 
-	tx := h.DB.Table("feedbacks").
+	tx := tenant.DB(c, h.DB).Table("feedbacks").
 		Scopes(tenant.ByConference(c)).
 		Joins("LEFT JOIN users ON users.id = feedbacks.user_id").
 		Joins("LEFT JOIN profiles ON profiles.user_id = users.id")

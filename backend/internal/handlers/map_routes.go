@@ -30,7 +30,7 @@ type upsertMapRoutePayload struct {
 
 func (h *MapRouteHandler) ListRoutes(c *gin.Context) {
 	var routes []models.MapRoute
-	if err := h.DB.Scopes(tenant.ByConference(c)).Order("id asc").Find(&routes).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Order("id asc").Find(&routes).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list routes"})
 		return
 	}
@@ -78,7 +78,7 @@ func (h *MapRouteHandler) UpsertRoute(c *gin.Context) {
 
 	// Empty points => delete route.
 	if len(payload.Points) == 0 {
-		if err := h.DB.Scopes(tenant.ByConference(c)).Where("from_key = ? AND to_key = ? AND floor = ?", payload.FromKey, payload.ToKey, payload.Floor).
+		if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Where("from_key = ? AND to_key = ? AND floor = ?", payload.FromKey, payload.ToKey, payload.Floor).
 			Delete(&models.MapRoute{}).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete route", "details": err.Error()})
 			return
@@ -94,7 +94,7 @@ func (h *MapRouteHandler) UpsertRoute(c *gin.Context) {
 	}
 
 	var existing models.MapRoute
-	err = h.DB.Scopes(tenant.ByConference(c)).Where("from_key = ? AND to_key = ? AND floor = ?", payload.FromKey, payload.ToKey, payload.Floor).
+	err = tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Where("from_key = ? AND to_key = ? AND floor = ?", payload.FromKey, payload.ToKey, payload.Floor).
 		First(&existing).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -107,7 +107,7 @@ func (h *MapRouteHandler) UpsertRoute(c *gin.Context) {
 			if cid := tenant.ConfID(c); cid != 0 {
 				route.ConferenceID = &cid
 			}
-			if err := h.DB.Create(&route).Error; err != nil {
+			if err := tenant.DB(c, h.DB).Create(&route).Error; err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save route", "details": err.Error()})
 				return
 			}
@@ -120,7 +120,7 @@ func (h *MapRouteHandler) UpsertRoute(c *gin.Context) {
 
 	existing.Points = pointsJSON
 	existing.Floor = payload.Floor
-	if err := h.DB.Save(&existing).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Save(&existing).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save route", "details": err.Error()})
 		return
 	}

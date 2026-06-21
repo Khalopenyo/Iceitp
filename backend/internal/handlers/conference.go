@@ -73,7 +73,7 @@ func (h *ConferenceHandler) UpdateConference(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Save(conf).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Save(conf).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update conference"})
 		return
 	}
@@ -83,7 +83,7 @@ func (h *ConferenceHandler) UpdateConference(c *gin.Context) {
 
 func (h *ConferenceHandler) getOrCreateConference(c *gin.Context) (*models.Conference, error) {
 	var conf models.Conference
-	if err := h.DB.Scopes(tenant.ByOrg(c)).Order("id asc").First(&conf).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByOrg(c)).Order("id asc").First(&conf).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
@@ -99,7 +99,7 @@ func (h *ConferenceHandler) getOrCreateConference(c *gin.Context) (*models.Confe
 		}
 		org := tenant.OrgID(c)
 		conf.OrganizationID = &org
-		if err := h.DB.Create(&conf).Error; err != nil {
+		if err := tenant.DB(c, h.DB).Create(&conf).Error; err != nil {
 			return nil, err
 		}
 	}

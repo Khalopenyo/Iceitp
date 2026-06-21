@@ -33,7 +33,7 @@ func (h *ConsentHandler) ListConsents(c *gin.Context) {
 	searchQuery := strings.ToLower(strings.TrimSpace(c.Query("q")))
 	consentType := strings.TrimSpace(c.Query("consent_type"))
 
-	tx := h.DB.Table("consent_logs").
+	tx := tenant.DB(c, h.DB).Table("consent_logs").
 		Joins("LEFT JOIN users ON users.id = consent_logs.user_id").
 		Joins("LEFT JOIN profiles ON profiles.user_id = users.id")
 

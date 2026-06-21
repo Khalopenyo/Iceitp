@@ -16,7 +16,7 @@ type MapMarkerHandler struct {
 
 func (h *MapMarkerHandler) ListMarkers(c *gin.Context) {
 	var markers []models.MapMarker
-	if err := h.DB.Scopes(tenant.ByConference(c)).Order("id asc").Find(&markers).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Order("id asc").Find(&markers).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list markers"})
 		return
 	}
@@ -59,7 +59,7 @@ func (h *MapMarkerHandler) ReplaceMarkers(c *gin.Context) {
 	if cid := tenant.ConfID(c); cid != 0 {
 		confID = &cid
 	}
-	err := h.DB.Transaction(func(tx *gorm.DB) error {
+	err := tenant.DB(c, h.DB).Transaction(func(tx *gorm.DB) error {
 		// Replace only the current tenant's markers. A global "DELETE FROM
 		// map_markers" would wipe every conference's markers; scope it to the
 		// resolved conference. With no scope (single-tenant / unit tests) we keep

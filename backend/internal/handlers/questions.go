@@ -52,7 +52,7 @@ func (h *QuestionHandler) PublicQuestionContext(c *gin.Context) {
 		return
 	}
 
-	context, err := loadQuestionTokenContext(h.DB, h.JWTSecret, token)
+	context, err := loadQuestionTokenContext(tenant.DB(c, h.DB), h.JWTSecret, token)
 	if err != nil {
 		writeQuestionTokenError(c, err)
 		return
@@ -97,7 +97,7 @@ func (h *QuestionHandler) CreatePublicQuestion(c *gin.Context) {
 		return
 	}
 
-	context, err := loadQuestionTokenContext(h.DB, h.JWTSecret, token)
+	context, err := loadQuestionTokenContext(tenant.DB(c, h.DB), h.JWTSecret, token)
 	if err != nil {
 		writeQuestionTokenError(c, err)
 		return
@@ -109,7 +109,7 @@ func (h *QuestionHandler) CreatePublicQuestion(c *gin.Context) {
 		Text:         text,
 		Status:       models.QuestionStatusPending,
 	}
-	if err := h.DB.Create(&question).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Create(&question).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save question"})
 		return
 	}
@@ -131,14 +131,14 @@ func (h *QuestionHandler) ApprovedQuestions(c *gin.Context) {
 		return
 	}
 
-	context, err := loadQuestionTokenContext(h.DB, h.JWTSecret, token)
+	context, err := loadQuestionTokenContext(tenant.DB(c, h.DB), h.JWTSecret, token)
 	if err != nil {
 		writeQuestionTokenError(c, err)
 		return
 	}
 
 	response := make([]publicApprovedQuestionEntry, 0)
-	if err := h.DB.Model(&models.Question{}).
+	if err := tenant.DB(c, h.DB).Model(&models.Question{}).
 		Where("conference_id = ? AND status = ?", context.Conference.ID, models.QuestionStatusApproved).
 		Select("id, author_name, text, created_at, moderated_at").
 		Order("COALESCE(moderated_at, created_at) desc").
@@ -175,7 +175,7 @@ func (h *QuestionHandler) QuestionQR(c *gin.Context) {
 	// When a tenant is resolved (prod request via tenant.Middleware), load only
 	// that tenant's active conference; otherwise fall back to the legacy
 	// single-conference behaviour so unit tests / single-tenant are unchanged.
-	query := h.DB
+	query := tenant.DB(c, h.DB)
 	if cid := tenant.ConfID(c); cid != 0 {
 		query = query.Scopes(tenant.ByOrg(c)).Where("id = ?", cid)
 	} else {
@@ -220,7 +220,7 @@ func (h *QuestionHandler) ListQuestions(c *gin.Context) {
 	searchQuery := strings.ToLower(strings.TrimSpace(c.Query("q")))
 	statusFilter := models.QuestionStatus(strings.TrimSpace(c.Query("status")))
 
-	tx := h.DB.Table("questions").
+	tx := tenant.DB(c, h.DB).Table("questions").
 		Scopes(tenant.ByConference(c)).
 		Joins("LEFT JOIN users ON users.id = questions.user_id").
 		Joins("LEFT JOIN profiles ON profiles.user_id = users.id")
@@ -312,7 +312,7 @@ func (h *QuestionHandler) UpdateQuestionStatus(c *gin.Context) {
 	}
 
 	var question models.Question
-	if err := h.DB.Scopes(tenant.ByConference(c)).Where("id = ?", id).First(&question).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Where("id = ?", id).First(&question).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "question not found"})
 			return
@@ -327,7 +327,7 @@ func (h *QuestionHandler) UpdateQuestionStatus(c *gin.Context) {
 	question.ModeratedByID = &moderatorID
 	question.ModeratedAt = &now
 
-	if err := h.DB.Save(&question).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Save(&question).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update question status"})
 		return
 	}
@@ -343,7 +343,7 @@ func (h *QuestionHandler) DeleteQuestion(c *gin.Context) {
 	id := c.Param("id")
 
 	var question models.Question
-	if err := h.DB.Scopes(tenant.ByConference(c)).Where("id = ?", id).First(&question).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Where("id = ?", id).First(&question).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "question not found"})
 			return
@@ -352,7 +352,7 @@ func (h *QuestionHandler) DeleteQuestion(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Scopes(tenant.ByConference(c)).Where("id = ?", question.ID).Delete(&models.Question{}).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Where("id = ?", question.ID).Delete(&models.Question{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete question"})
 		return
 	}

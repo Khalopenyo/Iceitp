@@ -16,7 +16,7 @@ type SectionHandler struct {
 
 func (h *SectionHandler) ListSections(c *gin.Context) {
 	var sections []models.Section
-	if err := h.DB.Scopes(tenant.ByConference(c)).Order("start_at asc, id asc").Find(&sections).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Order("start_at asc, id asc").Find(&sections).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list sections"})
 		return
 	}
@@ -37,7 +37,7 @@ func (h *SectionHandler) CreateSection(c *gin.Context) {
 	if cid := tenant.ConfID(c); cid != 0 {
 		section.ConferenceID = &cid
 	}
-	if err := h.DB.Create(&section).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Create(&section).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create section"})
 		return
 	}
@@ -55,7 +55,7 @@ func (h *SectionHandler) UpdateSection(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "title and room are required"})
 		return
 	}
-	res := h.DB.Model(&models.Section{}).Scopes(tenant.ByConference(c)).Where("id = ?", id).Omit("ConferenceID").Updates(payload)
+	res := tenant.DB(c, h.DB).Model(&models.Section{}).Scopes(tenant.ByConference(c)).Where("id = ?", id).Omit("ConferenceID").Updates(payload)
 	if res.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update section"})
 		return
@@ -134,7 +134,7 @@ func normalizeSectionTitle(value string) string {
 
 func (h *SectionHandler) DeleteSection(c *gin.Context) {
 	id := c.Param("id")
-	err := h.DB.Transaction(func(tx *gorm.DB) error {
+	err := tenant.DB(c, h.DB).Transaction(func(tx *gorm.DB) error {
 		// Profile is parent-scoped (UserID -> User.organization_id) with no
 		// conference_id column, so constrain its detach via the org through a user
 		// subquery; no-op when no scope is resolved (single-tenant / unit tests).
