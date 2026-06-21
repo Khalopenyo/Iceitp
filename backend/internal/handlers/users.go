@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/tenant"
 	"errors"
 	"net/http"
 	"strconv"
@@ -90,6 +91,7 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 	badgeIssuedFilter := strings.TrimSpace(c.Query("badge_issued"))
 
 	tx := h.DB.Model(&models.User{}).
+		Scopes(tenant.ByOrg(c)).
 		Joins("LEFT JOIN profiles ON profiles.user_id = users.id")
 
 	if searchQuery != "" {
@@ -147,8 +149,13 @@ func (h *UserHandler) UpdateUserRole(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
-	if err := h.DB.Model(&models.User{}).Where("id = ?", id).Update("role", payload.Role).Error; err != nil {
+	res := h.DB.Model(&models.User{}).Scopes(tenant.ByOrg(c)).Where("id = ?", id).Update("role", payload.Role)
+	if res.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update role"})
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -165,7 +172,7 @@ func (h *UserHandler) SetBadgeIssued(c *gin.Context) {
 	}
 
 	var user models.User
-	if err := h.DB.First(&user, id).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByOrg(c)).First(&user, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
@@ -179,7 +186,7 @@ func (h *UserHandler) SetBadgeIssued(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Model(&models.User{}).Where("id = ?", id).Update("badge_issued", payload.BadgeIssued).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByOrg(c)).Model(&models.User{}).Where("id = ?", id).Update("badge_issued", payload.BadgeIssued).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update badge status"})
 		return
 	}
@@ -189,6 +196,19 @@ func (h *UserHandler) SetBadgeIssued(c *gin.Context) {
 
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	id := c.Param("id")
+	// Cross-tenant guard: only proceed if the target user belongs to the caller's
+	// org. ByOrg is a no-op without a resolved scope (unit tests / single-tenant
+	// org#1), so behaviour is unchanged there; a foreign id yields 404 and the
+	// destructive transaction never runs.
+	var user models.User
+	if err := h.DB.Scopes(tenant.ByOrg(c)).Where("id = ?", id).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		return
+	}
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("user_id = ?", id).Delete(&models.Profile{}).Error; err != nil {
 			return err
