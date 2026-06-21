@@ -16,7 +16,7 @@ type SectionHandler struct {
 
 func (h *SectionHandler) ListSections(c *gin.Context) {
 	var sections []models.Section
-	if err := h.DB.Order("start_at asc, id asc").Find(&sections).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByConference(c)).Order("start_at asc, id asc").Find(&sections).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list sections"})
 		return
 	}

@@ -15,7 +15,7 @@ type RoomHandler struct {
 
 func (h *RoomHandler) ListRooms(c *gin.Context) {
 	var rooms []models.Room
-	if err := h.DB.Order("floor asc, name asc").Find(&rooms).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByConference(c)).Order("floor asc, name asc").Find(&rooms).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list rooms"})
 		return
 	}

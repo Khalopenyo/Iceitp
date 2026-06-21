@@ -16,7 +16,7 @@ type MapMarkerHandler struct {
 
 func (h *MapMarkerHandler) ListMarkers(c *gin.Context) {
 	var markers []models.MapMarker
-	if err := h.DB.Order("id asc").Find(&markers).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByConference(c)).Order("id asc").Find(&markers).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list markers"})
 		return
 	}

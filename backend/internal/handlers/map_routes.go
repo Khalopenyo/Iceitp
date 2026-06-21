@@ -30,7 +30,7 @@ type upsertMapRoutePayload struct {
 
 func (h *MapRouteHandler) ListRoutes(c *gin.Context) {
 	var routes []models.MapRoute
-	if err := h.DB.Order("id asc").Find(&routes).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByConference(c)).Order("id asc").Find(&routes).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list routes"})
 		return
 	}
