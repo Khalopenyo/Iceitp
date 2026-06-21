@@ -18,15 +18,16 @@ const (
 )
 
 type User struct {
-	ID           uint      `gorm:"primaryKey" json:"id"`
-	Email        string    `gorm:"uniqueIndex;not null" json:"email"`
-	PasswordHash string    `gorm:"not null" json:"-"`
-	Role         Role      `gorm:"type:varchar(20);not null" json:"role"`
-	UserType     UserType  `gorm:"type:varchar(20);not null" json:"user_type"`
-	BadgeIssued  bool      `gorm:"not null;default:false" json:"badge_issued"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	Profile      Profile   `json:"profile"`
+	OrganizationID *uint     `gorm:"index" json:"organization_id"`
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	Email          string    `gorm:"uniqueIndex;not null" json:"email"`
+	PasswordHash   string    `gorm:"not null" json:"-"`
+	Role           Role      `gorm:"type:varchar(20);not null" json:"role"`
+	UserType       UserType  `gorm:"type:varchar(20);not null" json:"user_type"`
+	BadgeIssued    bool      `gorm:"not null;default:false" json:"badge_issued"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	Profile        Profile   `json:"profile"`
 }
 
 type Profile struct {

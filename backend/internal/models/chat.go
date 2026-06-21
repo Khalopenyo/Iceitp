@@ -10,12 +10,13 @@ const (
 )
 
 type ChatMessage struct {
-	ID          uint             `gorm:"primaryKey" json:"id"`
-	UserID      uint             `gorm:"index" json:"user_id"`
-	Channel     ChatChannel      `gorm:"type:varchar(20);not null;default:'conference';index" json:"channel"`
-	SectionID   *uint            `gorm:"index" json:"section_id"`
-	Content     string           `gorm:"type:text;not null" json:"content"`
-	Attachments []ChatAttachment `gorm:"foreignKey:MessageID;references:ID;constraint:OnDelete:CASCADE;" json:"attachments,omitempty"`
-	CreatedAt   time.Time        `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt   time.Time        `gorm:"autoUpdateTime" json:"updated_at"`
+	ConferenceID *uint            `gorm:"index" json:"conference_id"`
+	ID           uint             `gorm:"primaryKey" json:"id"`
+	UserID       uint             `gorm:"index" json:"user_id"`
+	Channel      ChatChannel      `gorm:"type:varchar(20);not null;default:'conference';index" json:"channel"`
+	SectionID    *uint            `gorm:"index" json:"section_id"`
+	Content      string           `gorm:"type:text;not null" json:"content"`
+	Attachments  []ChatAttachment `gorm:"foreignKey:MessageID;references:ID;constraint:OnDelete:CASCADE;" json:"attachments,omitempty"`
+	CreatedAt    time.Time        `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt    time.Time        `gorm:"autoUpdateTime" json:"updated_at"`
 }

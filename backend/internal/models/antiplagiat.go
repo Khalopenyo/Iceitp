@@ -11,6 +11,7 @@ const (
 )
 
 type ArticleSubmission struct {
+	ConferenceID *uint            `gorm:"index" json:"conference_id"`
 	ID           uint             `gorm:"primaryKey" json:"id"`
 	UserID       uint             `gorm:"index;not null" json:"user_id"`
 	Title        string           `gorm:"not null" json:"title"`

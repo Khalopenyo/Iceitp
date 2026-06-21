@@ -15,6 +15,7 @@ const (
 )
 
 type Conference struct {
+	OrganizationID *uint            `gorm:"index" json:"organization_id"`
 	ID             uint             `gorm:"primaryKey" json:"id"`
 	Title          string           `gorm:"not null" json:"title"`
 	Description    string           `json:"description"`
