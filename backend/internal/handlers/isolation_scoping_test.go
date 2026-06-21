@@ -1,0 +1,295 @@
+package handlers
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/tenant"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+)
+
+// twoTenants holds the seeded fixtures for a two-organization isolation test:
+// each org has its own conference, participant user, section, question and
+// feedback, resolved by subdomain (alpha.* / beta.*).
+type twoTenants struct {
+	orgA, orgB         models.Organization
+	confA, confB       models.Conference
+	userA, userB       models.User
+	sectionA, sectionB models.Section
+	questionA          models.Question
+	feedbackA          models.Feedback
+}
+
+func setupTwoTenants(t *testing.T, dbName string) (*gorm.DB, twoTenants) {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open("file:"+dbName+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(
+		&models.Organization{}, &models.Conference{}, &models.User{}, &models.Profile{},
+		&models.Section{}, &models.Room{}, &models.Question{}, &models.Feedback{},
+		&models.ProgramAssignment{}, &models.ChatMessage{}, &models.ConsentLog{},
+	); err != nil {
+		t.Fatalf("automigrate: %v", err)
+	}
+
+	var f twoTenants
+	f.orgA = models.Organization{Slug: "alpha", DisplayName: "Alpha"}
+	f.orgB = models.Organization{Slug: "beta", DisplayName: "Beta"}
+	mustCreateH(t, db, &f.orgA)
+	mustCreateH(t, db, &f.orgB)
+
+	f.confA = models.Conference{Title: "Conf A", OrganizationID: &f.orgA.ID}
+	f.confB = models.Conference{Title: "Conf B", OrganizationID: &f.orgB.ID}
+	mustCreateH(t, db, &f.confA)
+	mustCreateH(t, db, &f.confB)
+
+	f.userA = models.User{Email: "a@alpha.test", Role: models.RoleParticipant, OrganizationID: &f.orgA.ID,
+		Profile: models.Profile{FullName: "Alpha User"}}
+	f.userB = models.User{Email: "b@beta.test", Role: models.RoleParticipant, OrganizationID: &f.orgB.ID,
+		Profile: models.Profile{FullName: "Beta User"}}
+	mustCreateH(t, db, &f.userA)
+	mustCreateH(t, db, &f.userB)
+
+	f.sectionA = models.Section{Title: "Sec A", Room: "Room", ConferenceID: &f.confA.ID}
+	f.sectionB = models.Section{Title: "Sec B", Room: "Room", ConferenceID: &f.confB.ID}
+	mustCreateH(t, db, &f.sectionA)
+	mustCreateH(t, db, &f.sectionB)
+
+	f.questionA = models.Question{ConferenceID: f.confA.ID, Text: "Q A", AuthorName: "anon", Status: models.QuestionStatusPending}
+	mustCreateH(t, db, &f.questionA)
+	mustCreateH(t, db, &models.Question{ConferenceID: f.confB.ID, Text: "Q B", AuthorName: "anon", Status: models.QuestionStatusPending})
+
+	f.feedbackA = models.Feedback{UserID: f.userA.ID, Rating: 5, Comment: "great A", ConferenceID: &f.confA.ID}
+	mustCreateH(t, db, &f.feedbackA)
+	mustCreateH(t, db, &models.Feedback{UserID: f.userB.ID, Rating: 4, Comment: "great B", ConferenceID: &f.confB.ID})
+
+	mustCreateH(t, db, &models.ProgramAssignment{UserID: f.userA.ID, UserType: models.UserTypeOffline, TalkTitle: "Talk A", ConferenceID: &f.confA.ID})
+	mustCreateH(t, db, &models.ProgramAssignment{UserID: f.userB.ID, UserType: models.UserTypeOffline, TalkTitle: "Talk B", ConferenceID: &f.confB.ID})
+
+	return db, f
+}
+
+func tenantReq(t *testing.T, r *gin.Engine, method, host, path string, body any) *httptest.ResponseRecorder {
+	t.Helper()
+	var rdr *bytes.Reader
+	if body != nil {
+		raw, _ := json.Marshal(body)
+		rdr = bytes.NewReader(raw)
+	} else {
+		rdr = bytes.NewReader(nil)
+	}
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(method, "http://"+host+path, rdr)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	r.ServeHTTP(w, req)
+	return w
+}
+
+// TestCrossTenantListIsolation proves the org/conference-scoped list endpoints
+// return only the requesting tenant's rows after the Phase 2.4 scoping.
+func TestCrossTenantListIsolation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, f := setupTwoTenants(t, "iso_list")
+
+	r := gin.New()
+	r.Use(tenant.Middleware(db))
+	r.GET("/users", (&UserHandler{DB: db}).ListUsers)
+	r.GET("/questions", (&QuestionHandler{DB: db}).ListQuestions)
+	r.GET("/feedback", (&FeedbackHandler{DB: db}).ListFeedback)
+	r.GET("/program", (&ProgramHandler{DB: db}).ListProgram)
+	r.GET("/conference", (&ConferenceHandler{DB: db}).GetConference)
+
+	// ListUsers: each tenant sees exactly its own user, with its own org id.
+	for _, tc := range []struct {
+		host    string
+		wantOrg uint
+		email   string
+	}{
+		{"alpha.platform.ru", f.orgA.ID, "a@alpha.test"},
+		{"beta.platform.ru", f.orgB.ID, "b@beta.test"},
+	} {
+		w := tenantReq(t, r, http.MethodGet, tc.host, "/users", nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s /users -> %d: %s", tc.host, w.Code, w.Body.String())
+		}
+		var resp struct {
+			Items []models.User `json:"items"`
+			Total int64         `json:"total"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode users: %v (%s)", err, w.Body.String())
+		}
+		if resp.Total != 1 || len(resp.Items) != 1 {
+			t.Fatalf("%s /users returned total=%d items=%d, want exactly 1", tc.host, resp.Total, len(resp.Items))
+		}
+		if resp.Items[0].Email != tc.email {
+			t.Errorf("%s /users leaked %s, want %s", tc.host, resp.Items[0].Email, tc.email)
+		}
+		if resp.Items[0].OrganizationID == nil || *resp.Items[0].OrganizationID != tc.wantOrg {
+			t.Errorf("%s /users leaked org %v, want %d", tc.host, resp.Items[0].OrganizationID, tc.wantOrg)
+		}
+	}
+
+	// ListQuestions / ListFeedback: each tenant sees exactly its single row.
+	for _, path := range []string{"/questions", "/feedback"} {
+		for _, host := range []string{"alpha.platform.ru", "beta.platform.ru"} {
+			w := tenantReq(t, r, http.MethodGet, host, path, nil)
+			if w.Code != http.StatusOK {
+				t.Fatalf("%s %s -> %d: %s", host, path, w.Code, w.Body.String())
+			}
+			var resp struct {
+				Total int64 `json:"total"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode %s: %v (%s)", path, err, w.Body.String())
+			}
+			if resp.Total != 1 {
+				t.Errorf("%s %s returned total=%d, want 1 (own only)", host, path, resp.Total)
+			}
+		}
+	}
+
+	// ListProgram: array of entries, one per own participant.
+	for _, tc := range []struct {
+		host  string
+		email string
+	}{
+		{"alpha.platform.ru", "a@alpha.test"},
+		{"beta.platform.ru", "b@beta.test"},
+	} {
+		w := tenantReq(t, r, http.MethodGet, tc.host, "/program", nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s /program -> %d: %s", tc.host, w.Code, w.Body.String())
+		}
+		var entries []programEntry
+		if err := json.Unmarshal(w.Body.Bytes(), &entries); err != nil {
+			t.Fatalf("decode program: %v (%s)", err, w.Body.String())
+		}
+		if len(entries) != 1 {
+			t.Fatalf("%s /program returned %d entries, want 1", tc.host, len(entries))
+		}
+		if entries[0].Email != tc.email {
+			t.Errorf("%s /program leaked %s, want %s", tc.host, entries[0].Email, tc.email)
+		}
+	}
+
+	// GetConference: each tenant gets its own conference, not the global first.
+	for _, tc := range []struct {
+		host  string
+		title string
+		org   uint
+	}{
+		{"alpha.platform.ru", "Conf A", f.orgA.ID},
+		{"beta.platform.ru", "Conf B", f.orgB.ID},
+	} {
+		w := tenantReq(t, r, http.MethodGet, tc.host, "/conference", nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s /conference -> %d: %s", tc.host, w.Code, w.Body.String())
+		}
+		var conf models.Conference
+		if err := json.Unmarshal(w.Body.Bytes(), &conf); err != nil {
+			t.Fatalf("decode conference: %v (%s)", err, w.Body.String())
+		}
+		if conf.Title != tc.title || conf.OrganizationID == nil || *conf.OrganizationID != tc.org {
+			t.Errorf("%s /conference leaked %q org %v, want %q org %d", tc.host, conf.Title, conf.OrganizationID, tc.title, tc.org)
+		}
+	}
+}
+
+// TestCrossTenantByIDMutationIsolation proves by-id admin mutations cannot reach
+// another tenant's rows: tenant B targeting tenant A's id gets 404 and the row
+// is left untouched.
+func TestCrossTenantByIDMutationIsolation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, f := setupTwoTenants(t, "iso_mut")
+
+	uh := &UserHandler{DB: db}
+	sh := &SectionHandler{DB: db}
+	qh := &QuestionHandler{DB: db}
+
+	r := gin.New()
+	r.Use(tenant.Middleware(db))
+	r.PUT("/users/:id/role", uh.UpdateUserRole)
+	r.DELETE("/users/:id", uh.DeleteUser)
+	r.PUT("/sections/:id", sh.UpdateSection)
+	r.DELETE("/admin/questions/:id", qh.DeleteQuestion)
+
+	idA := func(id uint) string { return "/users/" + uintToStr(id) }
+
+	// beta admin cannot change alpha user's role.
+	w := tenantReq(t, r, http.MethodPut, "beta.platform.ru", idA(f.userA.ID)+"/role", map[string]string{"role": "admin"})
+	if w.Code != http.StatusNotFound {
+		t.Errorf("cross-tenant UpdateUserRole -> %d, want 404 (%s)", w.Code, w.Body.String())
+	}
+	var checkUser models.User
+	if err := db.First(&checkUser, f.userA.ID).Error; err != nil {
+		t.Fatalf("reload userA: %v", err)
+	}
+	if checkUser.Role != models.RoleParticipant {
+		t.Errorf("cross-tenant UpdateUserRole mutated role to %q", checkUser.Role)
+	}
+
+	// beta admin cannot delete alpha user.
+	w = tenantReq(t, r, http.MethodDelete, "beta.platform.ru", idA(f.userA.ID), nil)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("cross-tenant DeleteUser -> %d, want 404 (%s)", w.Code, w.Body.String())
+	}
+	if err := db.First(&models.User{}, f.userA.ID).Error; err != nil {
+		t.Errorf("cross-tenant DeleteUser removed userA: %v", err)
+	}
+
+	// beta admin cannot update alpha section.
+	w = tenantReq(t, r, http.MethodPut, "beta.platform.ru", "/sections/"+uintToStr(f.sectionA.ID),
+		map[string]string{"title": "HACKED", "room": "x"})
+	if w.Code != http.StatusNotFound {
+		t.Errorf("cross-tenant UpdateSection -> %d, want 404 (%s)", w.Code, w.Body.String())
+	}
+	var checkSection models.Section
+	if err := db.First(&checkSection, f.sectionA.ID).Error; err != nil {
+		t.Fatalf("reload sectionA: %v", err)
+	}
+	if checkSection.Title != "Sec A" {
+		t.Errorf("cross-tenant UpdateSection mutated title to %q", checkSection.Title)
+	}
+
+	// beta admin cannot delete alpha question.
+	w = tenantReq(t, r, http.MethodDelete, "beta.platform.ru", "/admin/questions/"+uintToStr(f.questionA.ID), nil)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("cross-tenant DeleteQuestion -> %d, want 404 (%s)", w.Code, w.Body.String())
+	}
+	if err := db.First(&models.Question{}, f.questionA.ID).Error; err != nil {
+		t.Errorf("cross-tenant DeleteQuestion removed questionA: %v", err)
+	}
+
+	// Sanity: the owning tenant CAN mutate its own row (404 is isolation, not a
+	// blanket break).
+	w = tenantReq(t, r, http.MethodPut, "alpha.platform.ru", idA(f.userA.ID)+"/role", map[string]string{"role": "admin"})
+	if w.Code != http.StatusOK {
+		t.Errorf("same-tenant UpdateUserRole -> %d, want 200 (%s)", w.Code, w.Body.String())
+	}
+}
+
+func uintToStr(v uint) string {
+	if v == 0 {
+		return "0"
+	}
+	var buf [20]byte
+	i := len(buf)
+	for v > 0 {
+		i--
+		buf[i] = byte('0' + v%10)
+		v /= 10
+	}
+	return string(buf[i:])
+}
