@@ -19,7 +19,7 @@ type UserHandler struct {
 func (h *UserHandler) Me(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	var user models.User
-	if err := h.DB.Preload("Profile").First(&user, userID).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Preload("Profile").First(&user, userID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
@@ -29,7 +29,7 @@ func (h *UserHandler) Me(c *gin.Context) {
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	var profile models.Profile
-	if err := h.DB.Where("user_id = ?", userID).First(&profile).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Where("user_id = ?", userID).First(&profile).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "profile not found"})
 		return
 	}
@@ -40,7 +40,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	}
 	if payload.SectionID != nil {
 		var section models.Section
-		if err := h.DB.First(&section, *payload.SectionID).Error; err != nil {
+		if err := tenant.DB(c, h.DB).First(&section, *payload.SectionID).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "selected section not found"})
 			return
 		}
@@ -59,7 +59,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 			return
 		}
 		var existing models.Profile
-		if err := h.DB.
+		if err := tenant.DB(c, h.DB).
 			Where("phone = ? AND user_id <> ?", phone, userID).
 			First(&existing).Error; err == nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "phone already in use"})
@@ -72,7 +72,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	} else {
 		profile.Phone = ""
 	}
-	if err := h.DB.Save(&profile).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Save(&profile).Error; err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
 			c.JSON(http.StatusConflict, gin.H{"error": "phone already in use"})
 			return
@@ -90,7 +90,7 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 	userTypeFilter := strings.TrimSpace(c.Query("user_type"))
 	badgeIssuedFilter := strings.TrimSpace(c.Query("badge_issued"))
 
-	tx := h.DB.Model(&models.User{}).
+	tx := tenant.DB(c, h.DB).Model(&models.User{}).
 		Scopes(tenant.ByOrg(c)).
 		Joins("LEFT JOIN profiles ON profiles.user_id = users.id")
 
@@ -149,7 +149,7 @@ func (h *UserHandler) UpdateUserRole(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
-	res := h.DB.Model(&models.User{}).Scopes(tenant.ByOrg(c)).Where("id = ?", id).Update("role", payload.Role)
+	res := tenant.DB(c, h.DB).Model(&models.User{}).Scopes(tenant.ByOrg(c)).Where("id = ?", id).Update("role", payload.Role)
 	if res.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update role"})
 		return
@@ -172,7 +172,7 @@ func (h *UserHandler) SetBadgeIssued(c *gin.Context) {
 	}
 
 	var user models.User
-	if err := h.DB.Scopes(tenant.ByOrg(c)).First(&user, id).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByOrg(c)).First(&user, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
@@ -186,7 +186,7 @@ func (h *UserHandler) SetBadgeIssued(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Scopes(tenant.ByOrg(c)).Model(&models.User{}).Where("id = ?", id).Update("badge_issued", payload.BadgeIssued).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByOrg(c)).Model(&models.User{}).Where("id = ?", id).Update("badge_issued", payload.BadgeIssued).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update badge status"})
 		return
 	}
@@ -201,7 +201,7 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	// org#1), so behaviour is unchanged there; a foreign id yields 404 and the
 	// destructive transaction never runs.
 	var user models.User
-	if err := h.DB.Scopes(tenant.ByOrg(c)).Where("id = ?", id).First(&user).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByOrg(c)).Where("id = ?", id).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
@@ -209,7 +209,7 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
 		return
 	}
-	err := h.DB.Transaction(func(tx *gorm.DB) error {
+	err := tenant.DB(c, h.DB).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("user_id = ?", id).Delete(&models.Profile{}).Error; err != nil {
 			return err
 		}

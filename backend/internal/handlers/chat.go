@@ -112,7 +112,7 @@ func (h *ChatHandler) PostMessage(c *gin.Context) {
 		return
 	}
 
-	channel, section, err := h.resolveRequestedChannel(userID, payload.Scope)
+	channel, section, err := h.resolveRequestedChannel(c, userID, payload.Scope)
 	if err != nil {
 		h.writeScopeError(c, err)
 		return
@@ -139,7 +139,7 @@ func (h *ChatHandler) PostMessage(c *gin.Context) {
 
 	var attachments []models.ChatAttachment
 	var storedKeys []string
-	if err := h.DB.Transaction(func(tx *gorm.DB) error {
+	if err := tenant.DB(c, h.DB).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&msg).Error; err != nil {
 			return err
 		}
@@ -166,7 +166,7 @@ func (h *ChatHandler) PostMessage(c *gin.Context) {
 	}
 
 	msg.Attachments = attachments
-	item, err := h.buildMessageResponse(msg, userID, role)
+	item, err := h.buildMessageResponse(c, msg, userID, role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load message"})
 		return
@@ -176,7 +176,7 @@ func (h *ChatHandler) PostMessage(c *gin.Context) {
 
 func (h *ChatHandler) ListMessages(c *gin.Context) {
 	userID := c.GetUint("user_id")
-	channel, section, err := h.resolveRequestedChannel(userID, c.Query("scope"))
+	channel, section, err := h.resolveRequestedChannel(c, userID, c.Query("scope"))
 	if err != nil {
 		h.writeScopeError(c, err)
 		return
@@ -194,7 +194,7 @@ func (h *ChatHandler) ListMessages(c *gin.Context) {
 		return
 	}
 
-	items, err := h.buildMessageResponses(msgs, userID, h.currentRole(c))
+	items, err := h.buildMessageResponses(c, msgs, userID, h.currentRole(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load message authors"})
 		return
@@ -232,7 +232,7 @@ func (h *ChatHandler) UpdateMessage(c *gin.Context) {
 	}
 
 	var msg models.ChatMessage
-	if err := h.DB.Scopes(tenant.ByConference(c)).First(&msg, uint(messageID)).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).First(&msg, uint(messageID)).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "message not found"})
 			return
@@ -252,12 +252,12 @@ func (h *ChatHandler) UpdateMessage(c *gin.Context) {
 	}
 
 	msg.Content = content
-	if err := h.DB.Save(&msg).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Save(&msg).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update message"})
 		return
 	}
 
-	item, err := h.buildMessageResponse(msg, userID, h.currentRole(c))
+	item, err := h.buildMessageResponse(c, msg, userID, h.currentRole(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load updated message"})
 		return
@@ -275,7 +275,7 @@ func (h *ChatHandler) DeleteMessage(c *gin.Context) {
 	}
 
 	var msg models.ChatMessage
-	if err := h.DB.Scopes(tenant.ByConference(c)).Preload("Attachments").First(&msg, uint(messageID)).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Preload("Attachments").First(&msg, uint(messageID)).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "message not found"})
 			return
@@ -293,7 +293,7 @@ func (h *ChatHandler) DeleteMessage(c *gin.Context) {
 	for _, attachment := range msg.Attachments {
 		objectKeys = append(objectKeys, attachment.ObjectKey)
 	}
-	if err := h.DB.Transaction(func(tx *gorm.DB) error {
+	if err := tenant.DB(c, h.DB).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("message_id = ?", msg.ID).Delete(&models.ChatAttachment{}).Error; err != nil {
 			return err
 		}
@@ -323,7 +323,7 @@ func (h *ChatHandler) DownloadAttachment(c *gin.Context) {
 	// ChatAttachment has no own tenant column — scope via its parent message's
 	// conference_id through a JOIN so a cross-tenant attachment id yields 404.
 	// No-op when no conference is resolved (single-tenant / unit tests).
-	if err := h.DB.
+	if err := tenant.DB(c, h.DB).
 		Scopes(func(db *gorm.DB) *gorm.DB {
 			if cid := tenant.ConfID(c); cid != 0 {
 				return db.
@@ -342,7 +342,7 @@ func (h *ChatHandler) DownloadAttachment(c *gin.Context) {
 		return
 	}
 
-	if err := h.authorizeAttachmentAccess(userID, role, attachment.Message); err != nil {
+	if err := h.authorizeAttachmentAccess(c, userID, role, attachment.Message); err != nil {
 		if errors.Is(err, errUnauthorizedChatAttachment) || errors.Is(err, errUserHasNoSection) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 			return
@@ -376,7 +376,7 @@ func (h *ChatHandler) DownloadAttachment(c *gin.Context) {
 	_, _ = io.Copy(c.Writer, obj.Body)
 }
 
-func (h *ChatHandler) resolveRequestedChannel(userID uint, rawScope string) (models.ChatChannel, *models.Section, error) {
+func (h *ChatHandler) resolveRequestedChannel(c *gin.Context, userID uint, rawScope string) (models.ChatChannel, *models.Section, error) {
 	channel, err := parseChatChannel(rawScope)
 	if err != nil {
 		return "", nil, err
@@ -385,16 +385,16 @@ func (h *ChatHandler) resolveRequestedChannel(userID uint, rawScope string) (mod
 		return channel, nil, nil
 	}
 
-	section, err := h.resolveSectionByUser(userID)
+	section, err := h.resolveSectionByUser(c, userID)
 	if err != nil {
 		return "", nil, err
 	}
 	return channel, section, nil
 }
 
-func (h *ChatHandler) resolveSectionByUser(userID uint) (*models.Section, error) {
+func (h *ChatHandler) resolveSectionByUser(c *gin.Context, userID uint) (*models.Section, error) {
 	var profile models.Profile
-	if err := h.DB.Select("user_id", "section_id").Where("user_id = ?", userID).First(&profile).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Select("user_id", "section_id").Where("user_id = ?", userID).First(&profile).Error; err != nil {
 		return nil, err
 	}
 	if profile.SectionID == nil {
@@ -402,7 +402,7 @@ func (h *ChatHandler) resolveSectionByUser(userID uint) (*models.Section, error)
 	}
 
 	var section models.Section
-	if err := h.DB.Select("id", "title").First(&section, *profile.SectionID).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Select("id", "title").First(&section, *profile.SectionID).Error; err != nil {
 		return nil, err
 	}
 	return &section, nil
@@ -410,7 +410,7 @@ func (h *ChatHandler) resolveSectionByUser(userID uint) (*models.Section, error)
 
 func (h *ChatHandler) buildChannelResponses(c *gin.Context, userID uint) ([]chatChannelResponse, error) {
 	var totalUsers int64
-	if err := h.DB.Scopes(tenant.ByOrg(c)).Model(&models.User{}).Count(&totalUsers).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByOrg(c)).Model(&models.User{}).Count(&totalUsers).Error; err != nil {
 		return nil, err
 	}
 
@@ -419,7 +419,7 @@ func (h *ChatHandler) buildChannelResponses(c *gin.Context, userID uint) ([]chat
 		return nil, err
 	}
 
-	section, sectionErr := h.resolveSectionByUser(userID)
+	section, sectionErr := h.resolveSectionByUser(c, userID)
 	if sectionErr != nil && !errors.Is(sectionErr, errUserHasNoSection) {
 		return nil, sectionErr
 	}
@@ -445,7 +445,7 @@ func (h *ChatHandler) buildChannelResponses(c *gin.Context, userID uint) ([]chat
 
 	if section != nil {
 		var sectionMembers int64
-		if err := h.DB.Model(&models.Profile{}).Where("section_id = ?", section.ID).Count(&sectionMembers).Error; err != nil {
+		if err := tenant.DB(c, h.DB).Model(&models.Profile{}).Where("section_id = ?", section.ID).Count(&sectionMembers).Error; err != nil {
 			return nil, err
 		}
 
@@ -471,7 +471,7 @@ func (h *ChatHandler) buildChannelResponses(c *gin.Context, userID uint) ([]chat
 }
 
 func (h *ChatHandler) loadMessages(c *gin.Context, channel models.ChatChannel, section *models.Section) ([]models.ChatMessage, error) {
-	query := h.DB.Scopes(tenant.ByConference(c)).Model(&models.ChatMessage{}).
+	query := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Model(&models.ChatMessage{}).
 		Preload("Attachments", func(db *gorm.DB) *gorm.DB {
 			return db.Order("id asc")
 		})
@@ -493,7 +493,7 @@ func (h *ChatHandler) loadMessages(c *gin.Context, channel models.ChatChannel, s
 }
 
 func (h *ChatHandler) chatStats(c *gin.Context, channel models.ChatChannel, sectionID *uint) (int64, *time.Time, error) {
-	query := h.DB.Scopes(tenant.ByConference(c)).Model(&models.ChatMessage{}).Where("channel = ?", channel)
+	query := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Model(&models.ChatMessage{}).Where("channel = ?", channel)
 	if channel == models.ChatChannelSection && sectionID != nil {
 		query = query.Where("section_id = ?", *sectionID)
 	}
@@ -515,7 +515,7 @@ func (h *ChatHandler) chatStats(c *gin.Context, channel models.ChatChannel, sect
 	return count, &lastAt, nil
 }
 
-func (h *ChatHandler) buildMessageResponses(msgs []models.ChatMessage, currentUserID uint, role models.Role) ([]chatMessageResponse, error) {
+func (h *ChatHandler) buildMessageResponses(c *gin.Context, msgs []models.ChatMessage, currentUserID uint, role models.Role) ([]chatMessageResponse, error) {
 	if len(msgs) == 0 {
 		return []chatMessageResponse{}, nil
 	}
@@ -531,7 +531,7 @@ func (h *ChatHandler) buildMessageResponses(msgs []models.ChatMessage, currentUs
 	}
 
 	var profiles []models.Profile
-	if err := h.DB.
+	if err := tenant.DB(c, h.DB).
 		Select("user_id", "full_name", "organization", "position").
 		Where("user_id IN ?", userIDs).
 		Find(&profiles).Error; err != nil {
@@ -578,9 +578,9 @@ func (h *ChatHandler) buildMessageResponses(msgs []models.ChatMessage, currentUs
 	return items, nil
 }
 
-func (h *ChatHandler) buildMessageResponse(msg models.ChatMessage, currentUserID uint, role models.Role) (chatMessageResponse, error) {
+func (h *ChatHandler) buildMessageResponse(c *gin.Context, msg models.ChatMessage, currentUserID uint, role models.Role) (chatMessageResponse, error) {
 	var loaded models.ChatMessage
-	if err := h.DB.Preload("Attachments", func(db *gorm.DB) *gorm.DB {
+	if err := tenant.DB(c, h.DB).Preload("Attachments", func(db *gorm.DB) *gorm.DB {
 		return db.Order("id asc")
 	}).First(&loaded, msg.ID).Error; err == nil {
 		msg = loaded
@@ -588,7 +588,7 @@ func (h *ChatHandler) buildMessageResponse(msg models.ChatMessage, currentUserID
 		return chatMessageResponse{}, err
 	}
 
-	items, err := h.buildMessageResponses([]models.ChatMessage{msg}, currentUserID, role)
+	items, err := h.buildMessageResponses(c, []models.ChatMessage{msg}, currentUserID, role)
 	if err != nil {
 		return chatMessageResponse{}, err
 	}
@@ -716,14 +716,14 @@ func (h *ChatHandler) chatAttachmentObjectKey(
 	return fmt.Sprintf("chat/%s/%s", scopeDir, storedName)
 }
 
-func (h *ChatHandler) authorizeAttachmentAccess(userID uint, role models.Role, message models.ChatMessage) error {
+func (h *ChatHandler) authorizeAttachmentAccess(c *gin.Context, userID uint, role models.Role, message models.ChatMessage) error {
 	if message.Channel == models.ChatChannelConference {
 		return nil
 	}
 	if role == models.RoleAdmin || role == models.RoleOrg {
 		return nil
 	}
-	section, err := h.resolveSectionByUser(userID)
+	section, err := h.resolveSectionByUser(c, userID)
 	if err != nil {
 		return err
 	}
