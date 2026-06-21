@@ -78,7 +78,7 @@ func (h *MapRouteHandler) UpsertRoute(c *gin.Context) {
 
 	// Empty points => delete route.
 	if len(payload.Points) == 0 {
-		if err := h.DB.Where("from_key = ? AND to_key = ? AND floor = ?", payload.FromKey, payload.ToKey, payload.Floor).
+		if err := h.DB.Scopes(tenant.ByConference(c)).Where("from_key = ? AND to_key = ? AND floor = ?", payload.FromKey, payload.ToKey, payload.Floor).
 			Delete(&models.MapRoute{}).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete route", "details": err.Error()})
 			return
@@ -94,7 +94,7 @@ func (h *MapRouteHandler) UpsertRoute(c *gin.Context) {
 	}
 
 	var existing models.MapRoute
-	err = h.DB.Where("from_key = ? AND to_key = ? AND floor = ?", payload.FromKey, payload.ToKey, payload.Floor).
+	err = h.DB.Scopes(tenant.ByConference(c)).Where("from_key = ? AND to_key = ? AND floor = ?", payload.FromKey, payload.ToKey, payload.Floor).
 		First(&existing).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

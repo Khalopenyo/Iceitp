@@ -55,8 +55,13 @@ func (h *SectionHandler) UpdateSection(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "title and room are required"})
 		return
 	}
-	if err := h.DB.Model(&models.Section{}).Where("id = ?", id).Updates(payload).Error; err != nil {
+	res := h.DB.Model(&models.Section{}).Scopes(tenant.ByConference(c)).Where("id = ?", id).Omit("ConferenceID").Updates(payload)
+	if res.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update section"})
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "section not found"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -130,16 +135,29 @@ func normalizeSectionTitle(value string) string {
 func (h *SectionHandler) DeleteSection(c *gin.Context) {
 	id := c.Param("id")
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&models.Profile{}).Where("section_id = ?", id).Update("section_id", nil).Error; err != nil {
+		// Profile is parent-scoped (UserID -> User.organization_id) with no
+		// conference_id column, so constrain its detach via the org through a user
+		// subquery; no-op when no scope is resolved (single-tenant / unit tests).
+		profileQ := tx.Model(&models.Profile{}).Where("section_id = ?", id)
+		if s, ok := tenant.FromContext(c); ok && s.OrgID != 0 {
+			profileQ = profileQ.Where(
+				"user_id IN (?)",
+				tx.Model(&models.User{}).Select("id").Where("organization_id = ?", s.OrgID),
+			)
+		}
+		if err := profileQ.Update("section_id", nil).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&models.ProgramAssignment{}).Where("section_id = ?", id).Update("section_id", nil).Error; err != nil {
+		if err := tx.Scopes(tenant.ByConference(c)).Model(&models.ProgramAssignment{}).
+			Where("section_id = ?", id).Update("section_id", nil).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("section_id = ?", id).Delete(&models.ChatMessage{}).Error; err != nil {
+		if err := tx.Scopes(tenant.ByConference(c)).Where("section_id = ?", id).
+			Delete(&models.ChatMessage{}).Error; err != nil {
 			return err
 		}
-		if err := tx.Delete(&models.Section{}, id).Error; err != nil {
+		if err := tx.Scopes(tenant.ByConference(c)).Where("id = ?", id).
+			Delete(&models.Section{}).Error; err != nil {
 			return err
 		}
 		return nil
