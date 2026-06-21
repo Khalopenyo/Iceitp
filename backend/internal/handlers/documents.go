@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/tenant"
 	"errors"
 	"fmt"
 	"image/png"
@@ -192,18 +193,18 @@ func loadDocumentStatus(db *gorm.DB, user models.User, conf models.Conference) (
 	return status, nil
 }
 
-func (h *DocumentHandler) loadDocumentRuntimeContext(userID uint) (*documentRuntimeContext, error) {
+func (h *DocumentHandler) loadDocumentRuntimeContext(c *gin.Context, userID uint) (*documentRuntimeContext, error) {
 	var user models.User
 	if err := h.DB.Preload("Profile").First(&user, userID).Error; err != nil {
 		return nil, err
 	}
 
-	conf, err := h.getConference()
+	conf, err := h.getConference(c)
 	if err != nil {
 		return nil, err
 	}
 
-	status, err := loadDocumentStatus(h.DB, user, *conf)
+	status, err := loadDocumentStatus(h.DB.Scopes(tenant.ByConference(c)), user, *conf)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +221,7 @@ func writeBlockedDocumentError(c *gin.Context, item documentStatusItem) {
 }
 
 func (h *DocumentHandler) DocumentStatus(c *gin.Context) {
-	context, err := h.loadDocumentRuntimeContext(c.GetUint("user_id"))
+	context, err := h.loadDocumentRuntimeContext(c, c.GetUint("user_id"))
 	if err != nil {
 		switch {
 		case errors.Is(err, gorm.ErrRecordNotFound):
@@ -235,7 +236,7 @@ func (h *DocumentHandler) DocumentStatus(c *gin.Context) {
 }
 
 func (h *DocumentHandler) ProgramPDF(c *gin.Context) {
-	context, err := h.loadDocumentRuntimeContext(c.GetUint("user_id"))
+	context, err := h.loadDocumentRuntimeContext(c, c.GetUint("user_id"))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
@@ -263,7 +264,7 @@ func (h *DocumentHandler) ProgramPDF(c *gin.Context) {
 		}
 	}
 
-	view, err := loadProgramPDFView(h.DB, context.User.ID, mode)
+	view, err := loadProgramPDFView(h.DB.Scopes(tenant.ByConference(c)), context.User.ID, mode)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load authoritative program"})
 		return
@@ -339,7 +340,7 @@ func (h *DocumentHandler) ProgramPDF(c *gin.Context) {
 }
 
 func (h *DocumentHandler) CertificatePDF(c *gin.Context) {
-	context, err := h.loadDocumentRuntimeContext(c.GetUint("user_id"))
+	context, err := h.loadDocumentRuntimeContext(c, c.GetUint("user_id"))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
@@ -361,7 +362,7 @@ func (h *DocumentHandler) CertificatePDF(c *gin.Context) {
 
 	talkTitle := context.User.Profile.TalkTitle
 	var sectionTitle string
-	personalView, err := loadProgramPDFView(h.DB, context.User.ID, "personal")
+	personalView, err := loadProgramPDFView(h.DB.Scopes(tenant.ByConference(c)), context.User.ID, "personal")
 	if err == nil && personalView.PersonalEntry != nil {
 		if personalView.PersonalEntry.TalkTitle != "" {
 			talkTitle = personalView.PersonalEntry.TalkTitle
@@ -411,7 +412,7 @@ func (h *DocumentHandler) CertificatePDF(c *gin.Context) {
 }
 
 func (h *DocumentHandler) BadgePDF(c *gin.Context) {
-	context, err := h.loadDocumentRuntimeContext(c.GetUint("user_id"))
+	context, err := h.loadDocumentRuntimeContext(c, c.GetUint("user_id"))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
@@ -440,7 +441,7 @@ func (h *DocumentHandler) AdminBadgePDF(c *gin.Context) {
 		return
 	}
 
-	context, err := h.loadDocumentRuntimeContext(user.ID)
+	context, err := h.loadDocumentRuntimeContext(c, user.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
@@ -508,7 +509,7 @@ func (h *DocumentHandler) writeBadgePDF(c *gin.Context, context *documentRuntime
 }
 
 func (h *DocumentHandler) Proceedings(c *gin.Context) {
-	context, err := h.loadDocumentRuntimeContext(c.GetUint("user_id"))
+	context, err := h.loadDocumentRuntimeContext(c, c.GetUint("user_id"))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
@@ -570,9 +571,9 @@ func (h *DocumentHandler) VerifyCertificate(c *gin.Context) {
 	})
 }
 
-func (h *DocumentHandler) getConference() (*models.Conference, error) {
+func (h *DocumentHandler) getConference(c *gin.Context) (*models.Conference, error) {
 	var conf models.Conference
-	if err := h.DB.Order("id asc").First(&conf).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByOrg(c)).Order("id asc").First(&conf).Error; err != nil {
 		return nil, err
 	}
 	return &conf, nil
@@ -948,6 +949,13 @@ func containsCyrillic(s string) bool {
 	return false
 }
 
+func documentDisposition(c *gin.Context) string {
+	if strings.EqualFold(strings.TrimSpace(c.Query("disposition")), "inline") {
+		return "inline"
+	}
+	return "attachment"
+}
+
 func writePDF(c *gin.Context, pdf *gofpdf.Fpdf, filename string) {
 	var buf bytes.Buffer
 	if err := pdf.Output(&buf); err != nil {
@@ -955,7 +963,7 @@ func writePDF(c *gin.Context, pdf *gofpdf.Fpdf, filename string) {
 		return
 	}
 	c.Header("Content-Type", "application/pdf")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	c.Header("Content-Disposition", fmt.Sprintf("%s; filename=%s", documentDisposition(c), filename))
 	c.Data(http.StatusOK, "application/pdf", buf.Bytes())
 }
 
@@ -966,6 +974,6 @@ func writePDFFile(c *gin.Context, path, filename string) {
 		return
 	}
 	c.Header("Content-Type", "application/pdf")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	c.Header("Content-Disposition", fmt.Sprintf("%s; filename=%s", documentDisposition(c), filename))
 	c.Data(http.StatusOK, "application/pdf", content)
 }
