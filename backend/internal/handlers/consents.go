@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"conferenceplatforma/internal/tenant"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -34,6 +36,13 @@ func (h *ConsentHandler) ListConsents(c *gin.Context) {
 	tx := h.DB.Table("consent_logs").
 		Joins("LEFT JOIN users ON users.id = consent_logs.user_id").
 		Joins("LEFT JOIN profiles ON profiles.user_id = users.id")
+
+	// consent_logs has no own tenant column — scope via the joined user's org.
+	// Gated like ByOrg (no-op without a resolved scope) and table-qualified so it
+	// binds to users.organization_id, not the ambiguous bare column.
+	if s, ok := tenant.FromContext(c); ok && s.OrgID != 0 {
+		tx = tx.Where("users.organization_id = ?", s.OrgID)
+	}
 
 	if searchQuery != "" {
 		pattern := "%" + searchQuery + "%"

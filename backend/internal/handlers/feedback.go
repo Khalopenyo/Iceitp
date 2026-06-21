@@ -68,6 +68,7 @@ func (h *FeedbackHandler) ListFeedback(c *gin.Context) {
 	ratingFilter := parsePositiveInt(c.Query("rating"), 0)
 
 	tx := h.DB.Table("feedbacks").
+		Scopes(tenant.ByConference(c)).
 		Joins("LEFT JOIN users ON users.id = feedbacks.user_id").
 		Joins("LEFT JOIN profiles ON profiles.user_id = users.id")
 
