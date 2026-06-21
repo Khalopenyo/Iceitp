@@ -29,7 +29,7 @@ func (h *SubmissionHandler) ListSubmissions(c *gin.Context) {
 	userID := c.GetUint("user_id")
 
 	var submissions []models.ArticleSubmission
-	if err := h.DB.Where("user_id = ?", userID).Order("created_at desc").Find(&submissions).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByConference(c)).Where("user_id = ?", userID).Order("created_at desc").Find(&submissions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load submissions"})
 		return
 	}
@@ -160,7 +160,7 @@ func (h *SubmissionHandler) loadOwnedSubmission(c *gin.Context) (*models.Article
 	userID := c.GetUint("user_id")
 
 	var submission models.ArticleSubmission
-	if err := h.DB.Where("id = ? AND user_id = ?", uint(id), userID).First(&submission).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByConference(c)).Where("id = ? AND user_id = ?", uint(id), userID).First(&submission).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "submission not found"})
 			return nil, err

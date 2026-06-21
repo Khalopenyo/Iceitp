@@ -27,7 +27,7 @@ type updateConferencePayload struct {
 }
 
 func (h *ConferenceHandler) GetConference(c *gin.Context) {
-	conf, err := h.getOrCreateConference()
+	conf, err := h.getOrCreateConference(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load conference"})
 		return
@@ -36,7 +36,7 @@ func (h *ConferenceHandler) GetConference(c *gin.Context) {
 }
 
 func (h *ConferenceHandler) UpdateConference(c *gin.Context) {
-	conf, err := h.getOrCreateConference()
+	conf, err := h.getOrCreateConference(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load conference"})
 		return
@@ -81,9 +81,9 @@ func (h *ConferenceHandler) UpdateConference(c *gin.Context) {
 	c.JSON(http.StatusOK, conf)
 }
 
-func (h *ConferenceHandler) getOrCreateConference() (*models.Conference, error) {
+func (h *ConferenceHandler) getOrCreateConference(c *gin.Context) (*models.Conference, error) {
 	var conf models.Conference
-	if err := h.DB.Order("id asc").First(&conf).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByOrg(c)).Order("id asc").First(&conf).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
@@ -97,7 +97,7 @@ func (h *ConferenceHandler) getOrCreateConference() (*models.Conference, error) 
 			Status:       models.ConferenceStatusDraft,
 			SupportEmail: "madinaborz@mail.ru",
 		}
-		org := tenant.DefaultOrgID
+		org := tenant.OrgID(c)
 		conf.OrganizationID = &org
 		if err := h.DB.Create(&conf).Error; err != nil {
 			return nil, err
