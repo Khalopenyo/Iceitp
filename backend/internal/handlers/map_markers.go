@@ -55,6 +55,14 @@ func (h *MapMarkerHandler) ReplaceMarkers(c *gin.Context) {
 			payload[i].Color = "primary"
 		}
 	}
+	// A resolved tenant with no active conference must NOT run the bulk replace:
+	// the legacy replace-all path below would wipe every tenant's markers. Reject
+	// it instead of destroying data. (No resolved scope — unit tests / single-tenant
+	// without middleware — still uses the legacy path.)
+	if scope, ok := tenant.FromContext(c); ok && scope.ConfID == 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "no active conference for this organization"})
+		return
+	}
 	var confID *uint
 	if cid := tenant.ConfID(c); cid != 0 {
 		confID = &cid

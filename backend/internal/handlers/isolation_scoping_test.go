@@ -338,6 +338,31 @@ func TestConferenceLessOrgReadsFailClosed(t *testing.T) {
 	}
 }
 
+// TestConferenceLessOrgReplaceMarkers409 proves a conference-less org gets a 409
+// from ReplaceMarkers instead of triggering the legacy global delete that would
+// wipe other tenants' markers.
+func TestConferenceLessOrgReplaceMarkers409(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, f := setupTwoTenants(t, "iso_markers_confless")
+	mustCreateH(t, db, &models.MapMarker{Key: "a", Label: "A", Color: "primary", ConferenceID: &f.confA.ID})
+	mustCreateH(t, db, &models.Organization{Slug: "gamma", DisplayName: "Gamma"})
+
+	r := gin.New()
+	r.Use(tenant.Middleware(db))
+	r.PUT("/markers", (&MapMarkerHandler{DB: db}).ReplaceMarkers)
+
+	w := tenantReq(t, r, http.MethodPut, "gamma.platform.ru", "/markers",
+		[]map[string]any{{"key": "x", "label": "X", "color": "primary"}})
+	if w.Code != http.StatusConflict {
+		t.Fatalf("conf-less ReplaceMarkers -> %d, want 409 (%s)", w.Code, w.Body.String())
+	}
+	var count int64
+	db.Model(&models.MapMarker{}).Count(&count)
+	if count != 1 {
+		t.Errorf("conf-less ReplaceMarkers touched markers: total=%d, want 1 (alpha's untouched)", count)
+	}
+}
+
 func uintToStr(v uint) string {
 	if v == 0 {
 		return "0"
