@@ -167,10 +167,19 @@ func addOrganizationAndScoping(db *gorm.DB) error {
 		return err
 	}
 
+	return linkExistingToDefaultOrg(db)
+}
+
+// linkExistingToDefaultOrg creates organization #1 (derived from the single live
+// conference) and backfills any rows that still have NULL tenant columns. It is
+// idempotent (FirstOrCreate by slug + WHERE ... IS NULL) and safe to run on every
+// boot — used both by the Phase-1 migration and by EnsureFirstRun after seed(),
+// so fresh-install data created by the seeder is linked too. No-op on an empty DB.
+func linkExistingToDefaultOrg(db *gorm.DB) error {
 	var conf models.Conference
 	if err := db.Order("id asc").First(&conf).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil // empty DB: nothing to backfill (EnsureFirstRun/seed bootstraps).
+			return nil
 		}
 		return err
 	}

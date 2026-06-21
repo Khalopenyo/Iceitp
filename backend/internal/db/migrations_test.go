@@ -109,6 +109,46 @@ func TestAddOrganizationAndScoping(t *testing.T) {
 	}
 }
 
+// TestEnsureFirstRunLinksSeedData simulates a fresh install where migrations run
+// on an empty DB (no backfill) and the seeder then creates rows without tenant
+// columns; EnsureFirstRun (post-seed) must link them to organization #1.
+func TestEnsureFirstRunLinksSeedData(t *testing.T) {
+	db := newTestDB(t)
+	if err := RunMigrations(db); err != nil {
+		t.Fatalf("run migrations: %v", err)
+	}
+
+	conf := models.Conference{Title: "Seeded Conf"}
+	mustCreate(t, db, &conf)
+	sec := models.Section{Title: "Секция"}
+	mustCreate(t, db, &sec)
+
+	if err := EnsureFirstRun(db); err != nil {
+		t.Fatalf("EnsureFirstRun: %v", err)
+	}
+
+	var gotConf models.Conference
+	db.First(&gotConf, conf.ID)
+	if gotConf.OrganizationID == nil {
+		t.Errorf("conference not linked to an organization")
+	}
+	var gotSec models.Section
+	db.First(&gotSec, sec.ID)
+	if gotSec.ConferenceID == nil || *gotSec.ConferenceID != conf.ID {
+		t.Errorf("section.conference_id = %v, want %d", gotSec.ConferenceID, conf.ID)
+	}
+
+	// Idempotent: a second run is a no-op and does not duplicate org #1.
+	if err := EnsureFirstRun(db); err != nil {
+		t.Fatalf("EnsureFirstRun second run: %v", err)
+	}
+	var orgs int64
+	db.Model(&models.Organization{}).Count(&orgs)
+	if orgs != 1 {
+		t.Errorf("organization count = %d, want 1", orgs)
+	}
+}
+
 func mustCreate(t *testing.T, db *gorm.DB, v any) {
 	t.Helper()
 	if err := db.Create(v).Error; err != nil {

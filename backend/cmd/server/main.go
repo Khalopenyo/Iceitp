@@ -17,10 +17,12 @@ import (
 func main() {
 	cfg := config.Load()
 	database := db.Connect(cfg.DatabaseURL)
+	seed(database)
+	// After seeding: ensure org #1 exists and link any rows the seeder created
+	// without tenant columns (fresh install). Idempotent / no-op on a live DB.
 	if err := db.EnsureFirstRun(database); err != nil {
 		log.Fatalf("first run: %v", err)
 	}
-	seed(database)
 	store, err := objectstore.NewFilesystemStore(cfg.FileStorageRoot)
 	if err != nil {
 		log.Fatalf("init file storage: %v", err)
