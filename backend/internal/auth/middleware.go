@@ -2,6 +2,7 @@ package auth
 
 import (
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/tenant"
 	"errors"
 	"net/http"
 	"strings"
@@ -31,6 +32,19 @@ func Middleware(secret string) gin.HandlerFunc {
 		}
 		c.Set("user_id", claims.UserID)
 		c.Set("role", claims.Role)
+		c.Set("jwt_org_id", claims.OrganizationID)
+		// Bind the authenticated principal to the resolved tenant: a token minted
+		// for one organization must not operate under a different tenant's
+		// (Host-resolved) scope — otherwise an org-A admin could present their token
+		// to orgB.<domain> and act as org B. Enforced only when a tenant scope was
+		// actually resolved (production: the tenant middleware ran on /api).
+		// Pre-migration tokens with no org claim (OrganizationID == 0) are tolerated.
+		if claims.OrganizationID != 0 {
+			if s, ok := tenant.FromContext(c); ok && s.OrgID != 0 && s.OrgID != claims.OrganizationID {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "token does not belong to this organization"})
+				return
+			}
+		}
 		c.Next()
 	}
 }
