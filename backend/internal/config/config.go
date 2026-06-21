@@ -38,6 +38,12 @@ type Config struct {
 	GreenSMSTelegramCascade string
 	GreenSMSTelegramText    string
 	FileStorageRoot         string
+	// RLSEnforced, when true, wraps each tenant request in a transaction that sets
+	// the app.org_id / app.conf_id session variables so Postgres Row-Level
+	// Security (migration 202606200009) is active. Requires the app to connect as
+	// a non-owner role without BYPASSRLS (docs/rls/provision_app_role.sql). Default
+	// false → the owner connection bypasses RLS and behaviour is unchanged.
+	RLSEnforced bool
 }
 
 const (
@@ -138,6 +144,7 @@ func Load() Config {
 		GreenSMSTelegramCascade: strings.TrimSpace(os.Getenv("GREENSMS_TELEGRAM_CASCADE")),
 		GreenSMSTelegramText:    os.Getenv("GREENSMS_TELEGRAM_CASCADE_TEXT"),
 		FileStorageRoot:         defaultFileStorageRoot(),
+		RLSEnforced:             envBool("RLS_ENFORCED", false),
 	}
 	if cfg.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL is required")
@@ -216,6 +223,18 @@ func loadAppBaseURL() string {
 	parsed.Fragment = ""
 	parsed.Path = strings.TrimSuffix(parsed.Path, "/")
 	return parsed.String()
+}
+
+func envBool(key string, fallback bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
 
 func envInt(key string, fallback int) int {

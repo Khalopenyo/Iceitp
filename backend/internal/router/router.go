@@ -81,6 +81,11 @@ func Setup(db *gorm.DB, cfg config.Config, store objectstore.Store) *gin.Engine 
 	// Phase 2.1: resolve org (single existing org) + active conference into the
 	// request scope. Phase 2.2 replaces org resolution with subdomain/Host lookup.
 	api.Use(tenant.Middleware(db))
+	// Phase 2.5: when RLS_ENFORCED, wrap each request in a transaction that sets
+	// the app.org_id/app.conf_id session variables so Postgres RLS enforces tenant
+	// isolation. No-op (and zero overhead) when the flag is off. Must run after the
+	// scope resolver above.
+	api.Use(tenant.RLSMiddleware(db, cfg.RLSEnforced))
 	api.POST("/auth/register", registrationLimiter.Middleware("auth_register"), authHandler.RequestRegistrationCode)
 	api.POST("/auth/register/request-code", registrationLimiter.Middleware("auth_register_request_code"), authHandler.RequestRegistrationCode)
 	api.POST("/auth/register/verify", verificationLimiter.Middleware("auth_register_verify"), authHandler.VerifyRegistrationCode)
