@@ -62,7 +62,7 @@ type programEntry struct {
 
 func (h *ProgramHandler) ListProgram(c *gin.Context) {
 	var users []models.User
-	if err := h.DB.Preload("Profile").
+	if err := h.DB.Scopes(tenant.ByOrg(c)).Preload("Profile").
 		Where("role = ?", models.RoleParticipant).
 		Order("created_at asc").
 		Find(&users).Error; err != nil {
@@ -82,19 +82,19 @@ func (h *ProgramHandler) ListProgram(c *gin.Context) {
 		userIDs = append(userIDs, user.ID)
 	}
 
-	assignmentsByUser, approvedSectionIDs, roomIDs, err := h.loadAssignmentsByUser(userIDs)
+	assignmentsByUser, approvedSectionIDs, roomIDs, err := h.loadAssignmentsByUser(c, userIDs)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load authoritative program data"})
 		return
 	}
 	sectionIDs = append(sectionIDs, approvedSectionIDs...)
 
-	sectionsByID, err := h.loadSectionsByID(sectionIDs)
+	sectionsByID, err := h.loadSectionsByID(c, sectionIDs)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load sections"})
 		return
 	}
-	roomsByID, err := h.loadRoomsByID(roomIDs)
+	roomsByID, err := h.loadRoomsByID(c, roomIDs)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load rooms"})
 		return
@@ -155,14 +155,14 @@ func (h *ProgramHandler) UpsertProgramAssignment(c *gin.Context) {
 	}
 	if payload.SectionID != nil {
 		var section models.Section
-		if err := h.DB.First(&section, *payload.SectionID).Error; err != nil {
+		if err := h.DB.Scopes(tenant.ByConference(c)).First(&section, *payload.SectionID).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "selected section not found"})
 			return
 		}
 	}
 	if payload.RoomID != nil {
 		var room models.Room
-		if err := h.DB.First(&room, *payload.RoomID).Error; err != nil {
+		if err := h.DB.Scopes(tenant.ByConference(c)).First(&room, *payload.RoomID).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "selected room not found"})
 			return
 		}
@@ -179,7 +179,7 @@ func (h *ProgramHandler) UpsertProgramAssignment(c *gin.Context) {
 	}
 
 	var user models.User
-	if err := h.DB.Preload("Profile").First(&user, uint(userID)).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByOrg(c)).Preload("Profile").First(&user, uint(userID)).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "selected user not found"})
 		return
 	}
@@ -203,7 +203,7 @@ func (h *ProgramHandler) UpsertProgramAssignment(c *gin.Context) {
 	}
 
 	var existing models.ProgramAssignment
-	if err := h.DB.Where("user_id = ?", uint(userID)).First(&existing).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByConference(c)).Where("user_id = ?", uint(userID)).First(&existing).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load existing program assignment"})
 			return
@@ -227,12 +227,12 @@ func (h *ProgramHandler) UpsertProgramAssignment(c *gin.Context) {
 		assignment = existing
 	}
 
-	sectionsByID, err := h.loadSectionsByID(optionalUintSlice(assignment.SectionID))
+	sectionsByID, err := h.loadSectionsByID(c, optionalUintSlice(assignment.SectionID))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load section details"})
 		return
 	}
-	roomsByID, err := h.loadRoomsByID(optionalUintSlice(assignment.RoomID))
+	roomsByID, err := h.loadRoomsByID(c, optionalUintSlice(assignment.RoomID))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load room details"})
 		return
@@ -241,14 +241,14 @@ func (h *ProgramHandler) UpsertProgramAssignment(c *gin.Context) {
 	c.JSON(http.StatusOK, buildProgramAssignmentView(assignment, sectionsByID, roomsByID))
 }
 
-func (h *ProgramHandler) loadAssignmentsByUser(userIDs []uint) (map[uint]models.ProgramAssignment, []uint, []uint, error) {
+func (h *ProgramHandler) loadAssignmentsByUser(c *gin.Context, userIDs []uint) (map[uint]models.ProgramAssignment, []uint, []uint, error) {
 	result := make(map[uint]models.ProgramAssignment, len(userIDs))
 	if len(userIDs) == 0 {
 		return result, nil, nil, nil
 	}
 
 	var assignments []models.ProgramAssignment
-	if err := h.DB.Where("user_id IN ?", userIDs).Order("updated_at desc, id desc").Find(&assignments).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByConference(c)).Where("user_id IN ?", userIDs).Order("updated_at desc, id desc").Find(&assignments).Error; err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -267,7 +267,7 @@ func (h *ProgramHandler) loadAssignmentsByUser(userIDs []uint) (map[uint]models.
 	return result, sectionIDs, roomIDs, nil
 }
 
-func (h *ProgramHandler) loadSectionsByID(sectionIDs []uint) (map[uint]models.Section, error) {
+func (h *ProgramHandler) loadSectionsByID(c *gin.Context, sectionIDs []uint) (map[uint]models.Section, error) {
 	result := make(map[uint]models.Section, len(sectionIDs))
 	uniqueIDs := uniqueUintValues(sectionIDs)
 	if len(uniqueIDs) == 0 {
@@ -275,7 +275,7 @@ func (h *ProgramHandler) loadSectionsByID(sectionIDs []uint) (map[uint]models.Se
 	}
 
 	var sections []models.Section
-	if err := h.DB.Where("id IN ?", uniqueIDs).Find(&sections).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByConference(c)).Where("id IN ?", uniqueIDs).Find(&sections).Error; err != nil {
 		return nil, err
 	}
 	for _, section := range sections {
@@ -284,7 +284,7 @@ func (h *ProgramHandler) loadSectionsByID(sectionIDs []uint) (map[uint]models.Se
 	return result, nil
 }
 
-func (h *ProgramHandler) loadRoomsByID(roomIDs []uint) (map[uint]models.Room, error) {
+func (h *ProgramHandler) loadRoomsByID(c *gin.Context, roomIDs []uint) (map[uint]models.Room, error) {
 	result := make(map[uint]models.Room, len(roomIDs))
 	uniqueIDs := uniqueUintValues(roomIDs)
 	if len(uniqueIDs) == 0 {
@@ -292,7 +292,7 @@ func (h *ProgramHandler) loadRoomsByID(roomIDs []uint) (map[uint]models.Room, er
 	}
 
 	var rooms []models.Room
-	if err := h.DB.Where("id IN ?", uniqueIDs).Find(&rooms).Error; err != nil {
+	if err := h.DB.Scopes(tenant.ByConference(c)).Where("id IN ?", uniqueIDs).Find(&rooms).Error; err != nil {
 		return nil, err
 	}
 	for _, room := range rooms {

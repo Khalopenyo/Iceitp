@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/tenant"
 	"net/http"
 	"time"
 
@@ -122,7 +123,7 @@ func (h *ScheduleHandler) SeedDemo(c *gin.Context) {
 }
 
 func (h *ScheduleHandler) AdminSchedule(c *gin.Context) {
-	entries, err := loadAuthoritativeProgramEntries(h.DB, authoritativeProgramFilter{})
+	entries, err := loadAuthoritativeProgramEntries(h.DB.Scopes(tenant.ByConference(c)), authoritativeProgramFilter{})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load authoritative schedule"})
 		return
@@ -138,13 +139,13 @@ func (h *ScheduleHandler) ParticipantSchedule(c *gin.Context) {
 		return
 	}
 
-	currentView, err := loadParticipantScheduleView(h.DB, user)
+	currentView, err := loadParticipantScheduleView(h.DB.Scopes(tenant.ByConference(c)), user)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load participant schedule"})
 		return
 	}
 
-	entries, err := loadAuthoritativeProgramEntries(h.DB, authoritativeProgramFilter{})
+	entries, err := loadAuthoritativeProgramEntries(h.DB.Scopes(tenant.ByConference(c)), authoritativeProgramFilter{})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load authoritative venue schedule"})
 		return
@@ -166,7 +167,7 @@ func (h *ScheduleHandler) UserSchedule(c *gin.Context) {
 		return
 	}
 
-	scheduleView, err := loadParticipantScheduleView(h.DB, user)
+	scheduleView, err := loadParticipantScheduleView(h.DB.Scopes(tenant.ByConference(c)), user)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load participant schedule"})
 		return
