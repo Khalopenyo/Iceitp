@@ -50,11 +50,13 @@ jobs:
         with:
           go-version: "1.24.x"
           cache-dependency-path: backend/go.sum
-      - name: migration + isolation gate (Postgres)
+      - name: migration + RLS isolation gate (Postgres)
         env:
           TEST_DATABASE_URL: postgres://conf:confpass@localhost:5432/conftest?sslmode=disable
-        # Phase 2: also runs RLS / cross-tenant isolation tests once enforced.
-        run: go test ./internal/db/... -run 'Postgres' -count=1 -v
+        # Runs the Postgres migration gate AND the fail-closed RLS isolation gate
+        # (TestRLSEnforcement) — the regex must match both, else the RLS backstop
+        # has zero CI coverage.
+        run: go test ./internal/db/... -run 'Postgres|RLS' -count=1 -v
 
   frontend:
     name: Frontend (lint · build)
