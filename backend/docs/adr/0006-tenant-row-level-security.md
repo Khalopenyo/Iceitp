@@ -44,25 +44,37 @@ as a defense-in-depth layer beneath the app-layer scoping.
 Enforcement is opt-in via the `RLS_ENFORCED` flag so the policies can ship and be
 verified without risk to the single-tenant deployment:
 
-1. **Off (default):** the app connects as the table owner → RLS bypassed → today's
-   behaviour.
-2. **On:** the app connects as the restricted `conf_app` role (see
-   `docs/rls/provision_app_role.sql`) and wraps each tenant request in a
-   transaction that runs `SELECT set_config('app.org_id'/'app.conf_id', …, true)`
-   (`SET LOCAL`) before any query. Reliable per-request variable binding requires
-   a transaction because of connection pooling — a session-level `SET` would leak
-   across pooled requests.
+The app runs **two connection pools** (`MIGRATION_DATABASE_URL` = owner,
+`DATABASE_URL` = serving). They are the same DSN unless RLS is being rolled out.
+
+1. **Off (default):** `MIGRATION_DATABASE_URL` is unset → both pools resolve to the
+   single owner DSN → RLS bypassed → today's behaviour.
+2. **On:**
+   - `MIGRATION_DATABASE_URL` → the **owner** role: runs migrations + seed +
+     `bootstrap_admin`, resolves the tenant in `tenant.Middleware` (it reads the
+     RLS-protected `conferences` table — must bypass RLS, else `ConfID` would
+     always be 0), and backs `AuthHandler` (global email/phone uniqueness + login
+     span the whole DB and must bypass RLS).
+   - `DATABASE_URL` → the restricted **`conf_app`** role (see
+     `docs/rls/provision_app_role.sql`): serves every tenant-scoped handler. Each
+     request is wrapped in a transaction that runs
+     `SELECT set_config('app.org_id'/'app.conf_id', …, true)` (`SET LOCAL`) before
+     any query; reliable per-request binding needs a transaction because a
+     session-level `SET` would leak across pooled connections.
 
 ## Consequences
 
-- The backstop is proven end-to-end on real Postgres by `TestRLSEnforcement`:
-  connecting as a non-`BYPASSRLS` role, an unscoped query returns zero rows, a
-  scoped query returns only its tenant's rows, and a cross-tenant write is
-  rejected by `WITH CHECK`.
-- Flipping `RLS_ENFORCED` on requires (a) the restricted role provisioned, (b) the
-  app DSN switched to it, and (c) every tenant-scoped query running through the
-  request transaction. Until the request-transaction wiring lands, the flag stays
-  off and RLS is dormant (policies present, owner bypasses).
+- The backstop is proven end-to-end on real Postgres by `TestRLSEnforcement`
+  (conf-scoped fail-closed + `WITH CHECK`) and `TestRLSOrgScopedAndOwnerBypass`
+  (org-scoped `users`: owner sees all → auth works; restricted role fail-closed
+  without `app.org_id`, scoped with it).
+- The two-pool split makes the rollout executable: migrations/seed/auth run on the
+  owner pool, tenant requests on `conf_app`. Flipping `RLS_ENFORCED` on still
+  requires (a) the restricted role provisioned, (b) `DATABASE_URL` pointed at it
+  with `MIGRATION_DATABASE_URL` at the owner, and (c) the remaining tenant-scoped
+  queries (e.g. `documents.go`, public `VerifyCertificate` which must stay on the
+  owner pool) routed correctly. Until then the flag stays off and RLS is dormant
+  (policies present, owner bypasses).
 - Once enforced, every tenant-scoped row **must** carry its `conference_id` /
   `organization_id` (NULL is invisible under the policy) — which the write-path
   stamping (Ф2.2/Ф2.4) and the backfill already guarantee, and which the deferred

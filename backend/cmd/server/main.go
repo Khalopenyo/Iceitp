@@ -16,19 +16,34 @@ import (
 
 func main() {
 	cfg := config.Load()
-	database := db.Connect(cfg.DatabaseURL)
-	seed(database)
+	// Owner connection: owns the tables (bypasses RLS), so migrations + seed run
+	// here. With RLS off this is the same DSN as the app pool below.
+	owner := db.Connect(cfg.MigrationDatabaseURL)
+	seed(owner)
 	// After seeding: ensure org #1 exists and link any rows the seeder created
 	// without tenant columns (fresh install). Idempotent / no-op on a live DB.
-	if err := db.EnsureFirstRun(database); err != nil {
+	if err := db.EnsureFirstRun(owner); err != nil {
 		log.Fatalf("first run: %v", err)
 	}
+
+	// App connection serves tenant requests. Identical to the owner pool unless a
+	// distinct DATABASE_URL is configured (the RLS rollout points it at the
+	// non-owner conf_app role, which is subject to the RLS policies).
+	appDB := owner
+	if cfg.DatabaseURL != cfg.MigrationDatabaseURL {
+		a, err := db.Open(cfg.DatabaseURL)
+		if err != nil {
+			log.Fatalf("connect app database: %v", err)
+		}
+		appDB = a
+	}
+
 	store, err := objectstore.NewFilesystemStore(cfg.FileStorageRoot)
 	if err != nil {
 		log.Fatalf("init file storage: %v", err)
 	}
 
-	r := router.Setup(database, cfg, store)
+	r := router.Setup(appDB, owner, cfg, store)
 	log.Printf("server running on :%s", cfg.Port)
 	if err := r.Run(":" + cfg.Port); err != nil {
 		log.Fatal(err)

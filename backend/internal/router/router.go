@@ -16,7 +16,12 @@ import (
 	"gorm.io/gorm"
 )
 
-func Setup(db *gorm.DB, cfg config.Config, store objectstore.Store) *gin.Engine {
+// Setup wires the routes. appDB serves tenant-scoped requests (the RLS-enforced
+// conf_app pool when RLS_ENFORCED is on); ownerDB is the table-owner pool that
+// bypasses RLS — used to RESOLVE the tenant (reads conferences) and for auth's
+// global-uniqueness queries. With RLS off the two are the same connection.
+func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) *gin.Engine {
+	db := appDB // tenant-scoped handlers serve on the app pool
 	r := gin.Default()
 	corsConfig := cors.Config{
 		AllowOrigins:     cfg.CORSOrigins,
@@ -42,7 +47,9 @@ func Setup(db *gorm.DB, cfg config.Config, store objectstore.Store) *gin.Engine 
 	}
 
 	authHandler := &handlers.AuthHandler{
-		DB:                      db,
+		// Owner pool: auth must read/write users globally (global email/phone
+		// uniqueness, login across the whole DB) — it bypasses RLS by design.
+		DB:                      ownerDB,
 		JWTSecret:               cfg.JWTSecret,
 		AccessTokenTTL:          cfg.AccessTokenTTL,
 		AppBaseURL:              cfg.AppBaseURL,
@@ -80,12 +87,14 @@ func Setup(db *gorm.DB, cfg config.Config, store objectstore.Store) *gin.Engine 
 	api := r.Group("/api")
 	// Phase 2.1: resolve org (single existing org) + active conference into the
 	// request scope. Phase 2.2 replaces org resolution with subdomain/Host lookup.
-	api.Use(tenant.Middleware(db))
-	// Phase 2.5: when RLS_ENFORCED, wrap each request in a transaction that sets
-	// the app.org_id/app.conf_id session variables so Postgres RLS enforces tenant
-	// isolation. No-op (and zero overhead) when the flag is off. Must run after the
-	// scope resolver above.
-	api.Use(tenant.RLSMiddleware(db, cfg.RLSEnforced))
+	// Resolve the tenant on the OWNER pool: it reads the RLS-protected conferences
+	// table and must bypass RLS, otherwise ConfID would always be 0 once enforced.
+	api.Use(tenant.Middleware(ownerDB))
+	// Phase 2.5: when RLS_ENFORCED, wrap each request in a transaction on the APP
+	// pool that sets the app.org_id/app.conf_id session variables so Postgres RLS
+	// enforces tenant isolation. No-op (and zero overhead) when the flag is off.
+	// Must run after the scope resolver above.
+	api.Use(tenant.RLSMiddleware(appDB, cfg.RLSEnforced))
 	api.POST("/auth/register", registrationLimiter.Middleware("auth_register"), authHandler.RequestRegistrationCode)
 	api.POST("/auth/register/request-code", registrationLimiter.Middleware("auth_register_request_code"), authHandler.RequestRegistrationCode)
 	api.POST("/auth/register/verify", verificationLimiter.Middleware("auth_register_verify"), authHandler.VerifyRegistrationCode)

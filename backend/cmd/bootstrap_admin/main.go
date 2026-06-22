@@ -24,7 +24,9 @@ func main() {
 	}
 
 	cfg := config.Load()
-	database := db.Connect(cfg.DatabaseURL)
+	// Use the owner DSN: bootstrap runs migrations and writes a user, which must
+	// bypass RLS (the conf_app role cannot). Falls back to DATABASE_URL when unset.
+	database := db.Connect(cfg.MigrationDatabaseURL)
 
 	if err := bootstrapAdmin(database, strings.TrimSpace(*email), strings.TrimSpace(*password), strings.TrimSpace(*fullName), strings.TrimSpace(*organization)); err != nil {
 		log.Fatal(err)

@@ -11,7 +11,13 @@ import (
 )
 
 type Config struct {
-	DatabaseURL             string
+	DatabaseURL string
+	// MigrationDatabaseURL is the owner DSN used to run migrations + seed and to
+	// serve auth's global-uniqueness queries. It bypasses RLS (table owner). Falls
+	// back to DatabaseURL when unset — so the default single-tenant deployment uses
+	// a single connection unchanged. The RLS rollout points DatabaseURL at the
+	// non-owner conf_app role and MigrationDatabaseURL at the owner.
+	MigrationDatabaseURL    string
 	JWTSecret               string
 	Port                    string
 	AccessTokenTTL          time.Duration
@@ -118,6 +124,7 @@ func Load() Config {
 	}
 	cfg := Config{
 		DatabaseURL:             os.Getenv("DATABASE_URL"),
+		MigrationDatabaseURL:    strings.TrimSpace(os.Getenv("MIGRATION_DATABASE_URL")),
 		JWTSecret:               os.Getenv("JWT_SECRET"),
 		Port:                    os.Getenv("PORT"),
 		AccessTokenTTL:          envDuration("ACCESS_TOKEN_TTL", defaultAccessTokenTTL),
@@ -148,6 +155,9 @@ func Load() Config {
 	}
 	if cfg.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL is required")
+	}
+	if cfg.MigrationDatabaseURL == "" {
+		cfg.MigrationDatabaseURL = cfg.DatabaseURL
 	}
 	if cfg.JWTSecret == "" {
 		log.Fatal("JWT_SECRET is required")

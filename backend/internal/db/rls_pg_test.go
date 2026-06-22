@@ -39,20 +39,7 @@ func TestRLSEnforcement(t *testing.T) {
 		t.Fatalf("migrations: %v", err)
 	}
 
-	// Provision a restricted, non-BYPASSRLS role (idempotent).
-	const appRole = "conf_app_rlstest"
-	const appPass = "rlstest"
-	for _, stmt := range []string{
-		"DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '" + appRole + "') THEN " +
-			"CREATE ROLE " + appRole + " LOGIN PASSWORD '" + appPass + "' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE; END IF; END $$;",
-		"GRANT USAGE ON SCHEMA public TO " + appRole,
-		"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO " + appRole,
-		"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO " + appRole,
-	} {
-		if err := owner.Exec(stmt).Error; err != nil {
-			t.Fatalf("provision role (%s): %v", stmt, err)
-		}
-	}
+	provisionRLSTestRole(t, owner)
 
 	// Seed two tenants as owner (owner bypasses RLS).
 	orgA := models.Organization{Slug: "rls-a", DisplayName: "A"}
@@ -67,7 +54,7 @@ func TestRLSEnforcement(t *testing.T) {
 	mustCreate(t, owner, &models.Section{Title: "Sec B", Room: "R", ConferenceID: &confB.ID})
 
 	// Connect as the restricted role.
-	appDSN, err := withUser(dsn, appRole, appPass)
+	appDSN, err := withUser(dsn, rlsTestRole, rlsTestPass)
 	if err != nil {
 		t.Fatalf("build app dsn: %v", err)
 	}
@@ -116,6 +103,102 @@ func TestRLSEnforcement(t *testing.T) {
 	})
 	if werr == nil {
 		t.Error("WITH CHECK violated: restricted role inserted a section into another tenant's conference")
+	}
+}
+
+const (
+	rlsTestRole = "conf_app_rlstest"
+	rlsTestPass = "rlstest"
+)
+
+// provisionRLSTestRole creates (idempotently) the restricted, non-BYPASSRLS role
+// the RLS gates connect as, and grants it table/sequence access.
+func provisionRLSTestRole(t *testing.T, owner *gorm.DB) {
+	t.Helper()
+	for _, stmt := range []string{
+		"DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '" + rlsTestRole + "') THEN " +
+			"CREATE ROLE " + rlsTestRole + " LOGIN PASSWORD '" + rlsTestPass + "' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE; END IF; END $$;",
+		"GRANT USAGE ON SCHEMA public TO " + rlsTestRole,
+		"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO " + rlsTestRole,
+		"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO " + rlsTestRole,
+	} {
+		if err := owner.Exec(stmt).Error; err != nil {
+			t.Fatalf("provision role (%s): %v", stmt, err)
+		}
+	}
+}
+
+// TestRLSOrgScopedAndOwnerBypass proves the two-pool rollout model:
+//   - the OWNER connection sees every org's users (so auth's global login /
+//     uniqueness queries keep working when the app pool is RLS-restricted);
+//   - the restricted app role is fail-closed on the org-scoped users table with
+//     no app.org_id, and sees only its org's users once app.org_id is set.
+func TestRLSOrgScopedAndOwnerBypass(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("set TEST_DATABASE_URL (clean Postgres) to run the RLS org-scoped gate")
+	}
+	owner, err := gorm.Open(postgres.Open(dsn), &gorm.Config{TranslateError: true})
+	if err != nil {
+		t.Fatalf("open owner: %v", err)
+	}
+	if err := RunMigrations(owner); err != nil {
+		t.Fatalf("migrations: %v", err)
+	}
+	provisionRLSTestRole(t, owner)
+
+	orgA := models.Organization{Slug: "rls-own-a", DisplayName: "OA"}
+	orgB := models.Organization{Slug: "rls-own-b", DisplayName: "OB"}
+	mustCreate(t, owner, &orgA)
+	mustCreate(t, owner, &orgB)
+	mustCreate(t, owner, &models.User{Email: "own-a@x.test", Role: models.RoleParticipant, OrganizationID: &orgA.ID})
+	mustCreate(t, owner, &models.User{Email: "own-b@x.test", Role: models.RoleParticipant, OrganizationID: &orgB.ID})
+
+	emails := []string{"own-a@x.test", "own-b@x.test"}
+
+	// Owner bypasses RLS → sees both users (this is how auth/login works on the
+	// owner pool while the app pool is restricted).
+	var ownerCount int64
+	if err := owner.Model(&models.User{}).Where("email IN ?", emails).Count(&ownerCount).Error; err != nil {
+		t.Fatalf("owner count: %v", err)
+	}
+	if ownerCount != 2 {
+		t.Errorf("owner pool saw %d users, want 2 (auth needs the global view)", ownerCount)
+	}
+
+	appDSN, err := withUser(dsn, rlsTestRole, rlsTestPass)
+	if err != nil {
+		t.Fatalf("app dsn: %v", err)
+	}
+	app, err := gorm.Open(postgres.Open(appDSN), &gorm.Config{TranslateError: true})
+	if err != nil {
+		t.Fatalf("open app role: %v", err)
+	}
+
+	// Fail-closed: no app.org_id set → zero users visible to the restricted role.
+	var appCount int64
+	if err := app.Model(&models.User{}).Where("email IN ?", emails).Count(&appCount).Error; err != nil {
+		t.Fatalf("app count: %v", err)
+	}
+	if appCount != 0 {
+		t.Errorf("app pool saw %d users with no app.org_id, want 0 (fail-closed org RLS)", appCount)
+	}
+
+	// Scoped: app.org_id = orgA → only org A's user.
+	if err := app.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("SELECT set_config('app.org_id', ?, true)", strconv.FormatUint(uint64(orgA.ID), 10)).Error; err != nil {
+			return err
+		}
+		var us []models.User
+		if err := tx.Where("email IN ?", emails).Find(&us).Error; err != nil {
+			return err
+		}
+		if len(us) != 1 || us[0].OrganizationID == nil || *us[0].OrganizationID != orgA.ID {
+			t.Errorf("scoped app read = %d users, want exactly org A's one", len(us))
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("scoped read tx: %v", err)
 	}
 }
 
