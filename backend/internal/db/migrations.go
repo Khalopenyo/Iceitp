@@ -152,11 +152,17 @@ var migrations = []migration{
 		Name:    "tenant_row_level_security",
 		Up:      tenantRowLevelSecurity,
 	},
+	{
+		Version: "202606200010",
+		Name:    "tenant_row_level_security_parent_tables",
+		Up:      tenantRLSParentTables,
+	},
 }
 
 // rlsConfTables are the conference_id-scoped tables; rlsOrgTables the
 // organization_id-scoped ones. Parent-scoped tables (profiles, consent_logs,
-// chat_attachments) need subquery policies and are deferred to a follow-up.
+// chat_attachments) carry no own tenant column and are covered by subquery
+// policies in tenantRLSParentTables (migration 0010).
 var rlsConfTables = []string{
 	"sections", "rooms", "map_markers", "map_routes", "program_assignments",
 	"feedbacks", "chat_messages", "article_submissions", "questions",
@@ -208,6 +214,52 @@ func tenantRowLevelSecurity(db *gorm.DB) error {
 	for _, t := range rlsOrgTables {
 		if err := apply(t, "organization_id", "app.org_id"); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// rlsParentTable describes a tenant table that has no own scoping column and is
+// isolated through its parent (e.g. profiles → users.organization_id).
+type rlsParentTable struct {
+	table       string // the child table
+	parentTable string // the table it joins to
+	fk          string // child column referencing parent.id
+	parentCol   string // parent's tenant column (organization_id / conference_id)
+	setting     string // session variable holding the tenant id
+}
+
+var rlsParentTables = []rlsParentTable{
+	{"profiles", "users", "user_id", "organization_id", "app.org_id"},
+	{"consent_logs", "users", "user_id", "organization_id", "app.org_id"},
+	{"chat_attachments", "chat_messages", "message_id", "conference_id", "app.conf_id"},
+}
+
+// tenantRLSParentTables installs fail-closed RLS on the parent-scoped tables,
+// which carry no own tenant column: the policy admits a row only when its parent
+// row belongs to the request's tenant (EXISTS subquery on the parent's tenant
+// column, keyed on the same session variable as the direct tables). When the
+// variable is unset/empty the predicate is NULL → the EXISTS is false → zero rows
+// (fail-closed). NOT forced, so the owner bypasses; no-op on SQLite.
+func tenantRLSParentTables(db *gorm.DB) error {
+	if db.Dialector.Name() != "postgres" {
+		return nil
+	}
+	for _, p := range rlsParentTables {
+		pred := fmt.Sprintf(
+			"EXISTS (SELECT 1 FROM %s par WHERE par.id = %s.%s "+
+				"AND par.%s = NULLIF(current_setting('%s', true), '')::bigint)",
+			p.parentTable, p.table, p.fk, p.parentCol, p.setting,
+		)
+		stmts := []string{
+			fmt.Sprintf("ALTER TABLE %s ENABLE ROW LEVEL SECURITY", p.table),
+			fmt.Sprintf("DROP POLICY IF EXISTS tenant_isolation ON %s", p.table),
+			fmt.Sprintf("CREATE POLICY tenant_isolation ON %s USING (%s) WITH CHECK (%s)", p.table, pred, pred),
+		}
+		for _, s := range stmts {
+			if err := db.Exec(s).Error; err != nil {
+				return fmt.Errorf("rls parent %s: %w", p.table, err)
+			}
 		}
 	}
 	return nil

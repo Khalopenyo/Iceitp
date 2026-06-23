@@ -34,8 +34,9 @@ as a defense-in-depth layer beneath the app-layer scoping.
   map_markers, map_routes, program_assignments, feedbacks, chat_messages,
   article_submissions, questions, check_ins, certificates`) and the 2
   `organization_id` tables (`users, conferences`). Parent-scoped tables
-  (`profiles`, `consent_logs`, `chat_attachments`) need subquery policies and are
-  a tracked follow-up.
+  (`profiles`, `consent_logs`, `chat_attachments`) carry no own tenant column and
+  are covered by EXISTS-subquery policies on their parent (migration 0010,
+  `tenantRLSParentTables`).
 - **Postgres only.** SQLite (unit tests) has no RLS; the migration is a no-op
   there and tests rely on the app-layer scoping.
 

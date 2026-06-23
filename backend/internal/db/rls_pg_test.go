@@ -202,6 +202,72 @@ func TestRLSOrgScopedAndOwnerBypass(t *testing.T) {
 	}
 }
 
+// TestRLSParentTableScoping proves the parent-scoped tables (no own tenant
+// column) are isolated through their parent: consent_logs is invisible to the
+// restricted role with no app.org_id, and scoped to its org's users once set.
+func TestRLSParentTableScoping(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("set TEST_DATABASE_URL (clean Postgres) to run the RLS parent-table gate")
+	}
+	owner, err := gorm.Open(postgres.Open(dsn), &gorm.Config{TranslateError: true})
+	if err != nil {
+		t.Fatalf("open owner: %v", err)
+	}
+	if err := RunMigrations(owner); err != nil {
+		t.Fatalf("migrations: %v", err)
+	}
+	provisionRLSTestRole(t, owner)
+
+	orgA := models.Organization{Slug: "rls-par-a", DisplayName: "PA"}
+	orgB := models.Organization{Slug: "rls-par-b", DisplayName: "PB"}
+	mustCreate(t, owner, &orgA)
+	mustCreate(t, owner, &orgB)
+	userA := models.User{Email: "par-a@x.test", Role: models.RoleParticipant, OrganizationID: &orgA.ID}
+	userB := models.User{Email: "par-b@x.test", Role: models.RoleParticipant, OrganizationID: &orgB.ID}
+	mustCreate(t, owner, &userA)
+	mustCreate(t, owner, &userB)
+	mustCreate(t, owner, &models.ConsentLog{UserID: userA.ID, ConsentType: "personal_data", ConsentURL: "x", ConsentVersion: "1"})
+	mustCreate(t, owner, &models.ConsentLog{UserID: userB.ID, ConsentType: "personal_data", ConsentURL: "x", ConsentVersion: "1"})
+
+	appDSN, err := withUser(dsn, rlsTestRole, rlsTestPass)
+	if err != nil {
+		t.Fatalf("app dsn: %v", err)
+	}
+	app, err := gorm.Open(postgres.Open(appDSN), &gorm.Config{TranslateError: true})
+	if err != nil {
+		t.Fatalf("open app role: %v", err)
+	}
+
+	ours := []uint{userA.ID, userB.ID}
+
+	// Fail-closed: no app.org_id → no consent_logs visible.
+	var c0 int64
+	if err := app.Table("consent_logs").Where("user_id IN ?", ours).Count(&c0).Error; err != nil {
+		t.Fatalf("app count: %v", err)
+	}
+	if c0 != 0 {
+		t.Errorf("parent table fail-closed: saw %d consent_logs with no app.org_id, want 0", c0)
+	}
+
+	// Scoped: app.org_id = orgA → only org A's user's consent log.
+	if err := app.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("SELECT set_config('app.org_id', ?, true)", strconv.FormatUint(uint64(orgA.ID), 10)).Error; err != nil {
+			return err
+		}
+		var n int64
+		if err := tx.Table("consent_logs").Where("user_id IN ?", ours).Count(&n).Error; err != nil {
+			return err
+		}
+		if n != 1 {
+			t.Errorf("parent table scoped: saw %d consent_logs for org A, want 1", n)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("scoped read tx: %v", err)
+	}
+}
+
 // withUser returns the DSN with its username/password replaced — used to connect
 // as the restricted RLS role against the same database.
 func withUser(dsn, user, pass string) (string, error) {
