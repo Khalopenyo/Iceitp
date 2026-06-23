@@ -380,6 +380,25 @@ func TestCrossTenantAdminBadgePDFIsolation(t *testing.T) {
 	}
 }
 
+// TestCrossTenantProfileSectionScoping proves a participant cannot attach their
+// profile to another conference's section (the section existence check is
+// conference-scoped, holding even with RLS off).
+func TestCrossTenantProfileSectionScoping(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, f := setupTwoTenants(t, "iso_profile")
+
+	r := gin.New()
+	r.Use(tenant.Middleware(db))
+	r.Use(func(c *gin.Context) { c.Set("user_id", f.userB.ID); c.Next() }) // authenticated as org B's user
+	r.PUT("/me/profile", (&UserHandler{DB: db}).UpdateProfile)
+
+	w := tenantReq(t, r, http.MethodPut, "beta.platform.ru", "/me/profile",
+		map[string]any{"full_name": "B", "section_id": f.sectionA.ID})
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("cross-conference section attach -> %d, want 400 (org B user must not pick org A's section) (%s)", w.Code, w.Body.String())
+	}
+}
+
 func uintToStr(v uint) string {
 	if v == 0 {
 		return "0"

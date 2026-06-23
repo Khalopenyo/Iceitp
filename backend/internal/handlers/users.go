@@ -40,7 +40,9 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	}
 	if payload.SectionID != nil {
 		var section models.Section
-		if err := tenant.DB(c, h.DB).First(&section, *payload.SectionID).Error; err != nil {
+		// Scope by conference so a participant cannot attach their profile to
+		// another conference's section (app-layer guard; holds even with RLS off).
+		if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).First(&section, *payload.SectionID).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "selected section not found"})
 			return
 		}
