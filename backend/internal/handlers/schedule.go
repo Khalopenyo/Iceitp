@@ -39,8 +39,13 @@ func (h *ScheduleHandler) SeedDemo(c *gin.Context) {
 		TalkTitle string
 	}
 
+	var confID *uint
+	if cid := tenant.ConfID(c); cid != 0 {
+		confID = &cid
+	}
+
 	var sectionCount int64
-	tenant.DB(c, h.DB).Model(&models.Section{}).Count(&sectionCount)
+	tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Model(&models.Section{}).Count(&sectionCount)
 	if sectionCount == 0 {
 		sections := []models.Section{
 			{Title: "Экономика, право и управление в условиях цифровой трансформации", Description: "Сессия 1 конференции.", Room: "Хайпарк"},
@@ -50,12 +55,13 @@ func (h *ScheduleHandler) SeedDemo(c *gin.Context) {
 			{Title: "Наука зуммеров и альфа (молодые ученые до 35 лет)", Description: "Сессия 5 конференции.", Room: "Хайпарк"},
 		}
 		for _, s := range sections {
+			s.ConferenceID = confID
 			tenant.DB(c, h.DB).Create(&s)
 		}
 	}
 
 	var sections []models.Section
-	tenant.DB(c, h.DB).Order("start_at asc, id asc").Find(&sections)
+	tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Order("start_at asc, id asc").Find(&sections)
 	if len(sections) < 5 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "not enough sections"})
 		return
@@ -113,6 +119,9 @@ func (h *ScheduleHandler) SeedDemo(c *gin.Context) {
 				Phone:        "+7 900 000-00-00",
 				ConsentGiven: true,
 			},
+		}
+		if oid := tenant.OrgID(c); oid != 0 {
+			user.OrganizationID = &oid
 		}
 		if err := tenant.DB(c, h.DB).Create(&user).Error; err == nil {
 			// назначение идёт через выбранную секцию
