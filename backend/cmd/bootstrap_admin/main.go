@@ -49,11 +49,19 @@ func bootstrapAdmin(database *gorm.DB, email, password, fullName, organization s
 		return err
 	}
 
+	// Stamp organization #1 so the admin (and its parent-table rows) are visible
+	// under the org-scoped RLS policies on the app pool.
+	org, err := db.EnsureDefaultOrg(database)
+	if err != nil {
+		return err
+	}
+
 	admin := models.User{
-		Email:        strings.ToLower(email),
-		PasswordHash: string(passwordHash),
-		Role:         models.RoleAdmin,
-		UserType:     models.UserTypeOffline,
+		Email:          strings.ToLower(email),
+		PasswordHash:   string(passwordHash),
+		Role:           models.RoleAdmin,
+		UserType:       models.UserTypeOffline,
+		OrganizationID: &org.ID,
 		Profile: models.Profile{
 			FullName:     fullName,
 			Organization: organization,

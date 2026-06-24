@@ -159,6 +159,14 @@ func Load() Config {
 	if cfg.MigrationDatabaseURL == "" {
 		cfg.MigrationDatabaseURL = cfg.DatabaseURL
 	}
+	// Fail fast on a half-configured RLS rollout rather than silently losing
+	// isolation or fail-closing the whole app.
+	if cfg.RLSEnforced && cfg.MigrationDatabaseURL == cfg.DatabaseURL {
+		log.Fatal("RLS_ENFORCED=true requires a distinct MIGRATION_DATABASE_URL (table owner); DATABASE_URL must point at the non-owner conf_app role, else RLS is bypassed and isolation is silently disabled")
+	}
+	if !cfg.RLSEnforced && cfg.MigrationDatabaseURL != cfg.DatabaseURL {
+		log.Fatal("MIGRATION_DATABASE_URL differs from DATABASE_URL but RLS_ENFORCED is not set; the app pool would be subject to RLS with no session vars and every tenant query would fail closed")
+	}
 	if cfg.JWTSecret == "" {
 		log.Fatal("JWT_SECRET is required")
 	}
