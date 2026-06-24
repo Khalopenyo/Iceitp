@@ -107,7 +107,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
-	passwordHash, normalized, err := h.validateRegistrationRequest(req)
+	passwordHash, normalized, err := h.validateRegistrationRequest(c, req)
 	if err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
@@ -161,7 +161,7 @@ func (h *AuthHandler) RequestRegistrationCode(c *gin.Context) {
 		return
 	}
 
-	passwordHash, normalized, err := h.validateRegistrationRequest(req)
+	passwordHash, normalized, err := h.validateRegistrationRequest(c, req)
 	if err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
@@ -710,7 +710,7 @@ func (h *AuthHandler) logConsent(c *gin.Context, userID uint, consentVersion str
 	_ = h.DB.Create(&consents).Error
 }
 
-func (h *AuthHandler) validateRegistrationRequest(req RegisterRequest) (string, RegisterRequest, error) {
+func (h *AuthHandler) validateRegistrationRequest(c *gin.Context, req RegisterRequest) (string, RegisterRequest, error) {
 	req.Email = normalizeEmail(req.Email)
 	req.FullName = strings.TrimSpace(req.FullName)
 	req.Organization = strings.TrimSpace(req.Organization)
@@ -746,7 +746,10 @@ func (h *AuthHandler) validateRegistrationRequest(req RegisterRequest) (string, 
 		return "", RegisterRequest{}, errors.New("invalid user type")
 	}
 	var section models.Section
-	if err := h.DB.First(&section, *req.SectionID).Error; err != nil {
+	// Scope the section to the resolved conference: a registrant on one tenant's
+	// subdomain must not bind their profile to another tenant's section. (auth runs
+	// on the owner pool which bypasses RLS, so this app-layer scope is the guard.)
+	if err := h.DB.Scopes(tenant.ByConference(c)).First(&section, *req.SectionID).Error; err != nil {
 		return "", RegisterRequest{}, errors.New("selected section not found")
 	}
 	if _, err := h.findUserByEmail(h.DB, req.Email); err == nil {

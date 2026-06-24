@@ -399,6 +399,29 @@ func TestCrossTenantProfileSectionScoping(t *testing.T) {
 	}
 }
 
+// TestCrossTenantRegistrationSectionScoping proves a registrant resolved to one
+// tenant cannot bind their profile to another tenant's section: the section
+// existence check is conference-scoped and rejects a cross-conference section_id
+// before the (intentionally global) email/phone uniqueness checks.
+func TestCrossTenantRegistrationSectionScoping(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, f := setupTwoTenants(t, "iso_reg")
+	h := &AuthHandler{DB: db}
+
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	tenant.SetScope(c, tenant.Scope{OrgID: f.orgB.ID, ConfID: f.confB.ID}) // resolved to org B
+
+	req := RegisterRequest{
+		Email: "newreg@beta.test", Password: "Str0ngPass!", FullName: "X", TalkTitle: "T",
+		ConsentVersion: "1", ConsentPersonalData: true, ConsentPublication: true,
+		Phone: "+79001234567", UserType: models.UserTypeOnline,
+		SectionID: &f.sectionA.ID, // org A's section
+	}
+	if _, _, err := h.validateRegistrationRequest(c, req); err == nil || err.Error() != "selected section not found" {
+		t.Errorf("cross-tenant section at registration -> err=%v, want 'selected section not found'", err)
+	}
+}
+
 func uintToStr(v uint) string {
 	if v == 0 {
 		return "0"
