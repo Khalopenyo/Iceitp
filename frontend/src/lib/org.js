@@ -40,22 +40,23 @@ function shade(rgb, amount) {
   return { r: rgb.r * (1 - amount), g: rgb.g * (1 - amount), b: rgb.b * (1 - amount) };
 }
 
-// applyBranding derives a tint/shade scale from the tenant's primary_color and
-// sets the --primary* CSS variables, overriding the academic-blue defaults. A
-// missing/invalid color is a no-op (keeps the defaults).
+// applyBranding derives the brand blue scale (--bl-*) from the tenant's
+// primary_color and sets it on :root. Everything else — --brand, --link, the
+// legacy --primary*/--red aliases — follows via the var() chains in index.css. A
+// missing/invalid color is a no-op (keeps the academic-blue defaults).
 export function applyBranding(branding) {
   const rgb = parseHex(branding?.primary_color);
   if (!rgb) return;
-  const base = toHex(rgb);
-  const dark = toHex(shade(rgb, 0.2));
   const root = document.documentElement.style;
-  root.setProperty("--primary", base);
-  root.setProperty("--primary-dark", dark);
-  root.setProperty("--primary-50", toHex(tint(rgb, 0.93)));
-  root.setProperty("--primary-100", toHex(tint(rgb, 0.85)));
-  root.setProperty("--primary-200", toHex(tint(rgb, 0.68)));
-  root.setProperty("--primary-300", toHex(tint(rgb, 0.48)));
-  // Back-compat: legacy CSS still references --red / --red-dark as the accent.
-  root.setProperty("--red", base);
-  root.setProperty("--red-dark", dark);
+  root.setProperty("--bl-50", toHex(tint(rgb, 0.93)));
+  root.setProperty("--bl-100", toHex(tint(rgb, 0.85)));
+  root.setProperty("--bl-200", toHex(tint(rgb, 0.68)));
+  root.setProperty("--bl-300", toHex(tint(rgb, 0.48)));
+  root.setProperty("--bl-400", toHex(tint(rgb, 0.28)));
+  root.setProperty("--bl-500", toHex(tint(rgb, 0.12)));
+  root.setProperty("--bl-600", toHex(rgb));
+  root.setProperty("--bl-700", toHex(shade(rgb, 0.2)));
+  root.setProperty("--bl-800", toHex(shade(rgb, 0.4)));
+  root.setProperty("--bl-900", toHex(shade(rgb, 0.55)));
+  root.setProperty("--focus", `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)`);
 }

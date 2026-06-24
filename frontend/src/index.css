@@ -1,20 +1,83 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;600;700&display=swap");
 
 :root {
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   color: #1c1c1c;
   background-color: #f7f7f7;
-  /* Academic blue — the default tenant palette. A tenant's primary_color
-     overrides these at runtime via lib/org.js applyBranding(). */
-  --primary: #1e4e99;
-  --primary-dark: #163a73;
-  --primary-50: #eef3fb;
-  --primary-100: #d9e4f5;
-  --primary-200: #b3c8ea;
-  --primary-300: #7fa0d6;
-  /* Legacy accent vars kept as aliases so existing CSS renders academic blue. */
-  --red: var(--primary);
-  --red-dark: var(--primary-dark);
+
+  /* ===== Design system tokens (Визуальный-гайд, академический синий) =====
+     The multi-tenant rebuild styles against these. A tenant's primary_color
+     overrides --brand and the --bl-* scale at runtime via lib/org.js. */
+  --font: "Inter", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  /* Brand blue scale */
+  --bl-50: #eef4fc;
+  --bl-100: #d6e6f8;
+  --bl-200: #aeccf0;
+  --bl-300: #7face4;
+  --bl-400: #4d85d2;
+  --bl-500: #2a66bc;
+  --bl-600: #1e4e99;
+  --bl-700: #183e78;
+  --bl-800: #142f5a;
+  --bl-900: #0f2342;
+  /* Neutrals */
+  --n-0: #ffffff;
+  --n-25: #fafbfc;
+  --n-50: #f4f6f9;
+  --n-100: #eaeef3;
+  --n-200: #dbe1e8;
+  --n-300: #c3cad4;
+  --n-400: #959eab;
+  --n-500: #69727f;
+  --n-600: #4a5260;
+  --n-700: #343c49;
+  --n-800: #1f2632;
+  --n-900: #121722;
+  /* Semantic */
+  --gr-50: #e9f6ee;
+  --gr-500: #1f8a4c;
+  --gr-700: #156236;
+  --am-50: #fbf2e0;
+  --am-500: #b5791c;
+  --am-700: #8a5a12;
+  --rd-50: #fbebe8;
+  --rd-500: #c5402f;
+  --rd-700: #9a2c20;
+  /* Roles */
+  --bg: var(--n-25);
+  --surface: #fff;
+  --surface-2: var(--n-50);
+  --border: var(--n-200);
+  --border-strong: var(--n-300);
+  --text: var(--n-800);
+  --text-2: var(--n-500);
+  --text-3: var(--n-400);
+  --brand: var(--bl-600);
+  --brand-700: var(--bl-700);
+  --brand-weak: var(--bl-50);
+  --brand-weak-2: var(--bl-100);
+  --on-brand: #fff;
+  --link: var(--bl-600);
+  --focus: rgba(30, 78, 153, 0.3);
+  /* Radii & shadows */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-pill: 999px;
+  --sh-1: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --sh-2: 0 2px 8px rgba(16, 24, 40, 0.08);
+  --sh-3: 0 10px 28px rgba(16, 24, 40, 0.12);
+
+  /* ===== Legacy single-tenant vars (kept until each screen is rebuilt) ===== */
+  --primary: var(--brand);
+  --primary-dark: var(--brand-700);
+  --primary-50: var(--bl-50);
+  --primary-100: var(--bl-100);
+  --primary-200: var(--bl-200);
+  --primary-300: var(--bl-300);
+  --red: var(--brand);
+  --red-dark: var(--brand-700);
   --white: #ffffff;
   --gray: #f3f3f3;
   --shadow: 0 18px 45px rgba(0, 0, 0, 0.08);
