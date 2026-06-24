@@ -39,6 +39,14 @@ func (h *ScheduleHandler) SeedDemo(c *gin.Context) {
 		TalkTitle string
 	}
 
+	// A resolved tenant with no active conference cannot be seeded — the inserts
+	// below would be rejected (NOT NULL / RLS WITH CHECK). Reject cleanly, mirroring
+	// ReplaceMarkers. (No resolved scope — single-tenant / unit tests — proceeds.)
+	if scope, ok := tenant.FromContext(c); ok && scope.ConfID == 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "no active conference for this organization"})
+		return
+	}
+
 	var confID *uint
 	if cid := tenant.ConfID(c); cid != 0 {
 		confID = &cid

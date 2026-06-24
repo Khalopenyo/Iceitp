@@ -422,6 +422,23 @@ func TestCrossTenantRegistrationSectionScoping(t *testing.T) {
 	}
 }
 
+// TestConferenceLessOrgSeedDemo409 proves SeedDemo rejects a conference-less org
+// with 409 instead of attempting doomed NULL-conference_id inserts.
+func TestConferenceLessOrgSeedDemo409(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, _ := setupTwoTenants(t, "iso_seeddemo")
+	mustCreateH(t, db, &models.Organization{Slug: "gamma", DisplayName: "Gamma"})
+
+	r := gin.New()
+	r.Use(tenant.Middleware(db))
+	r.POST("/seed-demo", (&ScheduleHandler{DB: db}).SeedDemo)
+
+	w := tenantReq(t, r, http.MethodPost, "gamma.platform.ru", "/seed-demo", nil)
+	if w.Code != http.StatusConflict {
+		t.Errorf("conf-less SeedDemo -> %d, want 409 (%s)", w.Code, w.Body.String())
+	}
+}
+
 func uintToStr(v uint) string {
 	if v == 0 {
 		return "0"
