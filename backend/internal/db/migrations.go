@@ -157,6 +157,48 @@ var migrations = []migration{
 		Name:    "tenant_row_level_security_parent_tables",
 		Up:      tenantRLSParentTables,
 	},
+	{
+		Version: "202606200011",
+		Name:    "tenant_conference_id_not_null",
+		Up:      tenantConferenceIDNotNull,
+	},
+}
+
+// tenantConferenceIDNotNull flips the per-event conference_id columns (and
+// conferences.organization_id) to NOT NULL — the structural guarantee behind the
+// tenant scoping. It backfills any straggler NULLs first (idempotent; no-op on a
+// fresh/empty DB, where the seeder runs AFTER migrations and stamps every row).
+//
+// Postgres-only (the ALTER). No-op on SQLite, whose AutoMigrate'd schema keeps
+// the columns nullable so handler unit tests — which create rows with no resolved
+// conference — keep working.
+//
+// users.organization_id is intentionally NOT flipped: bootstrap_admin and the
+// future per-tenant membership model may create a user before an org is bound.
+func tenantConferenceIDNotNull(db *gorm.DB) error {
+	if db.Dialector.Name() != "postgres" {
+		return nil
+	}
+	if err := linkExistingToDefaultOrg(db); err != nil {
+		return err
+	}
+	alters := []string{
+		"ALTER TABLE sections ALTER COLUMN conference_id SET NOT NULL",
+		"ALTER TABLE rooms ALTER COLUMN conference_id SET NOT NULL",
+		"ALTER TABLE map_markers ALTER COLUMN conference_id SET NOT NULL",
+		"ALTER TABLE map_routes ALTER COLUMN conference_id SET NOT NULL",
+		"ALTER TABLE program_assignments ALTER COLUMN conference_id SET NOT NULL",
+		"ALTER TABLE feedbacks ALTER COLUMN conference_id SET NOT NULL",
+		"ALTER TABLE chat_messages ALTER COLUMN conference_id SET NOT NULL",
+		"ALTER TABLE article_submissions ALTER COLUMN conference_id SET NOT NULL",
+		"ALTER TABLE conferences ALTER COLUMN organization_id SET NOT NULL",
+	}
+	for _, s := range alters {
+		if err := db.Exec(s).Error; err != nil {
+			return fmt.Errorf("not null flip: %w", err)
+		}
+	}
+	return nil
 }
 
 // rlsConfTables are the conference_id-scoped tables; rlsOrgTables the

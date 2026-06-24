@@ -50,13 +50,14 @@ jobs:
         with:
           go-version: "1.24.x"
           cache-dependency-path: backend/go.sum
-      - name: migration + RLS isolation gate (Postgres)
+      - name: migration + RLS isolation + fresh-install gate (Postgres)
         env:
           TEST_DATABASE_URL: postgres://conf:confpass@localhost:5432/conftest?sslmode=disable
-        # Runs the Postgres migration gate AND the fail-closed RLS isolation gate
-        # (TestRLSEnforcement) — the regex must match both, else the RLS backstop
-        # has zero CI coverage.
-        run: go test ./internal/db/... -run 'Postgres|RLS' -count=1 -v
+        # Runs, against real Postgres: the migration gate (incl. the NOT NULL flip),
+        # the fail-closed RLS gates (TestRLS*), and the fresh-install bootstrap gate
+        # (TestFreshInstall — proves the seeder stamps every tenant column so the
+        # NOT NULL constraint holds on a clean DB).
+        run: go test ./internal/db/... ./cmd/server/... -run 'Postgres|RLS|FreshInstall' -count=1 -v
 
   frontend:
     name: Frontend (lint · build)
