@@ -9,13 +9,23 @@ import {
   getConferenceSupportEmail,
   getConferenceTitle,
 } from "../lib/conference.js";
+import { fetchBranding } from "../lib/org.js";
 
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [user, setUserState] = useState(getUser());
   const [conference, setConference] = useState(null);
+  const [branding, setBranding] = useState(null);
   const [navOpen, setNavOpen] = useState(false);
+
+  useEffect(() => {
+    // Per-tenant header branding (logo/name). Async setState (not synchronous in
+    // the effect body), so it does not trip the set-state-in-effect rule.
+    fetchBranding().then((value) => {
+      if (value) setBranding(value);
+    });
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -186,8 +196,11 @@ export default function Layout() {
             setNavOpen(false);
           }}
         >
-          <div className="logo" aria-label="Логотип ИЦЭиТП">
-            <img src="/LOGO1.svg" alt="Логотип ИЦЭиТП" />
+          <div className="logo" aria-label={`Логотип ${branding?.display_name || "ИЦЭиТП"}`}>
+            <img
+              src={branding?.logo_url || "/LOGO1.svg"}
+              alt={`Логотип ${branding?.display_name || "ИЦЭиТП"}`}
+            />
           </div>
           <div className="brand-copy">
             <div className="title">{conferenceTitle}</div>
