@@ -1,0 +1,144 @@
+/* ===== Public landing (SCR-PUB-01) — multi-tenant rebuild on the design tokens ===== */
+.pub-landing {
+  background: var(--bg);
+  font-family: var(--font);
+}
+
+.pub-hero {
+  background: linear-gradient(180deg, var(--brand-weak) 0%, var(--surface) 100%);
+  padding-block: 64px 48px;
+  border-bottom: 1px solid var(--border);
+}
+.pub-hero-inner {
+  max-width: 840px;
+}
+.pub-kicker {
+  color: var(--brand-700);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin: 0 0 12px;
+}
+.pub-hero-title {
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.12;
+  color: var(--text);
+  margin: 0 0 16px;
+  font-weight: 700;
+}
+.pub-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  color: var(--text-2);
+  font-size: 15px;
+  margin: 0 0 18px;
+}
+.pub-hero-meta strong {
+  color: var(--text);
+}
+.pub-hero-desc {
+  color: var(--text-2);
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0 0 24px;
+}
+.pub-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pub-section-head {
+  margin: 0 0 18px;
+}
+.pub-section-head h2 {
+  font-size: 24px;
+  color: var(--text);
+  margin: 10px 0 0;
+  font-weight: 700;
+}
+
+.pub-block {
+  padding-block: 36px;
+  border-bottom: 1px solid var(--border);
+}
+.pub-block-title {
+  font-size: 24px;
+  color: var(--text);
+  margin: 0 0 14px;
+  font-weight: 700;
+}
+.pub-block-body p {
+  color: var(--text-2);
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0 0 12px;
+}
+
+.pub-features {
+  padding-block: 44px;
+  border-bottom: 1px solid var(--border);
+}
+.pub-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+.pub-feature-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pub-feature-code {
+  color: var(--brand);
+  font-weight: 700;
+  font-size: 14px;
+}
+.pub-feature-card h3 {
+  font-size: 16px;
+  color: var(--text);
+  margin: 0;
+  font-weight: 600;
+}
+.pub-feature-card p {
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.pub-register {
+  padding-block: 48px;
+}
+.pub-register h2 {
+  font-size: 24px;
+  margin: 10px 0 8px;
+  color: var(--text);
+  font-weight: 700;
+}
+.pub-register-copy {
+  color: var(--text-2);
+  max-width: 640px;
+  margin: 0 0 18px;
+  line-height: 1.6;
+}
+.pub-consent {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--text-2);
+  max-width: 640px;
+}
+.pub-consent input {
+  margin-top: 3px;
+}
+.pub-form-error {
+  color: var(--rd-700);
+  font-size: 14px;
+  margin-top: 8px;
+}

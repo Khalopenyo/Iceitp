@@ -1,59 +1,24 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { isAuthenticated } from "../lib/auth.js";
 import {
   formatConferenceDateRange,
   getConferenceDescription,
   getConferenceStatusLabel,
-  getConferenceSupportEmail,
   getConferenceTitle,
 } from "../lib/conference.js";
+import { fetchContentBlocks } from "../lib/content.js";
+import { Container, Button, Badge } from "../components/ui/index.jsx";
+import { buttonClassName } from "../components/ui/buttonClass.js";
+import "./landing.css";
 
-const organizerCards = [
-  {
-    id: "university",
-    label: "О вузе",
-    title: "ГГНТУ",
-    text:
-      "Грозненский государственный нефтяной технический университет имени академика М.Д. Миллионщикова выступает основной площадкой конференции и отвечает за очную программу, секции и организационный контур мероприятия.",
-  },
-  {
-    id: "iceitp",
-    label: "Об ИЦЭиТП",
-    title: "Институт цифровой экономики и технологического предпринимательства",
-    text:
-      "ИЦЭиТП координирует цифровую повестку конференции, работу с участниками, сбор материалов, сопровождение публикаций и единый пользовательский путь от регистрации до итоговых документов.",
-  },
-];
-
+// Generic, product-level features (the same for every tenant — describe the
+// platform, not a specific university). Tenant-specific content lives in CMS blocks.
 const platformFeatures = [
-  {
-    code: "01",
-    title: "Выбор секций",
-    text: "Подача заявки с выбором подходящей секции и темы доклада внутри единой формы регистрации.",
-  },
-  {
-    code: "02",
-    title: "Бейджи и сертификаты",
-    text: "Персональные документы участника формируются автоматически и доступны в личном кабинете.",
-  },
-  {
-    code: "03",
-    title: "Чат участников",
-    text: "Общение, вопросы и обмен файлами внутри платформы без перехода в сторонние сервисы.",
-  },
-  {
-    code: "04",
-    title: "Электронный сборник",
-    text: "После завершения конференции участник получает доступ к итоговым материалам и публикациям.",
-  },
-];
-
-const conferenceHighlights = [
-  "Офлайн и онлайн-формат",
-  "5 тематических секций",
-  "РИНЦ / eLIBRARY",
-  "Лучшие статьи для ВАК (К-3)",
+  { code: "01", title: "Выбор секций", text: "Подача заявки с выбором секции и темы доклада в единой форме регистрации." },
+  { code: "02", title: "Бейджи и сертификаты", text: "Персональные документы участника формируются автоматически в личном кабинете." },
+  { code: "03", title: "Чат участников", text: "Общение, вопросы и обмен файлами внутри платформы без сторонних сервисов." },
+  { code: "04", title: "Электронный сборник", text: "После конференции участник получает доступ к итоговым материалам и публикациям." },
 ];
 
 export default function Welcome() {
@@ -63,10 +28,14 @@ export default function Welcome() {
   const isAuthorized = isAuthenticated();
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [consentError, setConsentError] = useState("");
+  const [blocks, setBlocks] = useState([]);
+
+  useEffect(() => {
+    fetchContentBlocks().then((list) => setBlocks(list));
+  }, []);
 
   const conferenceTitle = getConferenceTitle(conference);
   const conferenceDescription = getConferenceDescription(conference);
-  const conferenceSupportEmail = outletContext.conferenceSupportEmail || getConferenceSupportEmail(conference);
   const conferenceDateLabel =
     outletContext.conferenceDateLabel || formatConferenceDateRange(conference?.starts_at, conference?.ends_at);
   const conferenceStatusLabel =
@@ -77,154 +46,111 @@ export default function Welcome() {
       setConsentError("Сначала подтвердите согласие на обработку и размещение персональных данных.");
       return;
     }
-
     setConsentError("");
     navigate(`/register?mode=${mode}`);
   };
 
   return (
-    <div className="landing-v2">
-      <section className="landing-v2-hero">
-        <div className="landing-v2-hero-copy">
-          <p className="landing-v2-kicker">Всероссийская научно-практическая конференция с международным участием</p>
-          <h1>{conferenceTitle}</h1>
-          <p className="landing-v2-meta">
-            <strong>{conferenceDateLabel || "24-25 апреля 2026"}</strong>
-            <span>Онлайн и оффлайн участие</span>
-            {conferenceStatusLabel ? <span>{conferenceStatusLabel}</span> : null}
+    <div className="pub-landing">
+      <section className="pub-hero">
+        <Container className="pub-hero-inner">
+          <p className="pub-kicker">Научно-практическая конференция</p>
+          <h1 className="pub-hero-title">{conferenceTitle}</h1>
+          <p className="pub-hero-meta">
+            {conferenceDateLabel ? <strong>{conferenceDateLabel}</strong> : null}
+            <span>Онлайн и офлайн участие</span>
+            {conferenceStatusLabel ? <Badge variant="brand">{conferenceStatusLabel}</Badge> : null}
           </p>
-          <p className="landing-v2-description">{conferenceDescription}</p>
-          <div className="landing-v2-highlight-list">
-            {conferenceHighlights.map((item) => (
-              <span key={item}>{item}</span>
-            ))}
-          </div>
-          <div className="landing-v2-hero-actions">
+          {conferenceDescription ? <p className="pub-hero-desc">{conferenceDescription}</p> : null}
+          <div className="pub-hero-actions">
             {isAuthorized ? (
-              <Link className="btn btn-primary" to="/dashboard">
-                Открыть личный кабинет
+              <Link className={buttonClassName("primary")} to="/dashboard">
+                Личный кабинет
               </Link>
             ) : (
               <>
-                <button type="button" className="btn btn-primary" onClick={() => startRegistration("offline")}>
-                  Подать заявку
-                </button>
-                <Link className="btn btn-ghost" to="/login">
+                <Button onClick={() => startRegistration("offline")}>Регистрация</Button>
+                <Link className={buttonClassName("ghost")} to="/login">
                   Войти
                 </Link>
               </>
             )}
           </div>
-        </div>
-
-        <aside className="landing-v2-hero-panel" aria-label="Краткая информация о мероприятии">
-          <div className="landing-v2-panel-card">
-            <span>Формат участия</span>
-            <strong>Онлайн / Оффлайн</strong>
-            <p>Участник сам выбирает удобный формат при регистрации, а программа и документы формируются автоматически.</p>
-          </div>
-          <div className="landing-v2-panel-card">
-            <span>Что получает участник</span>
-            <strong>Программу, бейдж, сертификат, сборник</strong>
-            <p>Все основные действия и материалы доступны в личном кабинете без разрозненных каналов связи.</p>
-          </div>
-        </aside>
+        </Container>
       </section>
 
-      <section id="conference" className="landing-v2-section">
-        <div className="landing-v2-section-head">
-          <span className="badge">О конференции</span>
-          <h2>Знакомство с мероприятием до регистрации</h2>
-        </div>
-        <div className="landing-v2-conference-text">
-          <p>{conferenceDescription}</p>
-          <p>
-            Платформа ведет участника по полному маршруту: регистрация, выбор формата участия, секция и тема доклада,
-            доступ к программе, документам, чату, обратной связи и итоговому сборнику материалов.
-          </p>
-        </div>
-      </section>
-
-      <section className="landing-v2-section">
-        <div className="landing-v2-section-head">
-          <span className="badge">Организаторы</span>
-          <h2>Кто проводит конференцию</h2>
-        </div>
-        <div className="landing-v2-organizer-grid">
-          {organizerCards.map((card) => (
-            <article key={card.id} id={card.id} className="landing-v2-organizer-card">
-              <div className="landing-v2-organizer-mark">{card.label}</div>
-              <h3>{card.title}</h3>
-              <p>{card.text}</p>
-            </article>
+      {blocks.length > 0 ? (
+        <Container>
+          {blocks.map((block) => (
+            <section key={block.id} id={block.kind} className="pub-block">
+              {block.title ? <h2 className="pub-block-title">{block.title}</h2> : null}
+              {block.body ? (
+                <div className="pub-block-body">
+                  {block.body
+                    .split("\n")
+                    .map((line) => line.trim())
+                    .filter(Boolean)
+                    .map((paragraph, index) => (
+                      <p key={index}>{paragraph}</p>
+                    ))}
+                </div>
+              ) : null}
+            </section>
           ))}
-        </div>
-      </section>
+        </Container>
+      ) : null}
 
-      <section className="landing-v2-section">
-        <div className="landing-v2-section-head">
-          <span className="badge">Возможности платформы</span>
-          <h2>Что ждет участника внутри личного кабинета</h2>
-        </div>
-        <div className="landing-v2-feature-grid">
-          {platformFeatures.map((feature) => (
-            <article key={feature.code} className="landing-v2-feature-card">
-              <span className="landing-v2-feature-code">{feature.code}</span>
-              <h3>{feature.title}</h3>
-              <p>{feature.text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="landing-v2-section landing-v2-register" aria-labelledby="landing-register-title">
-        <div className="landing-v2-section-head">
-          <span className="badge">Регистрация</span>
-          <h2 id="landing-register-title">Старт регистрации без лишних шагов</h2>
-        </div>
-        <p className="landing-v2-register-copy">
-          Выберите формат участия, подтвердите согласие на обработку и размещение персональных данных и перейдите к полной
-          регистрационной форме.
-        </p>
-
-        {isAuthorized ? (
-          <div className="landing-v2-register-actions">
-            <Link className="btn btn-primary" to="/dashboard">
-              Перейти в личный кабинет
-            </Link>
+      <section className="pub-features">
+        <Container>
+          <div className="pub-section-head">
+            <Badge variant="brand">Возможности платформы</Badge>
+            <h2>Что ждёт участника в личном кабинете</h2>
           </div>
-        ) : (
-          <>
-            <div className="landing-v2-register-actions">
-              <button type="button" className="btn btn-primary" onClick={() => startRegistration("offline")}>
-                Оффлайн-участник
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={() => startRegistration("online")}>
+          <div className="pub-feature-grid">
+            {platformFeatures.map((feature) => (
+              <article key={feature.code} className="pub-feature-card">
+                <span className="pub-feature-code">{feature.code}</span>
+                <h3>{feature.title}</h3>
+                <p>{feature.text}</p>
+              </article>
+            ))}
+          </div>
+        </Container>
+      </section>
+
+      {!isAuthorized ? (
+        <section className="pub-register">
+          <Container>
+            <Badge variant="brand">Регистрация</Badge>
+            <h2>Подайте заявку на участие</h2>
+            <p className="pub-register-copy">
+              Выберите формат участия, подтвердите согласие на обработку и размещение персональных данных и перейдите к
+              регистрационной форме.
+            </p>
+            <div className="pub-hero-actions">
+              <Button onClick={() => startRegistration("offline")}>Офлайн-участник</Button>
+              <Button variant="ghost" onClick={() => startRegistration("online")}>
                 Онлайн-участник
-              </button>
+              </Button>
             </div>
-
-            <label className="landing-v2-consent">
+            <label className="pub-consent">
               <input
                 type="checkbox"
                 checked={consentAccepted}
                 onChange={(event) => {
                   setConsentAccepted(event.target.checked);
-                  if (event.target.checked) {
-                    setConsentError("");
-                  }
+                  if (event.target.checked) setConsentError("");
                 }}
               />
               <span>
-                Согласие на обработку и размещение персональных данных. Полный текст:
-                {" "}
+                Согласие на обработку и размещение персональных данных. Полный текст:{" "}
                 <Link to="/personal-data">официальный документ</Link>.
               </span>
             </label>
-            {consentError ? <p className="form-status error">{consentError}</p> : null}
-          </>
-        )}
-      </section>
+            {consentError ? <p className="pub-form-error">{consentError}</p> : null}
+          </Container>
+        </section>
+      ) : null}
     </div>
   );
 }
