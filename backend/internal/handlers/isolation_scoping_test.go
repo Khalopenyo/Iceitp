@@ -37,7 +37,7 @@ func setupTwoTenants(t *testing.T, dbName string) (*gorm.DB, twoTenants) {
 		&models.Organization{}, &models.Conference{}, &models.User{}, &models.Profile{},
 		&models.Section{}, &models.Room{}, &models.Question{}, &models.Feedback{},
 		&models.ProgramAssignment{}, &models.ChatMessage{}, &models.ConsentLog{},
-		&models.MapMarker{}, &models.MapRoute{},
+		&models.MapMarker{}, &models.MapRoute{}, &models.ContentBlock{},
 	); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -486,6 +486,52 @@ func TestOrgBrandingPerTenant(t *testing.T) {
 	w = tenantReq(t, r, http.MethodPut, "alpha.platform.ru", "/org", map[string]any{"primary_color": "red"})
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("invalid primary_color -> %d, want 400", w.Code)
+	}
+}
+
+// TestContentBlocksPerTenant proves the CMS content blocks are conference-scoped:
+// the public list returns only the tenant's visible blocks, creates stamp the
+// resolved conference, invalid kinds are rejected, and a cross-tenant by-id edit
+// is 404.
+func TestContentBlocksPerTenant(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, f := setupTwoTenants(t, "iso_content")
+	mustCreateH(t, db, &models.ContentBlock{Kind: "about", Title: "A about", Visible: true, ConferenceID: &f.confA.ID})
+	mustCreateH(t, db, &models.ContentBlock{Kind: "about", Title: "B about", Visible: true, ConferenceID: &f.confB.ID})
+	hidden := models.ContentBlock{Kind: "custom", Title: "hidden", Visible: false, ConferenceID: &f.confA.ID}
+	mustCreateH(t, db, &hidden)
+
+	ch := &ContentHandler{DB: db}
+	r := gin.New()
+	r.Use(tenant.Middleware(db))
+	r.GET("/content", ch.ListPublic)
+	r.POST("/content", ch.Create)
+	r.PUT("/content/:id", ch.Update)
+
+	// Public list: alpha sees only its own visible block.
+	w := tenantReq(t, r, http.MethodGet, "alpha.platform.ru", "/content", nil)
+	var blocks []models.ContentBlock
+	if err := json.Unmarshal(w.Body.Bytes(), &blocks); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(blocks) != 1 || blocks[0].Title != "A about" {
+		t.Errorf("alpha /content = %d blocks, want 1 (A about); got %+v", len(blocks), blocks)
+	}
+
+	// Create on beta succeeds; invalid kind rejected.
+	if w := tenantReq(t, r, http.MethodPost, "beta.platform.ru", "/content",
+		map[string]any{"kind": "hero", "title": "B hero", "visible": true}); w.Code != http.StatusCreated {
+		t.Fatalf("create -> %d: %s", w.Code, w.Body.String())
+	}
+	if w := tenantReq(t, r, http.MethodPost, "beta.platform.ru", "/content",
+		map[string]any{"kind": "bogus", "title": "x"}); w.Code != http.StatusBadRequest {
+		t.Errorf("invalid kind -> %d, want 400", w.Code)
+	}
+
+	// Cross-tenant by-id edit: beta editing alpha's block → 404.
+	if w := tenantReq(t, r, http.MethodPut, "beta.platform.ru", "/content/"+uintToStr(hidden.ID),
+		map[string]any{"kind": "custom", "title": "hax", "visible": true}); w.Code != http.StatusNotFound {
+		t.Errorf("cross-tenant content update -> %d, want 404 (%s)", w.Code, w.Body.String())
 	}
 }
 

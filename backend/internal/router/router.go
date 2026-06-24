@@ -76,6 +76,7 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	checkInHandler := &handlers.CheckInHandler{DB: db, JWTSecret: cfg.JWTSecret}
 	submissionHandler := &handlers.SubmissionHandler{DB: db, Store: store}
 	orgHandler := &handlers.OrganizationHandler{DB: db}
+	contentHandler := &handlers.ContentHandler{DB: db}
 
 	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 
@@ -109,6 +110,7 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	api.GET("/map/routes", mapRouteHandler.ListRoutes)
 	api.GET("/conference", conferenceHandler.GetConference)
 	api.GET("/org", orgHandler.GetOrg)
+	api.GET("/content", contentHandler.ListPublic)
 	api.GET("/certificates/:number", docHandler.VerifyCertificate)
 	api.GET("/questions/public", questionHandler.PublicQuestionContext)
 	api.GET("/questions/approved", questionHandler.ApprovedQuestions)
@@ -162,6 +164,10 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	admin.GET("/conference", conferenceHandler.GetConference)
 	admin.PUT("/conference", conferenceHandler.UpdateConference)
 	admin.PUT("/org", orgHandler.UpdateOrg)
+	admin.GET("/content", contentHandler.ListAdmin)
+	admin.POST("/content", contentHandler.Create)
+	admin.PUT("/content/:id", contentHandler.Update)
+	admin.DELETE("/content/:id", contentHandler.Delete)
 	admin.POST("/checkin/verify", checkInHandler.VerifyBadge)
 
 	return r

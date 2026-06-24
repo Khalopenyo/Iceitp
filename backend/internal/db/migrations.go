@@ -162,6 +162,32 @@ var migrations = []migration{
 		Name:    "tenant_conference_id_not_null",
 		Up:      tenantConferenceIDNotNull,
 	},
+	{
+		Version: "202606200012",
+		Name:    "add_content_blocks",
+		Up: func(db *gorm.DB) error {
+			if err := db.AutoMigrate(&models.ContentBlock{}); err != nil {
+				return err
+			}
+			if db.Dialector.Name() != "postgres" {
+				return nil
+			}
+			// New conference-scoped table → same fail-closed RLS policy as the
+			// other conference_id tables (0009 already ran, so apply it here).
+			for _, s := range []string{
+				"ALTER TABLE content_blocks ENABLE ROW LEVEL SECURITY",
+				"DROP POLICY IF EXISTS tenant_isolation ON content_blocks",
+				"CREATE POLICY tenant_isolation ON content_blocks " +
+					"USING (conference_id = NULLIF(current_setting('app.conf_id', true), '')::bigint) " +
+					"WITH CHECK (conference_id = NULLIF(current_setting('app.conf_id', true), '')::bigint)",
+			} {
+				if err := db.Exec(s).Error; err != nil {
+					return fmt.Errorf("rls content_blocks: %w", err)
+				}
+			}
+			return nil
+		},
+	},
 }
 
 // tenantConferenceIDNotNull flips the per-event conference_id columns (and
@@ -205,6 +231,9 @@ func tenantConferenceIDNotNull(db *gorm.DB) error {
 // organization_id-scoped ones. Parent-scoped tables (profiles, consent_logs,
 // chat_attachments) carry no own tenant column and are covered by subquery
 // policies in tenantRLSParentTables (migration 0010).
+// rlsConfTables is the set migration 0009 applies the conference policy to. Tables
+// added LATER (content_blocks, migration 0012) get their policy in their own
+// migration — they cannot be listed here because 0009 runs before they exist.
 var rlsConfTables = []string{
 	"sections", "rooms", "map_markers", "map_routes", "program_assignments",
 	"feedbacks", "chat_messages", "article_submissions", "questions",
