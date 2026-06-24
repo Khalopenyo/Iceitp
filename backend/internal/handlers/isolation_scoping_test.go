@@ -535,6 +535,24 @@ func TestContentBlocksPerTenant(t *testing.T) {
 	}
 }
 
+// TestConferenceLessOrgContentCreate409 proves Create rejects a conference-less
+// org with 409 instead of producing an orphan NULL-conference block.
+func TestConferenceLessOrgContentCreate409(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, _ := setupTwoTenants(t, "iso_content_confless")
+	mustCreateH(t, db, &models.Organization{Slug: "gamma", DisplayName: "Gamma"})
+
+	ch := &ContentHandler{DB: db}
+	r := gin.New()
+	r.Use(tenant.Middleware(db))
+	r.POST("/content", ch.Create)
+
+	w := tenantReq(t, r, http.MethodPost, "gamma.platform.ru", "/content", map[string]any{"kind": "about", "title": "x"})
+	if w.Code != http.StatusConflict {
+		t.Errorf("conf-less content create -> %d, want 409 (%s)", w.Code, w.Body.String())
+	}
+}
+
 func uintToStr(v uint) string {
 	if v == 0 {
 		return "0"

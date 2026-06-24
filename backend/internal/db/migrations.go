@@ -227,13 +227,12 @@ func tenantConferenceIDNotNull(db *gorm.DB) error {
 	return nil
 }
 
-// rlsConfTables are the conference_id-scoped tables; rlsOrgTables the
-// organization_id-scoped ones. Parent-scoped tables (profiles, consent_logs,
-// chat_attachments) carry no own tenant column and are covered by subquery
-// policies in tenantRLSParentTables (migration 0010).
-// rlsConfTables is the set migration 0009 applies the conference policy to. Tables
-// added LATER (content_blocks, migration 0012) get their policy in their own
-// migration — they cannot be listed here because 0009 runs before they exist.
+// rlsConfTables is the set migration 0009 applies the conference_id policy to;
+// rlsOrgTables the organization_id-scoped ones. Parent-scoped tables (profiles,
+// consent_logs, chat_attachments) carry no own tenant column and are covered by
+// subquery policies in tenantRLSParentTables (migration 0010). Tables added LATER
+// (content_blocks, migration 0012) get their policy in their own migration — they
+// cannot be listed here because 0009 runs before they exist.
 var rlsConfTables = []string{
 	"sections", "rooms", "map_markers", "map_routes", "program_assignments",
 	"feedbacks", "chat_messages", "article_submissions", "questions",

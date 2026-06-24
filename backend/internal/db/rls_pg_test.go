@@ -301,6 +301,80 @@ func withDBName(dsn, name string) (string, error) {
 	return u.String(), nil
 }
 
+// TestRLSContentBlocks gates the migration-0012 policy on content_blocks (a
+// conference table with a NULLABLE conference_id): fail-closed without app.conf_id,
+// scoped with it, NULL-conference rows invisible, and a cross-conference write
+// rejected by WITH CHECK.
+func TestRLSContentBlocks(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("set TEST_DATABASE_URL (clean Postgres) to run the RLS content-blocks gate")
+	}
+	owner, scratchDSN := freshScratchDB(t, dsn, "rls_content")
+	if err := RunMigrations(owner); err != nil {
+		t.Fatalf("migrations: %v", err)
+	}
+	provisionRLSTestRole(t, owner)
+
+	orgA := models.Organization{Slug: "rls-cb-a", DisplayName: "CA"}
+	orgB := models.Organization{Slug: "rls-cb-b", DisplayName: "CB"}
+	mustCreate(t, owner, &orgA)
+	mustCreate(t, owner, &orgB)
+	confA := models.Conference{Title: "CA", OrganizationID: &orgA.ID}
+	confB := models.Conference{Title: "CB", OrganizationID: &orgB.ID}
+	mustCreate(t, owner, &confA)
+	mustCreate(t, owner, &confB)
+	mustCreate(t, owner, &models.ContentBlock{Kind: "about", Title: "A", Visible: true, ConferenceID: &confA.ID})
+	mustCreate(t, owner, &models.ContentBlock{Kind: "about", Title: "B", Visible: true, ConferenceID: &confB.ID})
+	mustCreate(t, owner, &models.ContentBlock{Kind: "about", Title: "orphan", Visible: true}) // NULL conference_id
+
+	appDSN, err := withUser(scratchDSN, rlsTestRole, rlsTestPass)
+	if err != nil {
+		t.Fatalf("app dsn: %v", err)
+	}
+	app, err := gorm.Open(postgres.Open(appDSN), &gorm.Config{TranslateError: true})
+	if err != nil {
+		t.Fatalf("open app role: %v", err)
+	}
+
+	// Fail-closed: no app.conf_id → no blocks visible.
+	var c0 int64
+	if err := app.Table("content_blocks").Count(&c0).Error; err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if c0 != 0 {
+		t.Errorf("content_blocks fail-closed: saw %d with no app.conf_id, want 0", c0)
+	}
+
+	// Scoped: app.conf_id = confA → only conf A's block (orphan NULL-conf invisible).
+	if err := app.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("SELECT set_config('app.conf_id', ?, true)", strconv.FormatUint(uint64(confA.ID), 10)).Error; err != nil {
+			return err
+		}
+		var blocks []models.ContentBlock
+		if err := tx.Find(&blocks).Error; err != nil {
+			return err
+		}
+		if len(blocks) != 1 || blocks[0].Title != "A" {
+			t.Errorf("scoped content read = %d blocks, want exactly 1 (conf A); orphan/conf-B leaked", len(blocks))
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("scoped read tx: %v", err)
+	}
+
+	// WITH CHECK: while scoped to conf A, inserting a conf-B block is rejected.
+	werr := app.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("SELECT set_config('app.conf_id', ?, true)", strconv.FormatUint(uint64(confA.ID), 10)).Error; err != nil {
+			return err
+		}
+		return tx.Exec("INSERT INTO content_blocks (conference_id, kind, position, visible, created_at, updated_at) VALUES (?, 'about', 0, true, now(), now())", confB.ID).Error
+	})
+	if werr == nil {
+		t.Error("WITH CHECK violated: restricted role inserted a content block into another conference")
+	}
+}
+
 // withUser returns the DSN with its username/password replaced — used to connect
 // as the restricted RLS role against the same database.
 func withUser(dsn, user, pass string) (string, error) {

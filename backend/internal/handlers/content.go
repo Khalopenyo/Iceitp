@@ -56,6 +56,14 @@ func (h *ContentHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid block kind"})
 		return
 	}
+	// A resolved tenant with no active conference cannot own a block: a NULL
+	// conference_id row is invisible to every later read (ByConference fails closed)
+	// and rejected by RLS WITH CHECK. Reject up front for parity across deployments,
+	// mirroring ReplaceMarkers/SeedDemo. (No resolved scope — unit tests — proceeds.)
+	if scope, ok := tenant.FromContext(c); ok && scope.ConfID == 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "no active conference for this organization"})
+		return
+	}
 	visible := true
 	if payload.Visible != nil {
 		visible = *payload.Visible
