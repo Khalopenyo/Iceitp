@@ -419,6 +419,9 @@ export default function Register() {
                 onChange={(e) => update("phone", formatRussianPhone(e.target.value))}
                 required
               />
+              <small className="muted">
+                Важно: код подтверждения придет в Telegram на этот номер. Укажите ваш актуальный номер, к которому привязан Telegram.
+              </small>
               <small className="muted">Допустимые варианты: `+7 999 123-45-67`, `89991234567`, `9991234567`.</small>
             </label>
           </>

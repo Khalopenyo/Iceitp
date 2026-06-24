@@ -96,7 +96,8 @@ export default function Documents() {
   }, []);
 
   const openPdfDocument = (path) => {
-    openUrlInNewTab(buildApiUrl(path));
+    const separator = path.includes("?") ? "&" : "?";
+    openUrlInNewTab(buildApiUrl(`${path}${separator}disposition=inline`));
   };
 
   const handleAction = async (card, action = "download") => {
