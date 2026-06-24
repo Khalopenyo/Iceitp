@@ -390,16 +390,22 @@ func RunMigrations(db *gorm.DB) error {
 			continue
 		}
 		log.Printf("db migration: applying %s_%s", item.Version, item.Name)
-		if err := item.Up(db); err != nil {
+		// Run each migration AND its version record in one transaction, so a
+		// partial failure rolls back cleanly instead of leaving the schema
+		// half-migrated with the version unrecorded. DDL is transactional on both
+		// Postgres and SQLite.
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			if err := item.Up(tx); err != nil {
+				return err
+			}
+			record := schemaMigration{
+				Version:   item.Version,
+				Name:      item.Name,
+				AppliedAt: time.Now().UTC(),
+			}
+			return tx.Table(schemaMigrationsTable).Create(&record).Error
+		}); err != nil {
 			return fmt.Errorf("apply migration %s_%s: %w", item.Version, item.Name, err)
-		}
-		record := schemaMigration{
-			Version:   item.Version,
-			Name:      item.Name,
-			AppliedAt: time.Now().UTC(),
-		}
-		if err := db.Table(schemaMigrationsTable).Create(&record).Error; err != nil {
-			return fmt.Errorf("store migration %s_%s: %w", item.Version, item.Name, err)
 		}
 	}
 
