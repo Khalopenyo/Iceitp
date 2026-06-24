@@ -327,18 +327,21 @@ func addOrganizationAndScoping(db *gorm.DB) error {
 // idempotent (FirstOrCreate by slug + WHERE ... IS NULL) and safe to run on every
 // boot — used both by the Phase-1 migration and by EnsureFirstRun after seed(),
 // so fresh-install data created by the seeder is linked too. No-op on an empty DB.
-func linkExistingToDefaultOrg(db *gorm.DB) error {
+// EnsureDefaultOrg creates (idempotently, by slug "icetp") the default
+// organization #1 that owns the single-tenant data, and returns it. The display
+// name is taken from the existing conference title when present. Safe on an empty
+// database (creates the org with a generic name) — so the bootstrap can create
+// org #1 BEFORE the seeder, letting seed() stamp organization_id/conference_id on
+// the rows it creates (required once the NOT NULL flip lands).
+func EnsureDefaultOrg(db *gorm.DB) (models.Organization, error) {
+	displayName := "Организация"
 	var conf models.Conference
-	if err := db.Order("id asc").First(&conf).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil
+	if err := db.Order("id asc").First(&conf).Error; err == nil {
+		if t := strings.TrimSpace(conf.Title); t != "" {
+			displayName = t
 		}
-		return err
-	}
-
-	displayName := strings.TrimSpace(conf.Title)
-	if displayName == "" {
-		displayName = "Организация #1"
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return models.Organization{}, err
 	}
 	org := models.Organization{}
 	if err := db.Where(models.Organization{Slug: "icetp"}).
@@ -348,6 +351,22 @@ func linkExistingToDefaultOrg(db *gorm.DB) error {
 			Plan:        models.OrganizationPlanFree,
 		}).
 		FirstOrCreate(&org).Error; err != nil {
+		return models.Organization{}, err
+	}
+	return org, nil
+}
+
+func linkExistingToDefaultOrg(db *gorm.DB) error {
+	var conf models.Conference
+	if err := db.Order("id asc").First(&conf).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+
+	org, err := EnsureDefaultOrg(db)
+	if err != nil {
 		return err
 	}
 

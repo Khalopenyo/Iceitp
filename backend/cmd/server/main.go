@@ -19,9 +19,15 @@ func main() {
 	// Owner connection: owns the tables (bypasses RLS), so migrations + seed run
 	// here. With RLS off this is the same DSN as the app pool below.
 	owner := db.Connect(cfg.MigrationDatabaseURL)
-	seed(owner)
-	// After seeding: ensure org #1 exists and link any rows the seeder created
-	// without tenant columns (fresh install). Idempotent / no-op on a live DB.
+	// Create organization #1 BEFORE seeding so the seeder can stamp
+	// organization_id/conference_id on the rows it creates (fresh install).
+	defaultOrg, err := db.EnsureDefaultOrg(owner)
+	if err != nil {
+		log.Fatalf("ensure default organization: %v", err)
+	}
+	seed(owner, defaultOrg.ID)
+	// Safety net: link any still-unscoped rows to org #1 (e.g. a legacy DB whose
+	// rows predate the tenant columns). Idempotent / no-op on a freshly stamped DB.
 	if err := db.EnsureFirstRun(owner); err != nil {
 		log.Fatalf("first run: %v", err)
 	}
@@ -50,10 +56,14 @@ func main() {
 	}
 }
 
-func seed(db *gorm.DB) {
-	syncSectionSeed(db)
-	syncConferenceSeed(db)
-	ensureDefaultRooms(db)
+func seed(db *gorm.DB, orgID uint) {
+	confID := syncConferenceSeed(db, orgID)
+	if confID == 0 {
+		log.Printf("seed: no conference id resolved; skipping section/room/marker seed")
+		return
+	}
+	syncSectionSeed(db, confID)
+	ensureDefaultRooms(db, confID)
 
 	// Ensure required map markers exist (do not overwrite user-edited coordinates).
 	markers := []models.MapMarker{
@@ -64,8 +74,9 @@ func seed(db *gorm.DB) {
 		{Key: "academic-council", Label: "Ученый совет", X: 72, Y: 48, Floor: 1, Color: "primary"},
 	}
 	for _, m := range markers {
+		m.ConferenceID = &confID
 		var existing models.MapMarker
-		if err := db.Where("key = ? OR label = ?", m.Key, m.Label).First(&existing).Error; err != nil {
+		if err := db.Where("(key = ? OR label = ?) AND conference_id = ?", m.Key, m.Label, confID).First(&existing).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				if err := db.Create(&m).Error; err != nil {
 					log.Printf("seed markers: failed to create %s: %v", m.Key, err)
@@ -79,17 +90,18 @@ func seed(db *gorm.DB) {
 	// sessions removed
 }
 
-func syncSectionSeed(db *gorm.DB) {
+func syncSectionSeed(db *gorm.DB, confID uint) {
 	defaultSections := defaultConferenceSections()
 
 	var existingSections []models.Section
-	if err := db.Order("id asc").Find(&existingSections).Error; err != nil {
+	if err := db.Where("conference_id = ?", confID).Order("id asc").Find(&existingSections).Error; err != nil {
 		log.Printf("seed sections: failed to load sections: %v", err)
 		return
 	}
 
 	if len(existingSections) == 0 {
 		for _, section := range defaultSections {
+			section.ConferenceID = &confID
 			if err := db.Create(&section).Error; err != nil {
 				log.Printf("seed sections: failed to create %s: %v", section.Title, err)
 			}
@@ -98,18 +110,18 @@ func syncSectionSeed(db *gorm.DB) {
 	}
 }
 
-func ensureDefaultRooms(db *gorm.DB) {
+func ensureDefaultRooms(db *gorm.DB, confID uint) {
 	defaultRooms := []models.Room{
-		{Name: "Хайпарк", Floor: 1},
-		{Name: "Актовый зал", Floor: 1},
-		{Name: "Аркейн", Floor: 1},
-		{Name: "Ученый совет", Floor: 1},
-		{Name: "Фуршет", Floor: 1},
+		{Name: "Хайпарк", Floor: 1, ConferenceID: &confID},
+		{Name: "Актовый зал", Floor: 1, ConferenceID: &confID},
+		{Name: "Аркейн", Floor: 1, ConferenceID: &confID},
+		{Name: "Ученый совет", Floor: 1, ConferenceID: &confID},
+		{Name: "Фуршет", Floor: 1, ConferenceID: &confID},
 	}
 
 	for _, room := range defaultRooms {
 		var existing models.Room
-		if err := db.Where("name = ?", room.Name).First(&existing).Error; err != nil {
+		if err := db.Where("name = ? AND conference_id = ?", room.Name, confID).First(&existing).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				if err := db.Create(&room).Error; err != nil {
 					log.Printf("seed rooms: failed to create room %s: %v", room.Name, err)
@@ -127,19 +139,31 @@ func ensureDefaultRooms(db *gorm.DB) {
 	}
 }
 
-func syncConferenceSeed(db *gorm.DB) {
+// syncConferenceSeed ensures the default conference exists (owned by orgID) and
+// returns its id, so the rest of the seed can stamp conference_id. Returns 0 on
+// failure.
+func syncConferenceSeed(db *gorm.DB, orgID uint) uint {
 	defaultConference := defaultConferenceConfig()
 
 	var conference models.Conference
 	if err := db.Order("id asc").First(&conference).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			defaultConference.OrganizationID = &orgID
 			if err := db.Create(&defaultConference).Error; err != nil {
 				log.Printf("seed conference: failed to create conference: %v", err)
+				return 0
 			}
-			return
+			return defaultConference.ID
 		}
 		log.Printf("seed conference: failed to load conference: %v", err)
-		return
+		return 0
+	}
+
+	// Stamp the owning org on a legacy conference that predates the tenant column.
+	if conference.OrganizationID == nil {
+		if err := db.Model(&conference).Update("organization_id", orgID).Error; err != nil {
+			log.Printf("seed conference: failed to set organization_id: %v", err)
+		}
 	}
 
 	isLegacyTitle := strings.TrimSpace(conference.Title) == "" || strings.TrimSpace(conference.Title) == "Ежегодная научная конференция ИЦЭиТП"
@@ -147,7 +171,7 @@ func syncConferenceSeed(db *gorm.DB) {
 	isLegacyDescription := strings.TrimSpace(conference.Description) == "" || strings.TrimSpace(conference.Description) == "Площадка для обмена научными результатами и практическими разработками."
 
 	if !isLegacyTitle && !isLegacyEmail && !isLegacyDescription {
-		return
+		return conference.ID
 	}
 
 	if err := db.Model(&conference).Updates(map[string]any{
@@ -159,6 +183,7 @@ func syncConferenceSeed(db *gorm.DB) {
 	}).Error; err != nil {
 		log.Printf("seed conference: failed to update conference: %v", err)
 	}
+	return conference.ID
 }
 
 func defaultConferenceSections() []models.Section {
