@@ -439,6 +439,56 @@ func TestConferenceLessOrgSeedDemo409(t *testing.T) {
 	}
 }
 
+// TestOrgBrandingPerTenant proves the per-tenant branding API returns each
+// tenant's own branding (resolved from the subdomain, not user input) and that an
+// admin update touches only the resolved org.
+func TestOrgBrandingPerTenant(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, f := setupTwoTenants(t, "iso_org")
+	db.Model(&models.Organization{}).Where("id = ?", f.orgA.ID).Update("primary_color", "#1E4E99")
+	db.Model(&models.Organization{}).Where("id = ?", f.orgB.ID).Update("primary_color", "#990000")
+
+	oh := &OrganizationHandler{DB: db}
+	r := gin.New()
+	r.Use(tenant.Middleware(db))
+	r.GET("/org", oh.GetOrg)
+	r.PUT("/org", oh.UpdateOrg)
+
+	for _, tc := range []struct{ host, name, color string }{
+		{"alpha.platform.ru", "Alpha", "#1E4E99"},
+		{"beta.platform.ru", "Beta", "#990000"},
+	} {
+		w := tenantReq(t, r, http.MethodGet, tc.host, "/org", nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s /org -> %d: %s", tc.host, w.Code, w.Body.String())
+		}
+		var b orgBranding
+		if err := json.Unmarshal(w.Body.Bytes(), &b); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if b.DisplayName != tc.name || b.PrimaryColor != tc.color {
+			t.Errorf("%s /org = %q %q, want %q %q", tc.host, b.DisplayName, b.PrimaryColor, tc.name, tc.color)
+		}
+	}
+
+	// alpha admin updates only alpha's branding.
+	w := tenantReq(t, r, http.MethodPut, "alpha.platform.ru", "/org", map[string]any{"primary_color": "#0A0A0A"})
+	if w.Code != http.StatusOK {
+		t.Fatalf("alpha update -> %d: %s", w.Code, w.Body.String())
+	}
+	var betaOrg models.Organization
+	db.First(&betaOrg, f.orgB.ID)
+	if betaOrg.PrimaryColor != "#990000" {
+		t.Errorf("alpha update leaked into beta: %q", betaOrg.PrimaryColor)
+	}
+
+	// invalid color rejected.
+	w = tenantReq(t, r, http.MethodPut, "alpha.platform.ru", "/org", map[string]any{"primary_color": "red"})
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("invalid primary_color -> %d, want 400", w.Code)
+	}
+}
+
 func uintToStr(v uint) string {
 	if v == 0 {
 		return "0"
