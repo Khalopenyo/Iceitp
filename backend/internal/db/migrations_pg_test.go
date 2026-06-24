@@ -5,9 +5,6 @@ import (
 	"testing"
 
 	"conferenceplatforma/internal/models"
-
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 )
 
 // TestMigrationsOnPostgres is the Postgres migration gate: it runs the full
@@ -26,10 +23,7 @@ func TestMigrationsOnPostgres(t *testing.T) {
 	if dsn == "" {
 		t.Skip("set TEST_DATABASE_URL (clean Postgres) to run the Postgres migration gate")
 	}
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{TranslateError: true})
-	if err != nil {
-		t.Fatalf("open postgres: %v", err)
-	}
+	db, _ := freshScratchDB(t, dsn, "mig_gate")
 	if err := RunMigrations(db); err != nil {
 		t.Fatalf("RunMigrations: %v", err)
 	}

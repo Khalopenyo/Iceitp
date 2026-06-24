@@ -31,10 +31,7 @@ func TestRLSEnforcement(t *testing.T) {
 		t.Skip("set TEST_DATABASE_URL (clean Postgres) to run the RLS gate")
 	}
 
-	owner, err := gorm.Open(postgres.Open(dsn), &gorm.Config{TranslateError: true})
-	if err != nil {
-		t.Fatalf("open owner: %v", err)
-	}
+	owner, scratchDSN := freshScratchDB(t, dsn, "rls_enforce")
 	if err := RunMigrations(owner); err != nil {
 		t.Fatalf("migrations: %v", err)
 	}
@@ -54,7 +51,7 @@ func TestRLSEnforcement(t *testing.T) {
 	mustCreate(t, owner, &models.Section{Title: "Sec B", Room: "R", ConferenceID: &confB.ID})
 
 	// Connect as the restricted role.
-	appDSN, err := withUser(dsn, rlsTestRole, rlsTestPass)
+	appDSN, err := withUser(scratchDSN, rlsTestRole, rlsTestPass)
 	if err != nil {
 		t.Fatalf("build app dsn: %v", err)
 	}
@@ -138,10 +135,7 @@ func TestRLSOrgScopedAndOwnerBypass(t *testing.T) {
 	if dsn == "" {
 		t.Skip("set TEST_DATABASE_URL (clean Postgres) to run the RLS org-scoped gate")
 	}
-	owner, err := gorm.Open(postgres.Open(dsn), &gorm.Config{TranslateError: true})
-	if err != nil {
-		t.Fatalf("open owner: %v", err)
-	}
+	owner, scratchDSN := freshScratchDB(t, dsn, "rls_orgscoped")
 	if err := RunMigrations(owner); err != nil {
 		t.Fatalf("migrations: %v", err)
 	}
@@ -166,7 +160,7 @@ func TestRLSOrgScopedAndOwnerBypass(t *testing.T) {
 		t.Errorf("owner pool saw %d users, want 2 (auth needs the global view)", ownerCount)
 	}
 
-	appDSN, err := withUser(dsn, rlsTestRole, rlsTestPass)
+	appDSN, err := withUser(scratchDSN, rlsTestRole, rlsTestPass)
 	if err != nil {
 		t.Fatalf("app dsn: %v", err)
 	}
@@ -210,10 +204,7 @@ func TestRLSParentTableScoping(t *testing.T) {
 	if dsn == "" {
 		t.Skip("set TEST_DATABASE_URL (clean Postgres) to run the RLS parent-table gate")
 	}
-	owner, err := gorm.Open(postgres.Open(dsn), &gorm.Config{TranslateError: true})
-	if err != nil {
-		t.Fatalf("open owner: %v", err)
-	}
+	owner, scratchDSN := freshScratchDB(t, dsn, "rls_parent")
 	if err := RunMigrations(owner); err != nil {
 		t.Fatalf("migrations: %v", err)
 	}
@@ -230,7 +221,7 @@ func TestRLSParentTableScoping(t *testing.T) {
 	mustCreate(t, owner, &models.ConsentLog{UserID: userA.ID, ConsentType: "personal_data", ConsentURL: "x", ConsentVersion: "1"})
 	mustCreate(t, owner, &models.ConsentLog{UserID: userB.ID, ConsentType: "personal_data", ConsentURL: "x", ConsentVersion: "1"})
 
-	appDSN, err := withUser(dsn, rlsTestRole, rlsTestPass)
+	appDSN, err := withUser(scratchDSN, rlsTestRole, rlsTestPass)
 	if err != nil {
 		t.Fatalf("app dsn: %v", err)
 	}
@@ -266,6 +257,48 @@ func TestRLSParentTableScoping(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("scoped read tx: %v", err)
 	}
+}
+
+// freshScratchDB provisions a uniquely-named throwaway database from dsn so each
+// Postgres gate runs on a clean, re-runnable, isolated slate (TEST_DATABASE_URL's
+// database is shared across gates and not empty). Returns the owner connection
+// and the scratch DSN; the database is dropped (WITH FORCE, terminating the
+// owner/app connections) on cleanup, registered immediately so it can't leak.
+func freshScratchDB(t *testing.T, dsn, name string) (*gorm.DB, string) {
+	t.Helper()
+	admin, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open admin: %v", err)
+	}
+	admin.Exec("DROP DATABASE IF EXISTS " + name + " WITH (FORCE)")
+	if err := admin.Exec("CREATE DATABASE " + name).Error; err != nil {
+		t.Fatalf("create scratch db %s: %v", name, err)
+	}
+	t.Cleanup(func() {
+		admin.Exec("DROP DATABASE IF EXISTS " + name + " WITH (FORCE)")
+		if s, e := admin.DB(); e == nil {
+			_ = s.Close()
+		}
+	})
+
+	scratchDSN, err := withDBName(dsn, name)
+	if err != nil {
+		t.Fatalf("scratch dsn: %v", err)
+	}
+	owner, err := gorm.Open(postgres.Open(scratchDSN), &gorm.Config{TranslateError: true})
+	if err != nil {
+		t.Fatalf("open scratch owner: %v", err)
+	}
+	return owner, scratchDSN
+}
+
+func withDBName(dsn, name string) (string, error) {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return "", err
+	}
+	u.Path = "/" + name
+	return u.String(), nil
 }
 
 // withUser returns the DSN with its username/password replaced — used to connect
