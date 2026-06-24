@@ -399,8 +399,11 @@ func EnsureDefaultOrg(db *gorm.DB) (models.Organization, error) {
 }
 
 func linkExistingToDefaultOrg(db *gorm.DB) error {
+	// Unscoped so a soft-deleted-only conference still anchors the per-event
+	// backfill — otherwise straggler NULL conference_id rows would survive into the
+	// NOT NULL flip and abort boot.
 	var conf models.Conference
-	if err := db.Order("id asc").First(&conf).Error; err != nil {
+	if err := db.Unscoped().Order("id asc").First(&conf).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil
 		}
@@ -412,8 +415,10 @@ func linkExistingToDefaultOrg(db *gorm.DB) error {
 		return err
 	}
 
-	// Tenant-wide tables → organization #1.
-	if err := db.Model(&models.Conference{}).Where("organization_id IS NULL").
+	// Tenant-wide tables → organization #1. Unscoped: a soft-deleted conference
+	// with NULL organization_id is a physical row the NOT NULL flip will validate,
+	// so it must be backfilled too (GORM's default query skips deleted_at IS NULL).
+	if err := db.Unscoped().Model(&models.Conference{}).Where("organization_id IS NULL").
 		Update("organization_id", org.ID).Error; err != nil {
 		return err
 	}
@@ -451,22 +456,30 @@ func RunMigrations(db *gorm.DB) error {
 			continue
 		}
 		log.Printf("db migration: applying %s_%s", item.Version, item.Name)
-		// Run each migration AND its version record in one transaction, so a
-		// partial failure rolls back cleanly instead of leaving the schema
-		// half-migrated with the version unrecorded. DDL is transactional on both
-		// Postgres and SQLite.
-		if err := db.Transaction(func(tx *gorm.DB) error {
-			if err := item.Up(tx); err != nil {
+		// Apply the migration AND record its version together.
+		apply := func(target *gorm.DB) error {
+			if err := item.Up(target); err != nil {
 				return err
 			}
-			record := schemaMigration{
+			return target.Table(schemaMigrationsTable).Create(&schemaMigration{
 				Version:   item.Version,
 				Name:      item.Name,
 				AppliedAt: time.Now().UTC(),
-			}
-			return tx.Table(schemaMigrationsTable).Create(&record).Error
-		}); err != nil {
-			return fmt.Errorf("apply migration %s_%s: %w", item.Version, item.Name, err)
+			}).Error
+		}
+		var applyErr error
+		if db.Dialector.Name() == "postgres" {
+			// Atomic on Postgres: a partial failure rolls back cleanly instead of
+			// leaving the schema half-migrated with the version unrecorded.
+			applyErr = db.Transaction(apply)
+		} else {
+			// SQLite: run UNWRAPPED. A rebuild-style AutoMigrate toggles
+			// PRAGMA foreign_keys, which is a silent no-op inside a transaction,
+			// leaving FK enforcement on during the temp-table drop/rename.
+			applyErr = apply(db)
+		}
+		if applyErr != nil {
+			return fmt.Errorf("apply migration %s_%s: %w", item.Version, item.Name, applyErr)
 		}
 	}
 

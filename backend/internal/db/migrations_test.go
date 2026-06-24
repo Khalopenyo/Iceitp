@@ -209,6 +209,52 @@ func TestTenantCompositeUniquenessUpgrade(t *testing.T) {
 	}
 }
 
+// TestLinkExistingBackfillsDespiteSoftDeletedConference guards the NOT NULL-flip
+// robustness: a soft-deleted conference (with NULL organization_id) and an orphan
+// per-event row (NULL conference_id) must still be backfilled, so the subsequent
+// SET NOT NULL on Postgres cannot abort on a straggler NULL.
+func TestLinkExistingBackfillsDespiteSoftDeletedConference(t *testing.T) {
+	db := newTestDB(t)
+	if err := db.AutoMigrate(
+		&models.Organization{}, &models.Conference{}, &models.User{}, &models.Section{},
+		&models.Room{}, &models.MapMarker{}, &models.MapRoute{}, &models.ProgramAssignment{},
+		&models.ChatMessage{}, &models.Feedback{}, &models.ArticleSubmission{},
+	); err != nil {
+		t.Fatalf("automigrate: %v", err)
+	}
+
+	conf := models.Conference{Title: "Soft"}
+	mustCreate(t, db, &conf)
+	if err := db.Delete(&conf).Error; err != nil { // soft-delete (sets deleted_at)
+		t.Fatalf("soft-delete conference: %v", err)
+	}
+	sec := models.Section{Title: "orphan"} // NULL conference_id
+	mustCreate(t, db, &sec)
+
+	if err := linkExistingToDefaultOrg(db); err != nil {
+		t.Fatalf("linkExistingToDefaultOrg: %v", err)
+	}
+
+	var org models.Organization
+	if err := db.Where("slug = ?", "icetp").First(&org).Error; err != nil {
+		t.Fatalf("org #1 not created: %v", err)
+	}
+	var gotConf models.Conference
+	if err := db.Unscoped().First(&gotConf, conf.ID).Error; err != nil {
+		t.Fatalf("reload conf: %v", err)
+	}
+	if gotConf.OrganizationID == nil {
+		t.Errorf("soft-deleted conference organization_id not backfilled (would abort SET NOT NULL)")
+	}
+	var gotSec models.Section
+	if err := db.First(&gotSec, sec.ID).Error; err != nil {
+		t.Fatalf("reload section: %v", err)
+	}
+	if gotSec.ConferenceID == nil {
+		t.Errorf("orphan section conference_id not backfilled (would abort SET NOT NULL)")
+	}
+}
+
 func mustCreate(t *testing.T, db *gorm.DB, v any) {
 	t.Helper()
 	if err := db.Create(v).Error; err != nil {
