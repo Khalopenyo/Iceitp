@@ -4,12 +4,17 @@
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   color: #1c1c1c;
   background-color: #f7f7f7;
-  --red: #b42318;
-  --red-dark: #7f1d1d;
-  --primary-50: #fff1f1;
-  --primary-100: #ffe0e0;
-  --primary-200: #f8c9c9;
-  --primary-300: #f0a7a7;
+  /* Academic blue — the default tenant palette. A tenant's primary_color
+     overrides these at runtime via lib/org.js applyBranding(). */
+  --primary: #1e4e99;
+  --primary-dark: #163a73;
+  --primary-50: #eef3fb;
+  --primary-100: #d9e4f5;
+  --primary-200: #b3c8ea;
+  --primary-300: #7fa0d6;
+  /* Legacy accent vars kept as aliases so existing CSS renders academic blue. */
+  --red: var(--primary);
+  --red-dark: var(--primary-dark);
   --white: #ffffff;
   --gray: #f3f3f3;
   --shadow: 0 18px 45px rgba(0, 0, 0, 0.08);

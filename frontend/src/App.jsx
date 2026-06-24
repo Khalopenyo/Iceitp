@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout.jsx";
 import Welcome from "./pages/Welcome.jsx";
@@ -20,6 +21,7 @@ import QuestionPrompt from "./pages/QuestionPrompt.jsx";
 import AdminQuestions from "./pages/AdminQuestions.jsx";
 import ApprovedQuestions from "./pages/ApprovedQuestions.jsx";
 import AdminApprovedQuestions from "./pages/AdminApprovedQuestions.jsx";
+import { fetchBranding, applyBranding } from "./lib/org.js";
 
 function ProtectedRoute({ children }) {
   if (!isAuthenticated()) {
@@ -40,6 +42,14 @@ function AdminRoute({ children }) {
 }
 
 export default function App() {
+  useEffect(() => {
+    // Apply the resolved tenant's branding (primary color) over the academic-blue
+    // defaults. Silent fallback to the defaults if the org has no custom color.
+    fetchBranding().then((branding) => {
+      if (branding) applyBranding(branding);
+    });
+  }, []);
+
   return (
     <Routes>
       <Route path="/" element={<Layout />}>
