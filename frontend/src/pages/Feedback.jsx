@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { apiPost } from "../lib/api.js";
+import { Card, Field, Textarea, Button } from "../components/ui/index.jsx";
+import "./feedback.css";
 
 const MAX_FEEDBACK_LENGTH = 3000;
 const ratingOptions = [
@@ -47,7 +49,7 @@ export default function Feedback() {
     try {
       await apiPost("/feedback", { rating: Number(rating), comment: trimmedComment });
       setComment("");
-      setStatusMessage("Спасибо. Отзыв сохранен и будет доступен оргкомитету в админке.");
+      setStatusMessage("Спасибо. Отзыв сохранён и будет доступен оргкомитету в админке.");
     } catch (err) {
       setErrorMessage(err.message || "Не удалось отправить отзыв");
     } finally {
@@ -56,47 +58,68 @@ export default function Feedback() {
   };
 
   return (
-    <section className="panel narrow">
-      <h2>Обратная связь</h2>
-      <p className="muted">
-        Оцените организацию конференции и оставьте предложения по улучшению программы, коммуникации или работы площадки.
-      </p>
-      <form className="form-grid feedback-form" onSubmit={submit}>
-        <div className="feedback-rating-block">
-          <span className="feedback-block-label">Оценка</span>
-          <div className="feedback-rating-grid">
-            {ratingOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={`feedback-rating-btn ${Number(rating) === option.value ? "active" : ""}`}
-                onClick={() => setRating(option.value)}
-              >
-                <strong>{option.label}</strong>
-                <span>{option.text}</span>
-              </button>
-            ))}
+    <section className="fb">
+      <div className="fb-head">
+        <h1>Обратная связь</h1>
+        <p>
+          Оцените организацию конференции и оставьте предложения по улучшению программы, коммуникации
+          или работы площадки.
+        </p>
+      </div>
+      <Card>
+        <form onSubmit={submit}>
+          <div>
+            <span className="fb-block-label" id="fb-rating-label">
+              Оценка
+            </span>
+            <div className="fb-rating-grid" role="group" aria-labelledby="fb-rating-label">
+              {ratingOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`fb-rating-btn ${Number(rating) === option.value ? "active" : ""}`}
+                  aria-pressed={Number(rating) === option.value}
+                  onClick={() => setRating(option.value)}
+                >
+                  <strong>{option.label}</strong>
+                  <span>{option.text}</span>
+                </button>
+              ))}
+            </div>
+            <p className="fb-hint">{ratingHint(rating)}</p>
           </div>
-          <p className="muted">{ratingHint(rating)}</p>
-        </div>
-        <label>
-          Отзыв и предложения по улучшению
-          <textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value.slice(0, MAX_FEEDBACK_LENGTH))}
-            rows={6}
-            placeholder="Например: что сработало хорошо, чего не хватило участникам, какие процессы стоит улучшить к следующей конференции."
-          />
-        </label>
-        <div className="feedback-form-footer">
-          <p className="muted">{comment.length} / {MAX_FEEDBACK_LENGTH}</p>
-          <button className="btn btn-primary" type="submit" disabled={loading}>
-            {loading ? "Отправка..." : "Отправить отзыв"}
-          </button>
-        </div>
-        {statusMessage ? <p className="form-status success">{statusMessage}</p> : null}
-        {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
-      </form>
+
+          <Field label="Отзыв и предложения по улучшению" htmlFor="fb-comment">
+            <Textarea
+              id="fb-comment"
+              value={comment}
+              onChange={(e) => setComment(e.target.value.slice(0, MAX_FEEDBACK_LENGTH))}
+              rows={6}
+              placeholder="Например: что сработало хорошо, чего не хватило участникам, какие процессы стоит улучшить к следующей конференции."
+            />
+          </Field>
+
+          <div className="fb-footer">
+            <span className="fb-count">
+              {comment.length} / {MAX_FEEDBACK_LENGTH}
+            </span>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Отправка…" : "Отправить отзыв"}
+            </Button>
+          </div>
+
+          {statusMessage ? (
+            <div className="fb-status fb-status-success" role="status">
+              {statusMessage}
+            </div>
+          ) : null}
+          {errorMessage ? (
+            <div className="fb-status fb-status-error" role="alert">
+              {errorMessage}
+            </div>
+          ) : null}
+        </form>
+      </Card>
     </section>
   );
 }
