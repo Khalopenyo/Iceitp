@@ -2,12 +2,14 @@ import { useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout.jsx";
 import AuthLayout from "./components/AuthLayout.jsx";
+import LKLayout from "./components/LKLayout.jsx";
 import Welcome from "./pages/Welcome.jsx";
 import Register from "./pages/Register.jsx";
 import Login from "./pages/Login.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
+import Profile from "./pages/Profile.jsx";
 import Admin from "./pages/Admin.jsx";
 import Feedback from "./pages/Feedback.jsx";
 import Chat from "./pages/Chat.jsx";
@@ -67,19 +69,21 @@ export default function App() {
         <Route path="forgot-password" element={<ForgotPassword />} />
         <Route path="reset-password" element={<ResetPassword />} />
       </Route>
+      <Route
+        element={
+          <ProtectedRoute>
+            <LKLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="dashboard" element={<Dashboard />} />
+        <Route path="profile" element={<Profile />} />
+      </Route>
       <Route path="/" element={<Layout />}>
         <Route path="badge/:token" element={<BadgeCheckIn />} />
         <Route path="questions/:token" element={<QuestionPrompt />} />
         <Route path="questions/:token/approved" element={<ApprovedQuestions />} />
         <Route index element={<Welcome />} />
-        <Route
-          path="dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
         <Route
           path="feedback"
           element={
