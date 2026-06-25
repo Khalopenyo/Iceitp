@@ -1,7 +1,14 @@
+import { useNavigate } from "react-router-dom";
+import "./legal.css";
+
 export default function ConsentAuthors() {
+  const navigate = useNavigate();
   return (
-    <section className="panel">
-      <h2>Согласие на публикацию материалов и сведений об авторе</h2>
+    <section className="legal-page">
+      <button type="button" className="legal-back" onClick={() => navigate(-1)}>
+        ← Назад
+      </button>
+      <h1>Согласие на публикацию материалов и сведений об авторе</h1>
       <div className="legal-text">
         <p>
           Настоящим я, действуя свободно, своей волей и в своём интересе, во исполнение требований Федерального

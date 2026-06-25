@@ -1,7 +1,14 @@
+import { useNavigate } from "react-router-dom";
+import "./legal.css";
+
 export default function PersonalData() {
+  const navigate = useNavigate();
   return (
-    <section className="panel">
-      <h2>Политика обработки персональных данных участников конференции</h2>
+    <section className="legal-page">
+      <button type="button" className="legal-back" onClick={() => navigate(-1)}>
+        ← Назад
+      </button>
+      <h1>Политика обработки персональных данных участников конференции</h1>
       <div className="legal-text">
         <p>
           Настоящая политика определяет порядок обработки и защиты персональных данных участников научной

@@ -1,0 +1,40 @@
+/* ===== Legal / consent pages (SCR-PUB-14 и сопутствующие согласия) ===== */
+.legal-page {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 32px 20px 56px;
+}
+.legal-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 18px;
+  font-size: 14px;
+  color: var(--brand);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+.legal-back:hover {
+  text-decoration: underline;
+}
+.legal-page h1 {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 20px;
+  line-height: 1.25;
+}
+.legal-text {
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.legal-text p {
+  margin: 0 0 16px;
+}
+.legal-text p:last-child {
+  margin-bottom: 0;
+}
