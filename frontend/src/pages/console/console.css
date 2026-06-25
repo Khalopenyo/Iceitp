@@ -633,6 +633,158 @@
   font-weight: 600;
 }
 
+/* Онбординг — создание конференции (после оплаты/регистрации) */
+.con-onboard {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.con-onboard-top {
+  height: 56px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  padding: 0 26px;
+  gap: 11px;
+}
+.con-onboard-top .con-logo-name {
+  margin-left: 2px;
+}
+.con-onboard-top-note {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--muted);
+}
+.con-onboard-main {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 40px;
+}
+.con-onboard-inner {
+  width: 100%;
+  max-width: 640px;
+}
+.con-onboard-eyebrow {
+  font-family: var(--con-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-align: center;
+}
+.con-onboard-h1 {
+  font-family: var(--con-head);
+  font-weight: 600;
+  font-size: 34px;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  text-align: center;
+  margin: 14px 0 8px;
+  color: var(--ink);
+}
+.con-onboard-sub {
+  text-align: center;
+  margin: 0 auto 28px;
+  max-width: 460px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.con-onboard-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.con-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.con-field > span {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.con-field input {
+  height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font-size: 14.5px;
+  color: var(--ink);
+  font-family: var(--con-font);
+  outline: none;
+  background: var(--surface);
+}
+.con-field input:focus {
+  border-color: var(--accent);
+}
+.con-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.con-format-row {
+  display: flex;
+  gap: 10px;
+}
+.con-format {
+  flex: 1;
+  text-align: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 9px;
+  font-size: 13.5px;
+  font-weight: 600;
+  background: var(--surface);
+  cursor: pointer;
+  font-family: var(--con-font);
+}
+.con-format.active {
+  border: 1.5px solid var(--accent);
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+.con-steps {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  margin-top: 24px;
+}
+.con-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--faint);
+}
+.con-step.active {
+  color: var(--ink);
+  font-weight: 500;
+}
+.con-step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--line);
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+}
+.con-step.active .con-step-num {
+  background: var(--accent);
+  color: #fff;
+}
+
 /* Заглушка раздела */
 .con-soon {
   background: var(--surface);

@@ -260,6 +260,18 @@ var migrations = []migration{
 			return db.AutoMigrate(&models.Certificate{})
 		},
 	},
+	{
+		Version: "202606260019",
+		Name:    "add_conference_onboarded_format",
+		Up: func(db *gorm.DB) error {
+			// Additive: conferences onboarded + format под онбординг организатора.
+			// Существующие конференции считаем настроенными (onboarded=true).
+			if err := db.AutoMigrate(&models.Conference{}); err != nil {
+				return err
+			}
+			return db.Model(&models.Conference{}).Where("1 = 1").Update("onboarded", true).Error
+		},
+	},
 }
 
 // tenantConferenceIDNotNull flips the per-event conference_id columns (and

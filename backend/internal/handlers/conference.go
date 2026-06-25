@@ -97,6 +97,61 @@ func (h *ConferenceHandler) UpdateConference(c *gin.Context) {
 	c.JSON(http.StatusOK, conf)
 }
 
+type createConferencePayload struct {
+	Title        string     `json:"title"`
+	Organization string     `json:"organization"`
+	StartsAt     *time.Time `json:"starts_at"`
+	EndsAt       *time.Time `json:"ends_at"`
+	Format       string     `json:"format"`
+}
+
+// CreateConference — онбординг организатора: задаёт реальные данные конференции
+// своего вуза и помечает её настроенной (onboarded). Работает по модели
+// «одна конференция на вуз»: настраивает авто-созданную заглушку, а не плодит.
+func (h *ConferenceHandler) CreateConference(c *gin.Context) {
+	var payload createConferencePayload
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	title := strings.TrimSpace(payload.Title)
+	if title == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
+		return
+	}
+
+	conf, err := h.getOrCreateConference(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load conference"})
+		return
+	}
+
+	conf.Title = title
+	if payload.StartsAt != nil {
+		conf.StartsAt = *payload.StartsAt
+	}
+	if payload.EndsAt != nil {
+		conf.EndsAt = *payload.EndsAt
+	}
+	switch strings.TrimSpace(payload.Format) {
+	case "offline", "online", "hybrid":
+		conf.Format = strings.TrimSpace(payload.Format)
+	}
+	conf.Onboarded = true
+
+	if err := tenant.DB(c, h.DB).Save(conf).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save conference"})
+		return
+	}
+
+	// Имя вуза (бренд) обновляем заодно — оно из той же формы онбординга.
+	if orgName := strings.TrimSpace(payload.Organization); orgName != "" {
+		tenant.DB(c, h.DB).Model(&models.Organization{}).Where("id = ?", tenant.OrgID(c)).Update("display_name", orgName)
+	}
+
+	c.JSON(http.StatusCreated, conf)
+}
+
 type landingSectionView struct {
 	ID          uint      `json:"id"`
 	Title       string    `json:"title"`
@@ -187,15 +242,13 @@ func (h *ConferenceHandler) getOrCreateConference(c *gin.Context) (*models.Confe
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
-		startsAt := time.Date(2026, time.April, 24, 10, 0, 0, 0, time.Local)
-		endsAt := time.Date(2026, time.April, 25, 18, 0, 0, 0, time.Local)
+		// Нейтральная заглушка: без хардкод-конференции и личного email. Реальные
+		// данные задаёт организатор в онбординге (CreateConference → onboarded=true).
 		conf = models.Conference{
-			Title:        "ЦИФРОВАЯ РЕВОЛЮЦИЯ: ТОЧКИ СОЦИАЛЬНО-ЭКОНОМИЧЕСКОГО РОСТА",
-			Description:  "Всероссийская научно-практическая конференция с международным участием. Диалог между наукой, бизнесом и государством по вопросам цифровой трансформации экономики.",
-			StartsAt:     startsAt,
-			EndsAt:       endsAt,
-			Status:       models.ConferenceStatusDraft,
-			SupportEmail: "madinaborz@mail.ru",
+			Title:     "Новая конференция",
+			Status:    models.ConferenceStatusDraft,
+			Onboarded: false,
+			Format:    "hybrid",
 		}
 		org := tenant.OrgID(c)
 		conf.OrganizationID = &org

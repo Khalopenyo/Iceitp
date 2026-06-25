@@ -7,6 +7,7 @@ import OrgConsoleLayout from "./components/OrgConsoleLayout.jsx";
 import Overview from "./pages/console/Overview.jsx";
 import Branding from "./pages/console/Branding.jsx";
 import ConsoleSoon from "./pages/console/ConsoleSoon.jsx";
+import Onboarding from "./pages/console/Onboarding.jsx";
 import Welcome from "./pages/Welcome.jsx";
 import Register from "./pages/Register.jsx";
 import Login from "./pages/Login.jsx";
@@ -74,6 +75,14 @@ export default function App() {
         <Route path="forgot-password" element={<ForgotPassword />} />
         <Route path="reset-password" element={<ResetPassword />} />
       </Route>
+      <Route
+        path="console/onboarding"
+        element={
+          <AdminRoute>
+            <Onboarding />
+          </AdminRoute>
+        }
+      />
       <Route
         path="console"
         element={

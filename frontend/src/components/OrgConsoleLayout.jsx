@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Navigate, Outlet } from "react-router-dom";
 import { apiGet } from "../lib/api.js";
 import { getUser } from "../lib/auth.js";
 import "../pages/console/console.css";
@@ -30,11 +30,20 @@ export default function OrgConsoleLayout() {
   const user = getUser();
   const [org, setOrg] = useState(null);
   const [conference, setConference] = useState(null);
+  const [confLoaded, setConfLoaded] = useState(false);
 
   useEffect(() => {
     apiGet("/org").then(setOrg).catch(() => setOrg(null));
-    apiGet("/conference").then(setConference).catch(() => setConference(null));
+    apiGet("/conference")
+      .then(setConference)
+      .catch(() => setConference(null))
+      .finally(() => setConfLoaded(true));
   }, []);
+
+  // Конференция ещё не настроена организатором — ведём на онбординг.
+  if (confLoaded && !conference?.onboarded) {
+    return <Navigate to="/console/onboarding" replace />;
+  }
 
   const orgName = org?.display_name || "Ваш вуз";
   const confTitle = conference?.title || "Конференция не создана";
