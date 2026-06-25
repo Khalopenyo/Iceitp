@@ -75,6 +75,18 @@ func (h *SectionHandler) ListSections(c *gin.Context) {
 	c.JSON(http.StatusOK, sections)
 }
 
+// ListSectionsAdmin отдаёт СЫРЫЕ секции тенанта без кураторской подмены названий
+// (curatePublicSections) — для консоли организатора, которая управляет реальными
+// секциями. Публичная витрина продолжает использовать ListSections с курацией.
+func (h *SectionHandler) ListSectionsAdmin(c *gin.Context) {
+	var sections []models.Section
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Order("start_at asc, id asc").Find(&sections).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list sections"})
+		return
+	}
+	c.JSON(http.StatusOK, sections)
+}
+
 func (h *SectionHandler) CreateSection(c *gin.Context) {
 	var section models.Section
 	if err := c.ShouldBindJSON(&section); err != nil || section.Title == "" || section.Room == "" {

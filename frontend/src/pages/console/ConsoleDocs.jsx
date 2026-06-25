@@ -67,7 +67,7 @@ export default function ConsoleDocs() {
 
   return (
     <div className="con-screen">
-      {toast ? <div className={`con-toast ${toast.kind}`} role="status">{toast.text}</div> : null}
+      {toast ? <div className={`con-toast ${toast.kind}`} role={toast.kind === "err" ? "alert" : "status"}>{toast.text}</div> : null}
 
       <div className="con-eyebrow">Документы · автогенерация</div>
       <h2 className="con-h2" style={{ marginBottom: 22 }}>Генерация материалов</h2>

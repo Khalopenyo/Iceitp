@@ -15,15 +15,20 @@ const FILTERS = [
 
 export default function ConsoleParticipants() {
   const [users, setUsers] = useState([]);
+  const [total, setTotal] = useState(0);
   const [sections, setSections] = useState([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
 
   useEffect(() => {
-    apiGet("/admin/users")
-      .then((r) => setUsers(Array.isArray(r) ? r : r?.items || []))
+    apiGet("/admin/users?page_size=100")
+      .then((r) => {
+        const list = Array.isArray(r) ? r : r?.items || [];
+        setUsers(list);
+        setTotal(typeof r?.total === "number" ? r.total : list.length);
+      })
       .catch(() => setUsers([]));
-    apiGet("/sections").then((r) => setSections(Array.isArray(r) ? r : [])).catch(() => setSections([]));
+    apiGet("/admin/sections").then((r) => setSections(Array.isArray(r) ? r : r?.items || [])).catch(() => setSections([]));
   }, []);
 
   const sectionTitle = (id) => sections.find((s) => String(s.id) === String(id))?.title || "";
@@ -49,19 +54,20 @@ export default function ConsoleParticipants() {
 
   return (
     <div className="con-screen">
-      <div className="con-eyebrow">Участники · {users.length} заявок</div>
+      <div className="con-eyebrow">Участники · {total} заявок</div>
       <h2 className="con-h2" style={{ marginBottom: 22 }}>Заявки участников</h2>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 18, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, maxWidth: 320, height: 42, padding: "0 14px", border: "1px solid var(--line)", borderRadius: 9, background: "var(--surface)" }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по имени, вузу или секции…" style={{ flex: 1, border: "none", fontSize: 13.5, color: "var(--ink)", background: "transparent", outline: "none", fontFamily: "var(--con-font)" }} />
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по имени, вузу или секции…" aria-label="Поиск участников" style={{ flex: 1, border: "none", fontSize: 13.5, color: "var(--ink)", background: "transparent", outline: "none", fontFamily: "var(--con-font)" }} />
         </div>
         {FILTERS.map((f) => (
           <button
             key={f.key}
             type="button"
             onClick={() => setFilter(f.key)}
+            aria-pressed={filter === f.key}
             style={{
               padding: "9px 14px", borderRadius: 9, fontSize: 13, cursor: "pointer", fontFamily: "var(--con-font)",
               fontWeight: filter === f.key ? 600 : 500,
@@ -75,23 +81,23 @@ export default function ConsoleParticipants() {
         ))}
       </div>
 
-      <div className="con-card" style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1.4fr 1.6fr 130px", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)", background: "var(--surface-2)", fontSize: 11.5, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--faint)" }}>
-          <span>Участник</span><span>Организация</span><span>Секция</span><span>Статус</span>
+      <div className="con-card" style={{ padding: 0, overflow: "hidden" }} role="table" aria-label="Заявки участников">
+        <div role="row" style={{ display: "grid", gridTemplateColumns: "1.6fr 1.4fr 1.6fr 130px", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)", background: "var(--surface-2)", fontSize: 11.5, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--muted)" }}>
+          <span role="columnheader">Участник</span><span role="columnheader">Организация</span><span role="columnheader">Секция</span><span role="columnheader">Статус</span>
         </div>
         {rows.length ? (
           rows.map((r) => (
-            <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1.6fr 1.4fr 1.6fr 130px", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)", alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <div key={r.id} role="row" style={{ display: "grid", gridTemplateColumns: "1.6fr 1.4fr 1.6fr 130px", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)", alignItems: "center" }}>
+              <div role="cell" style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                 <span className="con-av">{initials(r.name)}</span>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
-                  {r.degree ? <div style={{ fontSize: 11.5, color: "var(--faint)" }}>{r.degree}</div> : null}
+                  {r.degree ? <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{r.degree}</div> : null}
                 </div>
               </div>
-              <span style={{ fontSize: 13, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.org || "—"}</span>
-              <span style={{ fontSize: 13, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.section || "—"}</span>
-              <span className={`con-pill ${r.isAuthor ? "ok" : ""}`}>{r.isAuthor ? "Докладчик" : "Слушатель"}</span>
+              <span role="cell" style={{ fontSize: 13, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.org || "—"}</span>
+              <span role="cell" style={{ fontSize: 13, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.section || "—"}</span>
+              <span role="cell" className={`con-pill ${r.isAuthor ? "ok" : ""}`}>{r.isAuthor ? "Докладчик" : "Слушатель"}</span>
             </div>
           ))
         ) : (

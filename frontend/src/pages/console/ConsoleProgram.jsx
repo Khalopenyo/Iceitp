@@ -23,7 +23,7 @@ export default function ConsoleProgram() {
   const [toast, setToast] = useState(null);
 
   const load = () =>
-    apiGet("/sections").then((r) => setSections(Array.isArray(r) ? r : [])).catch(() => setSections([]));
+    apiGet("/admin/sections").then((r) => setSections(Array.isArray(r) ? r : r?.items || [])).catch(() => setSections([]));
 
   useEffect(() => {
     load();
@@ -67,7 +67,7 @@ export default function ConsoleProgram() {
 
   return (
     <div className="con-screen">
-      {toast ? <div className={`con-toast ${toast.kind}`} role="status">{toast.text}</div> : null}
+      {toast ? <div className={`con-toast ${toast.kind}`} role={toast.kind === "err" ? "alert" : "status"}>{toast.text}</div> : null}
 
       <div className="con-eyebrow">Конструктор программы</div>
       <div className="con-head-row">

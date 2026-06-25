@@ -42,7 +42,7 @@ export default function ConsoleModeration() {
 
   return (
     <div className="con-screen">
-      {toast ? <div className={`con-toast ${toast.kind}`} role="status">{toast.text}</div> : null}
+      {toast ? <div className={`con-toast ${toast.kind}`} role={toast.kind === "err" ? "alert" : "status"}>{toast.text}</div> : null}
 
       <div className="con-eyebrow">Модерация · вопросы и обратная связь</div>
       <h2 className="con-h2" style={{ marginBottom: 6 }}>Вопросы спикерам</h2>

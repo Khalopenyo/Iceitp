@@ -16,22 +16,24 @@ type ConferenceHandler struct {
 	DB *gorm.DB
 }
 
+// Все строковые поля — указатели: частичный апдейт применяет только присланные,
+// чтобы PUT {status:"live"} не затирал title/описание/контакты/стримы.
 type updateConferencePayload struct {
-	Title          string                  `json:"title"`
-	Description    string                  `json:"description"`
+	Title          *string                 `json:"title"`
+	Description    *string                 `json:"description"`
 	StartsAt       *time.Time              `json:"starts_at"`
 	EndsAt         *time.Time              `json:"ends_at"`
 	Status         models.ConferenceStatus `json:"status"`
-	ProceedingsURL string                  `json:"proceedings_url"`
-	SupportEmail   string                  `json:"support_email"`
-	SupportPhone   string                  `json:"support_phone"`
-	VenueAddress   string                  `json:"venue_address"`
-	VenueMapURL    string                  `json:"venue_map_url"`
-	VenueTransport string                  `json:"venue_transport"`
-	LiveStreamURL  string                  `json:"live_stream_url"`
-	StreamVKURL    string                  `json:"stream_vk_url"`
-	StreamYouTube  string                  `json:"stream_youtube_url"`
-	StreamRutube   string                  `json:"stream_rutube_url"`
+	ProceedingsURL *string                 `json:"proceedings_url"`
+	SupportEmail   *string                 `json:"support_email"`
+	SupportPhone   *string                 `json:"support_phone"`
+	VenueAddress   *string                 `json:"venue_address"`
+	VenueMapURL    *string                 `json:"venue_map_url"`
+	VenueTransport *string                 `json:"venue_transport"`
+	LiveStreamURL  *string                 `json:"live_stream_url"`
+	StreamVKURL    *string                 `json:"stream_vk_url"`
+	StreamYouTube  *string                 `json:"stream_youtube_url"`
+	StreamRutube   *string                 `json:"stream_rutube_url"`
 }
 
 func (h *ConferenceHandler) GetConference(c *gin.Context) {
@@ -56,24 +58,29 @@ func (h *ConferenceHandler) UpdateConference(c *gin.Context) {
 		return
 	}
 
-	conf.Title = strings.TrimSpace(payload.Title)
-	conf.Description = strings.TrimSpace(payload.Description)
+	setStr := func(dst *string, src *string) {
+		if src != nil {
+			*dst = strings.TrimSpace(*src)
+		}
+	}
+	setStr(&conf.Title, payload.Title)
+	setStr(&conf.Description, payload.Description)
 	if payload.StartsAt != nil {
 		conf.StartsAt = *payload.StartsAt
 	}
 	if payload.EndsAt != nil {
 		conf.EndsAt = *payload.EndsAt
 	}
-	conf.SupportEmail = strings.TrimSpace(payload.SupportEmail)
-	conf.SupportPhone = strings.TrimSpace(payload.SupportPhone)
-	conf.VenueAddress = strings.TrimSpace(payload.VenueAddress)
-	conf.VenueMapURL = strings.TrimSpace(payload.VenueMapURL)
-	conf.VenueTransport = strings.TrimSpace(payload.VenueTransport)
-	conf.LiveStreamURL = strings.TrimSpace(payload.LiveStreamURL)
-	conf.StreamVKURL = strings.TrimSpace(payload.StreamVKURL)
-	conf.StreamYouTube = strings.TrimSpace(payload.StreamYouTube)
-	conf.StreamRutube = strings.TrimSpace(payload.StreamRutube)
-	conf.ProceedingsURL = strings.TrimSpace(payload.ProceedingsURL)
+	setStr(&conf.SupportEmail, payload.SupportEmail)
+	setStr(&conf.SupportPhone, payload.SupportPhone)
+	setStr(&conf.VenueAddress, payload.VenueAddress)
+	setStr(&conf.VenueMapURL, payload.VenueMapURL)
+	setStr(&conf.VenueTransport, payload.VenueTransport)
+	setStr(&conf.LiveStreamURL, payload.LiveStreamURL)
+	setStr(&conf.StreamVKURL, payload.StreamVKURL)
+	setStr(&conf.StreamYouTube, payload.StreamYouTube)
+	setStr(&conf.StreamRutube, payload.StreamRutube)
+	setStr(&conf.ProceedingsURL, payload.ProceedingsURL)
 	if payload.Status != "" {
 		switch payload.Status {
 		case models.ConferenceStatusDraft, models.ConferenceStatusLive, models.ConferenceStatusFinished:
@@ -187,6 +194,13 @@ func (h *ConferenceHandler) GetLanding(c *gin.Context) {
 		return
 	}
 
+	// profiles — parent-scoped таблица: своего organization_id у неё НЕТ, поэтому
+	// скоупим по родителю users.organization_id (а не tenant.ByOrg на самой profiles).
+	orgID := tenant.OrgID(c)
+	profileByOrg := func(q *gorm.DB) *gorm.DB {
+		return q.Where("user_id IN (SELECT id FROM users WHERE organization_id = ?)", orgID)
+	}
+
 	// Число докладов по секциям: профили, сгруппированные по section_id (скоуп по org).
 	type sectionCount struct {
 		SectionID uint
@@ -194,7 +208,7 @@ func (h *ConferenceHandler) GetLanding(c *gin.Context) {
 	}
 	var rows []sectionCount
 	db.Model(&models.Profile{}).
-		Scopes(tenant.ByOrg(c)).
+		Scopes(profileByOrg).
 		Select("section_id, count(*) as cnt").
 		Where("section_id IS NOT NULL").
 		Group("section_id").
@@ -219,9 +233,9 @@ func (h *ConferenceHandler) GetLanding(c *gin.Context) {
 
 	var stats landingStats
 	db.Model(&models.Section{}).Scopes(tenant.ByConference(c)).Count(&stats.Sections)
-	db.Model(&models.Profile{}).Scopes(tenant.ByOrg(c)).Count(&stats.Participants)
-	db.Model(&models.Profile{}).Scopes(tenant.ByOrg(c)).Where("talk_title <> ''").Count(&stats.Talks)
-	db.Model(&models.Profile{}).Scopes(tenant.ByOrg(c)).Where("city <> ''").Distinct("city").Count(&stats.Cities)
+	db.Model(&models.Profile{}).Scopes(profileByOrg).Count(&stats.Participants)
+	db.Model(&models.Profile{}).Scopes(profileByOrg).Where("talk_title <> ''").Count(&stats.Talks)
+	db.Model(&models.Profile{}).Scopes(profileByOrg).Where("city <> ''").Distinct("city").Count(&stats.Cities)
 
 	preview := sectionViews
 	if len(preview) > 5 {

@@ -50,7 +50,7 @@ export default function Branding() {
 
   return (
     <div className="con-screen">
-      {toast ? <div className={`con-toast ${toast.kind}`} role="status">{toast.text}</div> : null}
+      {toast ? <div className={`con-toast ${toast.kind}`} role={toast.kind === "err" ? "alert" : "status"}>{toast.text}</div> : null}
 
       <div className="con-eyebrow">Брендинг · White-label</div>
       <div className="con-head-row">

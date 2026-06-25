@@ -47,17 +47,24 @@ export default function Overview() {
   const readiness = Math.round((checklist.filter((c) => c.done).length / checklist.length) * 100);
 
   const dleft = daysUntil(conference?.starts_at);
+  // Go-нулевая дата ("0001-01-01") валидна для Date — отсекаем по году > 1.
+  const realDate = (v) => {
+    const d = v ? new Date(v) : null;
+    return d && !Number.isNaN(d.getTime()) && d.getUTCFullYear() > 1 ? d : null;
+  };
   const dateLabel = useMemo(() => {
-    const a = conference?.starts_at ? new Date(conference.starts_at) : null;
-    const b = conference?.ends_at ? new Date(conference.ends_at) : null;
-    if (a && !Number.isNaN(a.getTime())) {
+    const a = realDate(conference?.starts_at);
+    const b = realDate(conference?.ends_at);
+    if (a) {
       const opt = { day: "numeric", month: "long", year: "numeric" };
       const left = a.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
-      const right = b && !Number.isNaN(b.getTime()) ? b.toLocaleDateString("ru-RU", opt) : "";
+      const right = b ? b.toLocaleDateString("ru-RU", opt) : "";
       return right ? `${left} – ${right}` : a.toLocaleDateString("ru-RU", opt);
     }
     return "";
   }, [conference]);
+  const FORMAT_LABEL = { hybrid: "Очно и онлайн", offline: "Только очно", online: "Только онлайн" };
+  const formatLabel = FORMAT_LABEL[conference?.format] || "";
 
   const publish = async () => {
     setPublishing(true);
@@ -75,7 +82,7 @@ export default function Overview() {
 
   return (
     <div className="con-screen">
-      {toast ? <div className={`con-toast ${toast.kind}`} role="status">{toast.text}</div> : null}
+      {toast ? <div className={`con-toast ${toast.kind}`} role={toast.kind === "err" ? "alert" : "status"}>{toast.text}</div> : null}
 
       <div className="con-head-row">
         <div>
@@ -84,7 +91,7 @@ export default function Overview() {
           </div>
           <h2 className="con-h2">{conference?.title || "Конференция не создана"}</h2>
           <p className="con-sub">
-            {[dateLabel, conference?.format_label, org?.display_name].filter(Boolean).join(" · ") ||
+            {[dateLabel, formatLabel, org?.display_name].filter(Boolean).join(" · ") ||
               "Создайте конференцию, чтобы начать."}
           </p>
         </div>
