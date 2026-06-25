@@ -1,0 +1,32 @@
+/* ===== Centered status screens (404 / нет прав / заглушки) ===== */
+.status-page {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 64px 20px;
+  text-align: center;
+}
+.status-code {
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--brand);
+}
+.status-page h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 16px 0 8px;
+}
+.status-page p {
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 0 0 24px;
+}
+.status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}

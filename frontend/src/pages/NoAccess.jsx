@@ -1,15 +1,20 @@
 import { Link } from "react-router-dom";
+import { buttonClassName } from "../components/ui/buttonClass.js";
+import "./status-page.css";
 
 export default function NoAccess() {
   return (
-    <section className="panel narrow">
-      <h2>Недостаточно прав</h2>
-      <p>У вас нет доступа к админ‑панели. Если это ошибка, обратитесь в оргкомитет.</p>
-      <div className="form-actions">
-        <Link className="btn btn-primary" to="/dashboard">
+    <section className="status-page">
+      <div className="status-code">403</div>
+      <h1>Недостаточно прав</h1>
+      <p>
+        У вас нет доступа к этому разделу. Если это ошибка, обратитесь в оргкомитет конференции.
+      </p>
+      <div className="status-actions">
+        <Link className={buttonClassName("primary")} to="/dashboard">
           В кабинет
         </Link>
-        <Link className="btn btn-ghost" to="/">
+        <Link className={buttonClassName("ghost")} to="/">
           На главную
         </Link>
       </div>
