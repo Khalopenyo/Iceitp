@@ -28,6 +28,10 @@ type Conference struct {
 	VenueAddress   string           `json:"venue_address"`
 	VenueMapURL    string           `json:"venue_map_url"`
 	VenueTransport string           `json:"venue_transport"`
+	LiveStreamURL  string           `gorm:"column:live_stream_url" json:"live_stream_url"`
+	StreamVKURL    string           `gorm:"column:stream_vk_url" json:"stream_vk_url"`
+	StreamYouTube  string           `gorm:"column:stream_youtube_url" json:"stream_youtube_url"`
+	StreamRutube   string           `gorm:"column:stream_rutube_url" json:"stream_rutube_url"`
 	CreatedAt      time.Time        `json:"created_at"`
 	UpdatedAt      time.Time        `json:"updated_at"`
 	// Soft-delete (ADR-0004): Conference only in Phase 0. Inert column —

@@ -28,6 +28,10 @@ type updateConferencePayload struct {
 	VenueAddress   string                  `json:"venue_address"`
 	VenueMapURL    string                  `json:"venue_map_url"`
 	VenueTransport string                  `json:"venue_transport"`
+	LiveStreamURL  string                  `json:"live_stream_url"`
+	StreamVKURL    string                  `json:"stream_vk_url"`
+	StreamYouTube  string                  `json:"stream_youtube_url"`
+	StreamRutube   string                  `json:"stream_rutube_url"`
 }
 
 func (h *ConferenceHandler) GetConference(c *gin.Context) {
@@ -65,6 +69,10 @@ func (h *ConferenceHandler) UpdateConference(c *gin.Context) {
 	conf.VenueAddress = strings.TrimSpace(payload.VenueAddress)
 	conf.VenueMapURL = strings.TrimSpace(payload.VenueMapURL)
 	conf.VenueTransport = strings.TrimSpace(payload.VenueTransport)
+	conf.LiveStreamURL = strings.TrimSpace(payload.LiveStreamURL)
+	conf.StreamVKURL = strings.TrimSpace(payload.StreamVKURL)
+	conf.StreamYouTube = strings.TrimSpace(payload.StreamYouTube)
+	conf.StreamRutube = strings.TrimSpace(payload.StreamRutube)
 	conf.ProceedingsURL = strings.TrimSpace(payload.ProceedingsURL)
 	if payload.Status != "" {
 		switch payload.Status {

@@ -233,6 +233,15 @@ var migrations = []migration{
 			return db.AutoMigrate(&models.Conference{})
 		},
 	},
+	{
+		Version: "202606250016",
+		Name:    "add_conference_broadcast_fields",
+		Up: func(db *gorm.DB) error {
+			// Additive: live_stream_url + stream_vk/youtube/rutube под страницу
+			// трансляций (SCR-PUB-12T). AutoMigrate добавляет колонки.
+			return db.AutoMigrate(&models.Conference{})
+		},
+	},
 }
 
 // tenantConferenceIDNotNull flips the per-event conference_id columns (and

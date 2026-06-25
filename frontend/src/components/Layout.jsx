@@ -144,6 +144,7 @@ export default function Layout() {
     { to: "/sections", label: "Секции" },
     { to: "/speakers", label: "Спикеры" },
     { to: "/venue", label: "Площадка" },
+    { to: "/live", label: "Трансляции" },
   ];
   const desktopNavItems = user
     ? [
