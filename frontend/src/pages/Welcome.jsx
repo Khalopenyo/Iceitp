@@ -259,7 +259,12 @@ export default function Welcome() {
       {sections.length > 0 ? (
         <section className="pub-section" id="sections">
           <Container>
-            <h2 className="pub-block-title">Секции</h2>
+            <div className="pub-section-head-row">
+              <h2 className="pub-block-title">Секции</h2>
+              <Link className={buttonClassName("ghost")} to="/sections">
+                Все секции
+              </Link>
+            </div>
             <div className="pub-section-cards">
               {sections.map((section) => (
                 <article key={section.id} className="pub-section-card">
