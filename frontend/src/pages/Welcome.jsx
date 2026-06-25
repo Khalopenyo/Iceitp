@@ -127,9 +127,9 @@ export default function Welcome() {
             ) : (
               <>
                 <Button onClick={() => startRegistration("offline")}>Зарегистрироваться</Button>
-                <a className={buttonClassName("ghost")} href="#program">
+                <Link className={buttonClassName("ghost")} to="/program">
                   Программа
-                </a>
+                </Link>
               </>
             )}
           </div>
@@ -235,6 +235,9 @@ export default function Welcome() {
           <Container>
             <div className="pub-section-head-row">
               <h2 className="pub-block-title">Превью программы</h2>
+              <Link className={buttonClassName("ghost")} to="/program">
+                Полная программа
+              </Link>
             </div>
             <div className="pub-prog-list">
               {programPreview.map((item) => (

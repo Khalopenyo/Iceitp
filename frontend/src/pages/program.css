@@ -1,0 +1,104 @@
+/* ===== Публичная программа (SCR-PUB-03) на токенах ===== */
+.program {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 28px 20px 56px;
+}
+.program-head h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+.program-head p {
+  color: var(--text-2);
+  font-size: 14px;
+  margin: 0 0 18px;
+}
+
+.program-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.program-tab {
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+.program-tab:hover {
+  border-color: var(--brand);
+}
+.program-tab.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--on-brand);
+}
+.program-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.program-list {
+  display: grid;
+  gap: 10px;
+}
+.program-item {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 16px;
+  align-items: start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brand);
+  border-radius: var(--r-md);
+  padding: 16px 18px;
+}
+.program-time {
+  color: var(--brand-700);
+  font-weight: 700;
+  font-size: 15px;
+}
+.program-item-body strong {
+  display: block;
+  color: var(--text);
+  font-size: 16px;
+}
+.program-item-body p {
+  margin: 6px 0 0;
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.program-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+.program-empty {
+  color: var(--text-2);
+  font-size: 14px;
+  margin: 0;
+}
+.program-note {
+  color: var(--text-2);
+  font-size: 12.5px;
+  margin: 16px 0 0;
+}
+
+@media (max-width: 560px) {
+  .program-item {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
