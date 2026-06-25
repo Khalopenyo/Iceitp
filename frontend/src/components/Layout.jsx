@@ -142,6 +142,7 @@ export default function Layout() {
     { to: "/about", label: "О конференции" },
     { to: "/program", label: "Программа" },
     { to: "/sections", label: "Секции" },
+    { to: "/speakers", label: "Спикеры" },
   ];
   const desktopNavItems = user
     ? [

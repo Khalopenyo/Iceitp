@@ -198,6 +198,32 @@ var migrations = []migration{
 			return db.AutoMigrate(&models.Section{}, &models.ProgramAssignment{})
 		},
 	},
+	{
+		Version: "202606250014",
+		Name:    "add_persons",
+		Up: func(db *gorm.DB) error {
+			if err := db.AutoMigrate(&models.Person{}); err != nil {
+				return err
+			}
+			if db.Dialector.Name() != "postgres" {
+				return nil
+			}
+			// Per-conference таблица → та же fail-closed RLS-политика, что и у
+			// остальных conference_id-таблиц (0009 уже отработала).
+			for _, s := range []string{
+				"ALTER TABLE persons ENABLE ROW LEVEL SECURITY",
+				"DROP POLICY IF EXISTS tenant_isolation ON persons",
+				"CREATE POLICY tenant_isolation ON persons " +
+					"USING (conference_id = NULLIF(current_setting('app.conf_id', true), '')::bigint) " +
+					"WITH CHECK (conference_id = NULLIF(current_setting('app.conf_id', true), '')::bigint)",
+			} {
+				if err := db.Exec(s).Error; err != nil {
+					return fmt.Errorf("rls persons: %w", err)
+				}
+			}
+			return nil
+		},
+	},
 }
 
 // tenantConferenceIDNotNull flips the per-event conference_id columns (and
