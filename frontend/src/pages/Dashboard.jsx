@@ -142,7 +142,7 @@ export default function Dashboard() {
                 {hasSlot ? <>{I.clock} {formatSlot(schedule.starts_at)}</> : null}
               </div>
               <div className="lk-chips">
-                <Link className="ui-btn ui-btn-ghost ui-btn-sm" to="/program">{I.cal} В расписание</Link>
+                <Link className="ui-btn ui-btn-ghost ui-btn-sm" to="/schedule">{I.cal} В расписание</Link>
                 <Link className="ui-btn ui-btn-ghost ui-btn-sm" to="/map">{I.map} Как пройти</Link>
               </div>
             </>

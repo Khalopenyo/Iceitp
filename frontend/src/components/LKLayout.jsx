@@ -36,7 +36,7 @@ const icons = {
 
 const TABS = [
   { key: "home", to: "/dashboard", label: "Главная", match: ["/dashboard"] },
-  { key: "calendar", to: "/program", label: "Программа", match: ["/program", "/schedule"] },
+  { key: "calendar", to: "/schedule", label: "Программа", match: ["/schedule", "/program"] },
   { key: "badge", to: "/documents", label: "Бейдж", match: ["/documents"] },
   { key: "chat", to: "/chat", label: "Чат", match: ["/chat"] },
   { key: "more", to: "/profile", label: "Ещё", match: ["/profile", "/feedback", "/map", "/qa", "/more"] },

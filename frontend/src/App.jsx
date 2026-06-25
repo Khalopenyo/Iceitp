@@ -10,6 +10,7 @@ import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Profile from "./pages/Profile.jsx";
+import Schedule from "./pages/Schedule.jsx";
 import Admin from "./pages/Admin.jsx";
 import Feedback from "./pages/Feedback.jsx";
 import Chat from "./pages/Chat.jsx";
@@ -78,6 +79,7 @@ export default function App() {
       >
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="schedule" element={<Schedule />} />
       </Route>
       <Route path="/" element={<Layout />}>
         <Route path="badge/:token" element={<BadgeCheckIn />} />
