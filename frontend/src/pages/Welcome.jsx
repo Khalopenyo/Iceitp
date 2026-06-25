@@ -8,18 +8,55 @@ import {
   getConferenceTitle,
 } from "../lib/conference.js";
 import { fetchContentBlocks } from "../lib/content.js";
+import { fetchLanding } from "../lib/landing.js";
 import { Container, Button, Badge } from "../components/ui/index.jsx";
 import { buttonClassName } from "../components/ui/buttonClass.js";
 import "./landing.css";
 
-// Generic, product-level features (the same for every tenant — describe the
-// platform, not a specific university). Tenant-specific content lives in CMS blocks.
-const platformFeatures = [
-  { code: "01", title: "Выбор секций", text: "Подача заявки с выбором секции и темы доклада в единой форме регистрации." },
-  { code: "02", title: "Бейджи и сертификаты", text: "Персональные документы участника формируются автоматически в личном кабинете." },
-  { code: "03", title: "Чат участников", text: "Общение, вопросы и обмен файлами внутри платформы без сторонних сервисов." },
-  { code: "04", title: "Электронный сборник", text: "После конференции участник получает доступ к итоговым материалам и публикациям." },
-];
+function useCountdown(target) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  if (!target) {
+    return null;
+  }
+  const ms = new Date(target).getTime() - now;
+  if (Number.isNaN(ms)) {
+    return null;
+  }
+  if (ms <= 0) {
+    return { started: true, days: 0, hours: 0, mins: 0, secs: 0 };
+  }
+  return {
+    started: false,
+    days: Math.floor(ms / 86400000),
+    hours: Math.floor((ms % 86400000) / 3600000),
+    mins: Math.floor((ms % 3600000) / 60000),
+    secs: Math.floor((ms % 60000) / 1000),
+  };
+}
+
+function pad(value) {
+  return String(value).padStart(2, "0");
+}
+
+function formatSessionTime(value) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function Welcome() {
   const navigate = useNavigate();
@@ -30,9 +67,14 @@ export default function Welcome() {
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [consentError, setConsentError] = useState("");
   const [blocks, setBlocks] = useState([]);
+  const [landing, setLanding] = useState(null);
 
   useEffect(() => {
     fetchContentBlocks().then((list) => setBlocks(list));
+  }, []);
+
+  useEffect(() => {
+    fetchLanding().then((data) => setLanding(data));
   }, []);
 
   const conferenceTitle = getConferenceTitle(conference);
@@ -41,6 +83,11 @@ export default function Welcome() {
     outletContext.conferenceDateLabel || formatConferenceDateRange(conference?.starts_at, conference?.ends_at);
   const conferenceStatusLabel =
     outletContext.conferenceStatusLabel || getConferenceStatusLabel(conference?.status);
+  const countdown = useCountdown(conference?.starts_at);
+  const stats = landing?.stats || null;
+  const sections = landing?.sections || [];
+  const programPreview = landing?.program_preview || [];
+  const registrationOpen = conference?.status === "draft" || conference?.status === "live";
 
   const startRegistration = (mode) => {
     if (!consentAccepted) {
@@ -79,12 +126,85 @@ export default function Welcome() {
               </Link>
             ) : (
               <>
-                <Button onClick={() => startRegistration("offline")}>Регистрация</Button>
-                <Link className={buttonClassName("ghost")} to="/login">
-                  Войти
-                </Link>
+                <Button onClick={() => startRegistration("offline")}>Зарегистрироваться</Button>
+                <a className={buttonClassName("ghost")} href="#program">
+                  Программа
+                </a>
               </>
             )}
+          </div>
+
+          {countdown && !countdown.started ? (
+            <div className="pub-countdown" aria-label="Обратный отсчёт до открытия">
+              <div className="pub-cd">
+                <b>{countdown.days}</b>
+                <span>дней</span>
+              </div>
+              <div className="pub-cd">
+                <b>{pad(countdown.hours)}</b>
+                <span>часов</span>
+              </div>
+              <div className="pub-cd">
+                <b>{pad(countdown.mins)}</b>
+                <span>минут</span>
+              </div>
+              <div className="pub-cd">
+                <b>{pad(countdown.secs)}</b>
+                <span>секунд</span>
+              </div>
+            </div>
+          ) : null}
+        </Container>
+      </section>
+
+      {stats ? (
+        <section className="pub-section">
+          <Container>
+            <h2 className="pub-block-title">Ключевые цифры</h2>
+            <div className="pub-stats">
+              <div className="pub-stat">
+                <b>{stats.sections}</b>
+                <span>Секции</span>
+              </div>
+              <div className="pub-stat">
+                <b>{stats.talks}</b>
+                <span>Доклады</span>
+              </div>
+              <div className="pub-stat">
+                <b>{stats.participants}</b>
+                <span>Участники</span>
+              </div>
+              <div className="pub-stat">
+                <b>{stats.cities}</b>
+                <span>Города</span>
+              </div>
+            </div>
+          </Container>
+        </section>
+      ) : null}
+
+      <section className="pub-section">
+        <Container>
+          <h2 className="pub-block-title">Важные даты</h2>
+          <div className="pub-dates">
+            <div className="pub-date">
+              <div className="pub-date-tx">
+                <strong>Регистрация участников</strong>
+                <span>Подача заявок на участие и доклады</span>
+              </div>
+              <Badge variant={registrationOpen ? "success" : "neutral"}>
+                {registrationOpen ? "Открыта" : "Закрыта"}
+              </Badge>
+            </div>
+            {conferenceDateLabel ? (
+              <div className="pub-date">
+                <div className="pub-date-tx">
+                  <strong>Даты проведения</strong>
+                  <span>{conferenceDateLabel}</span>
+                </div>
+                <Badge variant="brand">Основное</Badge>
+              </div>
+            ) : null}
           </div>
         </Container>
       </section>
@@ -110,20 +230,77 @@ export default function Welcome() {
         </Container>
       ) : null}
 
-      <section className="pub-features">
+      {programPreview.length > 0 ? (
+        <section className="pub-section" id="program">
+          <Container>
+            <div className="pub-section-head-row">
+              <h2 className="pub-block-title">Превью программы</h2>
+            </div>
+            <div className="pub-prog-list">
+              {programPreview.map((item) => (
+                <div key={item.id} className="pub-prog-item">
+                  <div className="pub-prog-tx">
+                    <strong>{item.title}</strong>
+                    <span>
+                      {formatSessionTime(item.start_at)}
+                      {item.room ? ` · Зал «${item.room}»` : ""}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Container>
+        </section>
+      ) : null}
+
+      {sections.length > 0 ? (
+        <section className="pub-section" id="sections">
+          <Container>
+            <h2 className="pub-block-title">Секции</h2>
+            <div className="pub-section-cards">
+              {sections.map((section) => (
+                <article key={section.id} className="pub-section-card">
+                  <strong>{section.title}</strong>
+                  {section.description ? <p>{section.description}</p> : null}
+                  <div className="pub-section-card-meta">
+                    {section.room ? <span>Зал «{section.room}»</span> : null}
+                    <span>{section.talks_count} докл.</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </Container>
+        </section>
+      ) : null}
+
+      <section className="pub-section" id="venue">
         <Container>
-          <div className="pub-section-head">
-            <Badge variant="brand">Возможности платформы</Badge>
-            <h2>Что ждёт участника в личном кабинете</h2>
-          </div>
-          <div className="pub-feature-grid">
-            {platformFeatures.map((feature) => (
-              <article key={feature.code} className="pub-feature-card">
-                <span className="pub-feature-code">{feature.code}</span>
-                <h3>{feature.title}</h3>
-                <p>{feature.text}</p>
-              </article>
-            ))}
+          <div className="pub-venue">
+            <div className="pub-venue-col">
+              <h2 className="pub-block-title">Место проведения</h2>
+              <p className="pub-venue-text">
+                Точный адрес площадки и схема проезда публикуются организатором. Очным участникам
+                доступен интерактивный 360-тур по площадке.
+              </p>
+              <div className="pub-hero-actions">
+                <Link className={buttonClassName("ghost")} to="/map">
+                  360-тур по площадке
+                </Link>
+              </div>
+            </div>
+            <div className="pub-venue-col" id="contacts">
+              <h2 className="pub-block-title">Контакты оргкомитета</h2>
+              {outletContext.conferenceSupportEmail ? (
+                <p className="pub-venue-text">
+                  Email:{" "}
+                  <a href={`mailto:${outletContext.conferenceSupportEmail}`}>
+                    {outletContext.conferenceSupportEmail}
+                  </a>
+                </p>
+              ) : (
+                <p className="pub-venue-text">Контакты организатора публикуются на странице конференции.</p>
+              )}
+            </div>
           </div>
         </Container>
       </section>
@@ -134,8 +311,8 @@ export default function Welcome() {
             <Badge variant="brand">Регистрация</Badge>
             <h2>Подайте заявку на участие</h2>
             <p className="pub-register-copy">
-              Выберите формат участия, подтвердите согласие на обработку и размещение персональных данных и перейдите к
-              регистрационной форме.
+              Выберите формат участия, подтвердите согласие на обработку и размещение персональных данных и
+              перейдите к регистрационной форме.
             </p>
             <div className="pub-hero-actions">
               <Button onClick={() => startRegistration("offline")}>Офлайн-участник</Button>

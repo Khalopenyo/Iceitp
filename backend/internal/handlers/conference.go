@@ -81,6 +81,90 @@ func (h *ConferenceHandler) UpdateConference(c *gin.Context) {
 	c.JSON(http.StatusOK, conf)
 }
 
+type landingSectionView struct {
+	ID          uint      `json:"id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Room        string    `json:"room"`
+	StartAt     time.Time `json:"start_at"`
+	EndAt       time.Time `json:"end_at"`
+	TalksCount  int       `json:"talks_count"`
+}
+
+type landingStats struct {
+	Sections     int64 `json:"sections"`
+	Talks        int64 `json:"talks"`
+	Participants int64 `json:"participants"`
+	Cities       int64 `json:"cities"`
+}
+
+// GetLanding отдаёт публичные данные витрины лендинга (SCR-PUB-01) одним
+// запросом: конференция, агрегаты (секции/доклады/участники/города), карточки
+// секций с числом докладов и превью программы. Всё тенант-скоуплено.
+func (h *ConferenceHandler) GetLanding(c *gin.Context) {
+	conf, err := h.getOrCreateConference(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load conference"})
+		return
+	}
+
+	db := tenant.DB(c, h.DB)
+
+	var sections []models.Section
+	if err := db.Scopes(tenant.ByConference(c)).Order("start_at asc, id asc").Find(&sections).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load sections"})
+		return
+	}
+
+	// Число докладов по секциям: профили, сгруппированные по section_id (скоуп по org).
+	type sectionCount struct {
+		SectionID uint
+		Cnt       int
+	}
+	var rows []sectionCount
+	db.Model(&models.Profile{}).
+		Scopes(tenant.ByOrg(c)).
+		Select("section_id, count(*) as cnt").
+		Where("section_id IS NOT NULL").
+		Group("section_id").
+		Scan(&rows)
+	countBySection := make(map[uint]int, len(rows))
+	for _, r := range rows {
+		countBySection[r.SectionID] = r.Cnt
+	}
+
+	sectionViews := make([]landingSectionView, 0, len(sections))
+	for _, s := range sections {
+		sectionViews = append(sectionViews, landingSectionView{
+			ID:          s.ID,
+			Title:       s.Title,
+			Description: s.Description,
+			Room:        s.Room,
+			StartAt:     s.StartAt,
+			EndAt:       s.EndAt,
+			TalksCount:  countBySection[s.ID],
+		})
+	}
+
+	var stats landingStats
+	db.Model(&models.Section{}).Scopes(tenant.ByConference(c)).Count(&stats.Sections)
+	db.Model(&models.Profile{}).Scopes(tenant.ByOrg(c)).Count(&stats.Participants)
+	db.Model(&models.Profile{}).Scopes(tenant.ByOrg(c)).Where("talk_title <> ''").Count(&stats.Talks)
+	db.Model(&models.Profile{}).Scopes(tenant.ByOrg(c)).Where("city <> ''").Distinct("city").Count(&stats.Cities)
+
+	preview := sectionViews
+	if len(preview) > 5 {
+		preview = preview[:5]
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"conference":      conf,
+		"stats":           stats,
+		"sections":        sectionViews,
+		"program_preview": preview,
+	})
+}
+
 func (h *ConferenceHandler) getOrCreateConference(c *gin.Context) (*models.Conference, error) {
 	var conf models.Conference
 	if err := tenant.DB(c, h.DB).Scopes(tenant.ByOrg(c)).Order("id asc").First(&conf).Error; err != nil {
