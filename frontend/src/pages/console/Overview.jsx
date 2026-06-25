@@ -25,7 +25,10 @@ export default function Overview() {
   useEffect(() => {
     apiGet("/landing").then(setLanding).catch(() => setLanding(null));
     apiGet("/admin/users")
-      .then((list) => setRecent(Array.isArray(list) ? list.slice(-4).reverse() : []))
+      .then((r) => {
+        const list = Array.isArray(r) ? r : r?.items || [];
+        setRecent(list.slice(0, 4));
+      })
       .catch(() => setRecent([]));
   }, []);
 
