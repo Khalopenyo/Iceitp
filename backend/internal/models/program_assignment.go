@@ -9,6 +9,7 @@ type ProgramAssignment struct {
 	UserType     UserType   `gorm:"type:varchar(20);not null" json:"user_type"`
 	SectionID    *uint      `gorm:"index" json:"section_id"`
 	TalkTitle    string     `gorm:"not null" json:"talk_title"`
+	Abstract     string     `json:"abstract"`
 	RoomID       *uint      `gorm:"index" json:"room_id"`
 	StartsAt     *time.Time `json:"starts_at"`
 	EndsAt       *time.Time `json:"ends_at"`

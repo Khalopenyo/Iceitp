@@ -5,10 +5,57 @@ import (
 	"conferenceplatforma/internal/tenant"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+type sectionTalkView struct {
+	TalkTitle    string          `json:"talk_title"`
+	Abstract     string          `json:"abstract"`
+	AuthorName   string          `json:"author_name"`
+	Organization string          `json:"organization"`
+	UserType     models.UserType `json:"user_type"`
+	StartsAt     *time.Time      `json:"starts_at"`
+	EndsAt       *time.Time      `json:"ends_at"`
+	JoinURL      string          `json:"join_url"`
+}
+
+// GetSection — публичная карточка секции (SCR-PUB-05): секция (с председателем)
+// + список её докладов из утверждённой программы (ProgramAssignment), тенант-
+// скоуплено. Доклады: тема, аннотация, автор/организация, формат, время, трансляция.
+func (h *SectionHandler) GetSection(c *gin.Context) {
+	id := c.Param("id")
+	var section models.Section
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).First(&section, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "section not found"})
+		return
+	}
+
+	var assignments []models.ProgramAssignment
+	tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).
+		Preload("User.Profile").
+		Where("section_id = ?", section.ID).
+		Order("starts_at asc, id asc").
+		Find(&assignments)
+
+	talks := make([]sectionTalkView, 0, len(assignments))
+	for _, a := range assignments {
+		talks = append(talks, sectionTalkView{
+			TalkTitle:    a.TalkTitle,
+			Abstract:     a.Abstract,
+			AuthorName:   a.User.Profile.FullName,
+			Organization: a.User.Profile.Organization,
+			UserType:     a.UserType,
+			StartsAt:     a.StartsAt,
+			EndsAt:       a.EndsAt,
+			JoinURL:      a.JoinURL,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"section": section, "talks": talks})
+}
 
 type SectionHandler struct {
 	DB *gorm.DB

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { fetchLanding } from "../lib/landing.js";
 import { Container } from "../components/ui/index.jsx";
+import { buttonClassName } from "../components/ui/buttonClass.js";
 import "./sections.css";
 
 function pad(value) {
@@ -133,6 +135,9 @@ export default function Sections() {
                   {section.start_at ? <span>{formatDayShort(section.start_at)}</span> : null}
                   {section.room ? <span>Зал «{section.room}»</span> : null}
                 </div>
+                <Link className={buttonClassName("ghost")} to={`/sections/${section.id}`}>
+                  Подробнее
+                </Link>
               </article>
             ))}
           </div>

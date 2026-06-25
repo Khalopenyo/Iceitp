@@ -188,6 +188,16 @@ var migrations = []migration{
 			return nil
 		},
 	},
+	{
+		Version: "202606250013",
+		Name:    "add_section_chair_and_talk_abstract",
+		Up: func(db *gorm.DB) error {
+			// Additive nullable-колонки под карточку секции (SCR-PUB-05):
+			// sections.chair (председатель) и program_assignments.abstract.
+			// AutoMigrate добавляет колонки, не трогая данные.
+			return db.AutoMigrate(&models.Section{}, &models.ProgramAssignment{})
+		},
+	},
 }
 
 // tenantConferenceIDNotNull flips the per-event conference_id columns (and
