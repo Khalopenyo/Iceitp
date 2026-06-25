@@ -2,7 +2,7 @@
 
 :root {
   /* База документа — на токенах дизайн-системы (Inter), чтобы текст вне
-     .ui-*/.pub-*/.auth-* не наследовал чужой шрифт/цвет. */
+     ui-, pub- и auth-обёрток не наследовал чужой шрифт и цвет. */
   font-family: var(--font);
   color: var(--text);
   background-color: var(--bg);
