@@ -10,6 +10,8 @@ import ConsoleSoon from "./pages/console/ConsoleSoon.jsx";
 import Onboarding from "./pages/console/Onboarding.jsx";
 import ConsoleProgram from "./pages/console/ConsoleProgram.jsx";
 import ConsoleParticipants from "./pages/console/ConsoleParticipants.jsx";
+import ConsoleModeration from "./pages/console/ConsoleModeration.jsx";
+import ConsoleDocs from "./pages/console/ConsoleDocs.jsx";
 import Welcome from "./pages/Welcome.jsx";
 import Register from "./pages/Register.jsx";
 import Login from "./pages/Login.jsx";
@@ -98,8 +100,8 @@ export default function App() {
         <Route path="program" element={<ConsoleProgram />} />
         <Route path="participants" element={<ConsoleParticipants />} />
         <Route path="checkin" element={<ConsoleSoon eyebrow="Регистрация на месте" title="Сканирование бейджей" />} />
-        <Route path="moderation" element={<ConsoleSoon eyebrow="Модерация" title="Вопросы спикерам" />} />
-        <Route path="docs" element={<ConsoleSoon eyebrow="Документы" title="Генерация материалов" />} />
+        <Route path="moderation" element={<ConsoleModeration />} />
+        <Route path="docs" element={<ConsoleDocs />} />
         <Route path="team" element={<ConsoleSoon eyebrow="Команда" title="Кто работает над конференцией" />} />
         <Route path="billing" element={<ConsoleSoon eyebrow="Подписка" title="Тариф и использование" />} />
       </Route>
