@@ -2,6 +2,8 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm } from "../lib/api.js";
 import { getUser } from "../lib/auth.js";
 import { triggerBlobDownload } from "../lib/download.js";
+import { Badge, Button } from "../components/ui/index.jsx";
+import "./chat.css";
 
 const CHAT_SCOPE_CONFERENCE = "conference";
 const CHAT_SCOPE_SECTION = "section";
@@ -367,14 +369,15 @@ export default function Chat() {
   const canCompose = Boolean(currentChannel?.available) && !sending;
 
   return (
-    <section className="panel chat-page">
+    <section className="chat-page">
       <div className="chat-shell">
         <aside className="chat-sidebar">
           <div className="chat-sidebar-head">
-            <span className="badge">Conference Chat</span>
+            <Badge variant="brand">Общение</Badge>
             <h2>Чаты конференции</h2>
-            <p className="muted">
-              Главный канал для всех участников и отдельный чат вашей секции с автоматическим обновлением.
+            <p>
+              Главный канал для всех участников и отдельный чат вашей секции с автоматическим
+              обновлением.
             </p>
           </div>
 
@@ -513,12 +516,12 @@ export default function Chat() {
                             />
                             <div className="chat-editor-actions">
                               <span>{editingContent.trim().length}/2000</span>
-                              <button type="button" className="btn btn-ghost" onClick={cancelEditing}>
+                              <Button variant="ghost" type="button" onClick={cancelEditing}>
                                 Отмена
-                              </button>
-                              <button type="button" className="btn btn-primary" onClick={() => handleSaveEdit(message.id)}>
+                              </Button>
+                              <Button type="button" onClick={() => handleSaveEdit(message.id)}>
                                 Сохранить
-                              </button>
+                              </Button>
                             </div>
                           </div>
                         ) : (
@@ -602,13 +605,12 @@ export default function Chat() {
                 {content.trim().length}/2000
                 {selectedFiles.length ? ` · файлов: ${selectedFiles.length}` : ""}
               </span>
-              <button
-                className="btn btn-primary"
+              <Button
                 type="submit"
                 disabled={!canCompose || (!content.trim() && selectedFiles.length === 0)}
               >
-                {sending ? "Отправка..." : "Отправить"}
-              </button>
+                {sending ? "Отправка…" : "Отправить"}
+              </Button>
             </div>
           </form>
         </div>
