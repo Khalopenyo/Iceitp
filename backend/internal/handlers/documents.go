@@ -429,6 +429,36 @@ func (h *DocumentHandler) BadgePDF(c *gin.Context) {
 	h.writeBadgePDF(c, context)
 }
 
+// BadgeQR отдаёт QR-код бейджа отдельным PNG для показа на экране (офлайн
+// check-in без печати). Кодирует тот же scan-URL, что и QR внутри PDF-бейджа.
+func (h *DocumentHandler) BadgeQR(c *gin.Context) {
+	context, err := h.loadDocumentRuntimeContext(c, c.GetUint("user_id"))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load conference"})
+		return
+	}
+	if !context.Status.Badge.Available {
+		writeBlockedDocumentError(c, context.Status.Badge)
+		return
+	}
+	token, err := h.generateBadgeToken(context.User.ID, context.Conf.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate badge token"})
+		return
+	}
+	png, err := qrcode.Encode(h.badgeScanURL(token), qrcode.Medium, 512)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to render qr"})
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Data(http.StatusOK, "image/png", png)
+}
+
 func (h *DocumentHandler) AdminBadgePDF(c *gin.Context) {
 	userID := c.Param("id")
 	var user models.User

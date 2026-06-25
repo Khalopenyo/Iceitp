@@ -474,6 +474,76 @@ a.lk-li:hover {
   background: var(--brand-weak);
 }
 
+/* QR-бейдж (LK-04) */
+.lk-qr {
+  display: block;
+  width: 168px;
+  height: 168px;
+  margin: 0 auto 10px;
+  padding: 10px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: #fff;
+  cursor: pointer;
+}
+.lk-qr img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+}
+.lk-qr:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus);
+}
+.lk-qr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--scrim, rgba(0, 0, 0, 0.7));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+}
+.lk-qr-overlay img {
+  width: min(80vw, 320px);
+  height: min(80vw, 320px);
+  background: #fff;
+  padding: 16px;
+  border-radius: var(--r-lg);
+  image-rendering: pixelated;
+}
+.lk-qr-overlay-name {
+  color: #fff;
+  font-weight: 700;
+  font-size: 17px;
+}
+.lk-qr-overlay-sub {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+}
+.lk-qr-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-pill);
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+}
+.lk-qr-close svg {
+  width: 22px;
+  height: 22px;
+}
+
 /* Статус-сообщения внутри ЛК */
 .lk-note {
   font-size: 11.5px;

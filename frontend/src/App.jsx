@@ -80,6 +80,7 @@ export default function App() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="profile" element={<Profile />} />
         <Route path="schedule" element={<Schedule />} />
+        <Route path="documents" element={<Documents />} />
       </Route>
       <Route path="/" element={<Layout />}>
         <Route path="badge/:token" element={<BadgeCheckIn />} />
@@ -99,14 +100,6 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Chat />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="documents"
-          element={
-            <ProtectedRoute>
-              <Documents />
             </ProtectedRoute>
           }
         />
