@@ -159,7 +159,7 @@ export default function Register() {
   const [verificationToken, setVerificationToken] = useState("");
   const [cooldown, setCooldown] = useState(0);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
-  const [showDegreeDropdown, setShowDegreeDropdown] = useState(false);
+  const [cityActiveIndex, setCityActiveIndex] = useState(-1);
   const [form, setForm] = useState({
     email: "",
     password: "",
@@ -215,6 +215,14 @@ export default function Register() {
   );
 
   const normalizedPhone = useMemo(() => normalizeRussianPhone(form.phone), [form.phone]);
+
+  const cityMatches = useMemo(
+    () =>
+      cityOptions
+        .filter((city) => city.toLowerCase().includes(form.city.toLowerCase()))
+        .slice(0, 8),
+    [form.city]
+  );
 
   const payload = useMemo(
     () => ({
@@ -291,9 +299,13 @@ export default function Register() {
   return (
     <Card className="reg-card">
       <h1>Регистрация участника</h1>
-      <div className="reg-stepper">
+      <div className="reg-stepper" aria-label={`Этапы регистрации, шаг ${step} из ${steps.length}`}>
         {steps.map((label, idx) => (
-          <div key={label} className={`reg-step ${step === idx + 1 ? "active" : ""}`}>
+          <div
+            key={label}
+            className={`reg-step ${step === idx + 1 ? "active" : ""}`}
+            aria-current={step === idx + 1 ? "step" : undefined}
+          >
             {label}
           </div>
         ))}
@@ -315,38 +327,23 @@ export default function Register() {
                 required
               />
             </Field>
-            <Field label="Ученая степень/звание">
-              <div className="reg-dropdown">
-                <button
-                  type="button"
-                  className="reg-dropdown-trigger"
-                  onClick={() => setShowDegreeDropdown((prev) => !prev)}
-                >
-                  {form.degree || "Выберите степень/звание"}
-                </button>
-                {showDegreeDropdown && (
-                  <div className="reg-dropdown-menu">
-                    {degreeGroups.map((group) => (
-                      <div key={group.label}>
-                        <div className="reg-dropdown-group-title">{group.label}</div>
-                        {group.options.map((degree) => (
-                          <button
-                            type="button"
-                            key={degree}
-                            className="reg-dropdown-item"
-                            onClick={() => {
-                              update("degree", degree);
-                              setShowDegreeDropdown(false);
-                            }}
-                          >
-                            {degree}
-                          </button>
-                        ))}
-                      </div>
+            <Field label="Ученая степень/звание" htmlFor="reg-degree">
+              <Select
+                id="reg-degree"
+                value={form.degree}
+                onChange={(e) => update("degree", e.target.value)}
+              >
+                <option value="">Выберите степень/звание</option>
+                {degreeGroups.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.options.map((degree) => (
+                      <option key={degree} value={degree}>
+                        {degree}
+                      </option>
                     ))}
-                  </div>
-                )}
-              </div>
+                  </optgroup>
+                ))}
+              </Select>
             </Field>
             <Field label="Должность" htmlFor="reg-position">
               <Input
@@ -365,34 +362,72 @@ export default function Register() {
             <Field label="Город" htmlFor="reg-city" className="reg-city">
               <Input
                 id="reg-city"
+                role="combobox"
+                aria-expanded={showCityDropdown && cityMatches.length > 0}
+                aria-controls="reg-city-listbox"
+                aria-autocomplete="list"
+                aria-activedescendant={
+                  showCityDropdown && cityActiveIndex >= 0
+                    ? `reg-city-opt-${cityActiveIndex}`
+                    : undefined
+                }
                 value={form.city}
                 onChange={(e) => {
                   update("city", e.target.value);
                   setShowCityDropdown(true);
+                  setCityActiveIndex(-1);
                 }}
                 onFocus={() => setShowCityDropdown(true)}
                 onBlur={() => setTimeout(() => setShowCityDropdown(false), 150)}
+                onKeyDown={(e) => {
+                  if (!showCityDropdown && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+                    setShowCityDropdown(true);
+                    return;
+                  }
+                  if (e.key === "ArrowDown" && cityMatches.length > 0) {
+                    e.preventDefault();
+                    setCityActiveIndex((prev) => (prev + 1) % cityMatches.length);
+                  } else if (e.key === "ArrowUp" && cityMatches.length > 0) {
+                    e.preventDefault();
+                    setCityActiveIndex((prev) => (prev <= 0 ? cityMatches.length - 1 : prev - 1));
+                  } else if (e.key === "Enter" && cityActiveIndex >= 0 && cityMatches[cityActiveIndex]) {
+                    e.preventDefault();
+                    update("city", cityMatches[cityActiveIndex]);
+                    setShowCityDropdown(false);
+                    setCityActiveIndex(-1);
+                  } else if (e.key === "Escape") {
+                    setShowCityDropdown(false);
+                    setCityActiveIndex(-1);
+                  }
+                }}
                 placeholder="Начните вводить..."
+                autoComplete="off"
               />
-              {showCityDropdown && (
-                <div className="reg-city-menu">
-                  {cityOptions
-                    .filter((city) => city.toLowerCase().includes(form.city.toLowerCase()))
-                    .slice(0, 8)
-                    .map((city) => (
+              {showCityDropdown && cityMatches.length > 0 && (
+                <ul className="reg-city-menu" id="reg-city-listbox" role="listbox">
+                  {cityMatches.map((city, idx) => (
+                    <li
+                      key={city}
+                      id={`reg-city-opt-${idx}`}
+                      role="option"
+                      aria-selected={idx === cityActiveIndex}
+                    >
                       <button
                         type="button"
-                        key={city}
-                        className="reg-city-option"
-                        onClick={() => {
+                        className={`reg-city-option${idx === cityActiveIndex ? " active" : ""}`}
+                        onMouseDown={(e) => {
+                          // mousedown срабатывает до blur инпута — выбор не теряется
+                          e.preventDefault();
                           update("city", city);
                           setShowCityDropdown(false);
+                          setCityActiveIndex(-1);
                         }}
                       >
                         {city}
                       </button>
-                    ))}
-                </div>
+                    </li>
+                  ))}
+                </ul>
               )}
             </Field>
           </>
