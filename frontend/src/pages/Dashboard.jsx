@@ -2,138 +2,58 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiGet, apiPut } from "../lib/api.js";
 import { setUser } from "../lib/auth.js";
-
-const sectionLocationByTitle = {
-  "Экономика, право и управление в условиях цифровой трансформации": "Квазар",
-  "Современное общество в цифровую эпоху": "Пульсар",
-  "Лингвистика и методика преподавания языков": "Дом Африки",
-  "Физическое воспитание: инновации и подходы": "Нарния",
-  "Наука зуммеров и альфа (молодые ученые до 35 лет)": "Гаргантюа",
-};
-const conferenceScheduleItems = [
-  { id: "registration", time: "10:00 - 10:30", title: "Регистрация участников", place: "Холл" },
-  { id: "plenary", time: "10:30 - 12:30", title: "Пленарное заседание", place: "Актовый зал" },
-  { id: "buffet", time: "12:30 - 14:00", title: "Фуршет", place: "Музей ГГНТУ" },
-  {
-    id: "sections",
-    time: "14:00 - 16:30",
-    title: "Работа секций",
-    place: "По секционным аудиториям",
-    sessions: [
-      "Экономика, право и управление в условиях цифровой трансформации — Квазар",
-      "Современное общество в цифровую эпоху — Пульсар",
-      "Лингвистика и методика преподавания языков — Дом Африки",
-      "Физическое воспитание: инновации и подходы — Нарния",
-      "Наука зуммеров и альфа (молодые ученые до 35 лет) — Гаргантюа",
-    ],
-  },
-  { id: "closing", time: "16:30", title: "Подведение итогов", place: "Квазар" },
-];
-const conferenceScheduleRange = "10:00 - 16:30";
+import { Card, Field, Input, Select, Button, Badge } from "../components/ui/index.jsx";
+import { buttonClassName } from "../components/ui/buttonClass.js";
+import "./dashboard.css";
 
 const participationLabel = (userType) => (userType === "online" ? "Онлайн-участник" : "Очный участник");
 
-const timeLabelToMinutes = (value) => {
-  const [hours, minutes] = String(value || "").split(":").map(Number);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+function formatDateTimeRange(startsAt, endsAt) {
+  const start = startsAt ? new Date(startsAt) : null;
+  if (!start || Number.isNaN(start.getTime())) {
+    return "";
+  }
+  const dateStr = start.toLocaleDateString("ru-RU", { day: "2-digit", month: "long" });
+  const startTime = start.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  const end = endsAt ? new Date(endsAt) : null;
+  if (!end || Number.isNaN(end.getTime())) {
+    return `${dateStr}, ${startTime}`;
+  }
+  const endTime = end.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  return `${dateStr}, ${startTime}–${endTime}`;
+}
+
+// Живой статус собственной сессии участника поверх реальных времён из /schedule.
+function liveStatus(startsAt, endsAt, now) {
+  const start = startsAt ? new Date(startsAt) : null;
+  if (!start || Number.isNaN(start.getTime())) {
     return null;
   }
-  return hours * 60 + minutes;
-};
-
-const parseScheduleWindow = (timeLabel, fallbackStart = null) => {
-  const matches = String(timeLabel || "").match(/\d{2}:\d{2}/g) || [];
-  if (!matches.length) {
-    return { start: fallbackStart, end: fallbackStart, isPoint: true };
+  if (now < start) {
+    return { label: "Ещё не началось", variant: "warn" };
   }
-
-  if (matches.length === 1) {
-    const start = timeLabelToMinutes(matches[0]);
-    return { start, end: start, isPoint: true };
+  const end = endsAt ? new Date(endsAt) : null;
+  if (end && !Number.isNaN(end.getTime()) && now >= end) {
+    return { label: "Завершено", variant: "neutral" };
   }
+  return { label: "Идёт сейчас", variant: "success" };
+}
 
-  return {
-    start: timeLabelToMinutes(matches[0]),
-    end: timeLabelToMinutes(matches[1]),
-    isPoint: false,
-  };
-};
-
-const getScheduleState = (items, nowMinutes) => {
-  if (!items.length) {
-    return { currentIndex: -1, nextIndex: -1, mode: "empty" };
+function roomLabel(schedule) {
+  if (!schedule?.room_name) {
+    return "";
   }
-
-  for (let index = 0; index < items.length; index += 1) {
-    const currentWindow = parseScheduleWindow(items[index].time);
-    const nextWindow = index < items.length - 1 ? parseScheduleWindow(items[index + 1].time, currentWindow.start) : null;
-
-    if (currentWindow.start == null) {
-      continue;
-    }
-
-    if (nowMinutes < currentWindow.start) {
-      return { currentIndex: -1, nextIndex: index, mode: "before" };
-    }
-
-    if (!currentWindow.isPoint && currentWindow.end != null && nowMinutes >= currentWindow.start && nowMinutes < currentWindow.end) {
-      return {
-        currentIndex: index,
-        nextIndex: index < items.length - 1 ? index + 1 : -1,
-        mode: "current",
-      };
-    }
-
-    if (currentWindow.isPoint) {
-      const pointEnd = nextWindow?.start != null && nextWindow.start > currentWindow.start
-        ? nextWindow.start
-        : currentWindow.start + 60;
-
-      if (nowMinutes >= currentWindow.start && nowMinutes < pointEnd) {
-        return {
-          currentIndex: index,
-          nextIndex: index < items.length - 1 ? index + 1 : -1,
-          mode: "current",
-        };
-      }
-    }
-  }
-
-  return {
-    currentIndex: items.length - 1,
-    nextIndex: -1,
-    mode: "after",
-  };
-};
-
-const buildScheduleInstruction = (item, userType, sectionTitle, sectionPlace) => {
-  if (!item) {
-    return "Расписание пока недоступно.";
-  }
-
-  if (item.id === "sections") {
-    if (!sectionTitle) {
-      return "Во время блока секций сначала выберите свою секцию во вкладке «Личные данные».";
-    }
-
-    if (userType === "online") {
-      return `Во время секционного блока у вас секция «${sectionTitle}». Ориентируйтесь на это время для подключения онлайн.`;
-    }
-
-    return `Во время секционного блока вам нужно пройти в секцию «${sectionTitle}», место проведения — ${sectionPlace}.`;
-  }
-
-  if (userType === "online") {
-    return `Сейчас ориентируйтесь на блок «${item.title}» по общему времени конференции.`;
-  }
-
-  return `Сейчас вам нужно пройти в локацию «${item.place}» на блок «${item.title}».`;
-};
+  return schedule.room_floor
+    ? `${schedule.room_name} (этаж ${schedule.room_floor})`
+    : schedule.room_name;
+}
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [profile, setProfile] = useState(null);
   const [sections, setSections] = useState([]);
+  const [schedule, setSchedule] = useState(null);
+  const [assignmentStatus, setAssignmentStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const [profileStatusMessage, setProfileStatusMessage] = useState("");
   const [profileErrorMessage, setProfileErrorMessage] = useState("");
@@ -154,66 +74,55 @@ export default function Dashboard() {
   const loadSections = async () => {
     try {
       const response = await apiGet("/sections");
-      setSections(response);
+      setSections(Array.isArray(response) ? response : []);
     } catch {
       setSections([]);
+    }
+  };
+
+  const loadSchedule = async () => {
+    try {
+      const response = await apiGet("/schedule");
+      setSchedule(response?.schedule || null);
+      setAssignmentStatus(response?.assignment_status || "");
+    } catch {
+      setSchedule(null);
+      setAssignmentStatus("");
     }
   };
 
   useEffect(() => {
     loadDashboard();
     loadSections();
+    loadSchedule();
   }, []);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setNow(new Date());
-    }, 30000);
-
-    return () => {
-      window.clearInterval(timer);
-    };
+    const timer = window.setInterval(() => setNow(new Date()), 30000);
+    return () => window.clearInterval(timer);
   }, []);
 
   if (!data) {
     return (
-      <section className="panel">
-        <h2>Личный кабинет</h2>
-        <p>Войдите в систему, чтобы увидеть данные участника.</p>
+      <section className="dash">
+        <div className="dash-head">
+          <h1>Личный кабинет</h1>
+          <p>Войдите в систему, чтобы увидеть данные участника.</p>
+        </div>
       </section>
     );
   }
 
   const update = (field, value) => setProfile((prev) => ({ ...prev, [field]: value }));
   const currentUserType = data?.user_type || "offline";
-  const selectedSection = sections.find((section) => String(section.id) === String(profile?.section_id));
+  const selectedSection = sections.find((s) => String(s.id) === String(profile?.section_id));
   const selectedSectionTitle = selectedSection?.title || profile?.section_title || "";
-  const selectedSectionPlace = selectedSectionTitle ? sectionLocationByTitle[selectedSectionTitle] || "Место уточняется" : "";
-  const personalizedScheduleItems = conferenceScheduleItems.map((item) => {
-    if (item.id !== "sections") {
-      return {
-        ...item,
-        userTitle: item.title,
-        userPlace: item.place,
-        userDescription: buildScheduleInstruction(item, currentUserType, selectedSectionTitle, selectedSectionPlace),
-      };
-    }
 
-    return {
-      ...item,
-      userTitle: selectedSectionTitle ? "Работа вашей секции" : item.title,
-      userPlace: selectedSectionPlace || item.place,
-      userDescription: buildScheduleInstruction(item, currentUserType, selectedSectionTitle, selectedSectionPlace),
-    };
-  });
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const scheduleState = getScheduleState(personalizedScheduleItems, nowMinutes);
-  const currentScheduleItem =
-    scheduleState.currentIndex >= 0 ? personalizedScheduleItems[scheduleState.currentIndex] : null;
-  const nextScheduleItem =
-    scheduleState.nextIndex >= 0 ? personalizedScheduleItems[scheduleState.nextIndex] : null;
-  const liveSummaryItem = scheduleState.mode === "before" ? nextScheduleItem : currentScheduleItem;
-  const liveSummaryLabel = scheduleState.mode === "before" ? "Следующий этап" : "Сейчас по расписанию";
+  const isApproved = assignmentStatus === "approved";
+  const hasAssignment = Boolean(isApproved && schedule && schedule.starts_at);
+  const status = hasAssignment ? liveStatus(schedule.starts_at, schedule.ends_at, now) : null;
+  const scheduleTimeLabel = hasAssignment ? formatDateTimeRange(schedule.starts_at, schedule.ends_at) : "";
+  const scheduleRoom = roomLabel(schedule);
 
   const save = async () => {
     setSaving(true);
@@ -228,7 +137,7 @@ export default function Dashboard() {
       setUser(freshUser);
       setData(freshUser);
       setProfile(freshUser.profile);
-      setProfileStatusMessage("Профиль обновлен. Новые данные сохранены в личном кабинете.");
+      setProfileStatusMessage("Профиль обновлён. Новые данные сохранены в личном кабинете.");
     } catch (err) {
       setProfileErrorMessage(err.message || "Не удалось сохранить профиль");
     } finally {
@@ -237,248 +146,248 @@ export default function Dashboard() {
   };
 
   return (
-    <section className="panel">
-      <h2>Личный кабинет</h2>
-      <div className="dashboard-overview">
-        <div className="dashboard-summary-grid">
-          <article className="dashboard-summary-card">
-            <div className="dashboard-summary-head">
-              <span className="dashboard-summary-label">Формат участия</span>
-              <span className="status-chip status-chip-neutral">{participationLabel(currentUserType)}</span>
+    <section className="dash">
+      <div className="dash-head">
+        <h1>Личный кабинет</h1>
+        <p>Профиль участника, секция и персональное расписание.</p>
+      </div>
+
+      <div className="dash-overview">
+        <div className="dash-summary-grid">
+          <article className="dash-summary-card">
+            <div className="dash-summary-head">
+              <span className="dash-summary-label">Формат участия</span>
+              <Badge variant="neutral">{participationLabel(currentUserType)}</Badge>
             </div>
             <strong>{profile?.full_name || "Участник"}</strong>
-            <p className="muted">
-              {selectedSection?.title || profile?.section_title || "Секция пока не выбрана"}
-            </p>
+            <p>{selectedSectionTitle || "Секция пока не выбрана"}</p>
           </article>
 
-          <article className="dashboard-summary-card">
-            <div className="dashboard-summary-head">
-              <span className="dashboard-summary-label">{liveSummaryLabel}</span>
-              <span className="status-chip status-chip-neutral">{liveSummaryItem?.time || conferenceScheduleRange}</span>
+          <article className="dash-summary-card">
+            <div className="dash-summary-head">
+              <span className="dash-summary-label">Ваше расписание</span>
+              {status ? <Badge variant={status.variant}>{status.label}</Badge> : null}
             </div>
-            <strong>{liveSummaryItem?.userTitle || "Общее расписание дня"}</strong>
-            <p className="muted">
-              {liveSummaryItem
-                ? `Место: ${liveSummaryItem.userPlace}.`
-                : "Холл, актовый зал, музей ГГНТУ, секционные аудитории и Квазар."}
-            </p>
+            {hasAssignment ? (
+              <>
+                <strong>{schedule.section_title || "Ваша секция"}</strong>
+                <p>
+                  {scheduleTimeLabel}
+                  {scheduleRoom ? ` • ${scheduleRoom}` : ""}
+                </p>
+              </>
+            ) : (
+              <>
+                <strong>Назначение формируется</strong>
+                <p>Секция, аудитория и время появятся после утверждения программы.</p>
+              </>
+            )}
           </article>
         </div>
 
-        <div className="dashboard-quick-actions">
-          <div className="dashboard-quick-actions-head">
-            <h3>Быстрые действия</h3>
-            <p className="muted">Открывайте нужный сценарий без поиска по разделам.</p>
-          </div>
-          <div className="dashboard-quick-action-list">
-            <button className="btn btn-ghost" onClick={() => setTab("profile")}>
-              Проверить профиль
-            </button>
-            <button className="btn btn-ghost" onClick={() => setTab("schedule")}>
-              Открыть расписание
-            </button>
-            <Link className="btn btn-ghost" to="/documents">
-              Открыть документы
+        <div className="dash-actions">
+          <Button variant="ghost" onClick={() => setTab("profile")}>
+            Проверить профиль
+          </Button>
+          <Button variant="ghost" onClick={() => setTab("schedule")}>
+            Открыть расписание
+          </Button>
+          <Link className={buttonClassName("ghost")} to="/documents">
+            Открыть документы
+          </Link>
+          {currentUserType !== "online" ? (
+            <Link className={buttonClassName("ghost")} to="/map">
+              Маршрут по площадке
             </Link>
-            {currentUserType !== "online" ? (
-              <Link className="btn btn-ghost" to="/map">
-                Маршрут по площадке
-              </Link>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       </div>
 
-      <div className="dashboard-layout">
-        <aside className="dashboard-tabs">
-          <button className={`tab-btn ${tab === "profile" ? "active" : ""}`} onClick={() => setTab("profile")}>
+      <div className="dash-layout">
+        <aside className="dash-tabs">
+          <button
+            type="button"
+            className={`dash-tab ${tab === "profile" ? "active" : ""}`}
+            aria-current={tab === "profile" ? "page" : undefined}
+            onClick={() => setTab("profile")}
+          >
             Личные данные
           </button>
-          <button className={`tab-btn ${tab === "schedule" ? "active" : ""}`} onClick={() => setTab("schedule")}>
+          <button
+            type="button"
+            className={`dash-tab ${tab === "schedule" ? "active" : ""}`}
+            aria-current={tab === "schedule" ? "page" : undefined}
+            onClick={() => setTab("schedule")}
+          >
             Расписание
           </button>
         </aside>
-        <div className="dashboard-content">
+
+        <div className="dash-content">
           {tab === "profile" ? (
-            <div className="card">
-              <h3>Профиль участника</h3>
-              {profileStatusMessage ? <p className="form-status success">{profileStatusMessage}</p> : null}
-              {profileErrorMessage ? <p className="form-status error">{profileErrorMessage}</p> : null}
-              {profile ? (
-                <div className="form-grid">
-                  <label>
-                    ФИО
-                    <input value={profile.full_name || ""} onChange={(e) => update("full_name", e.target.value)} />
-                  </label>
-                  <label>
-                    Организация
-                    <input
-                      value={profile.organization || ""}
-                      onChange={(e) => update("organization", e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Должность
-                    <input value={profile.position || ""} onChange={(e) => update("position", e.target.value)} />
-                  </label>
-                  <label>
-                    Город
-                    <input value={profile.city || ""} onChange={(e) => update("city", e.target.value)} />
-                  </label>
-                  <label>
-                    Степень
-                    <input value={profile.degree || ""} onChange={(e) => update("degree", e.target.value)} />
-                  </label>
-                  <label>
-                    Секция
-                    <select
-                      value={profile.section_id ?? ""}
-                      onChange={(e) => update("section_id", e.target.value ? Number(e.target.value) : null)}
-                    >
-                      <option value="">Выберите секцию</option>
-                      {sections.map((section) => (
-                        <option key={section.id} value={section.id}>
-                          {section.title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Доклад
-                    <input value={profile.talk_title || ""} onChange={(e) => update("talk_title", e.target.value)} />
-                  </label>
-                  <label>
-                    Телефон
-                    <input value={profile.phone || ""} onChange={(e) => update("phone", e.target.value)} />
-                  </label>
-                  {selectedSection ? (
-                    <p className="muted">
-                      Текущая секция: <strong>{selectedSection.title}</strong>
-                    </p>
-                  ) : null}
-                  <button className="btn btn-primary" onClick={save} disabled={saving}>
-                    {saving ? "Сохранение..." : "Сохранить изменения"}
-                  </button>
+            <Card>
+              <h2 className="dash-card-title">Профиль участника</h2>
+              <p className="dash-card-sub">Данные используются в программе, бейдже и сертификате.</p>
+              {profileStatusMessage ? (
+                <div className="dash-status dash-status-success" role="status">
+                  {profileStatusMessage}
                 </div>
               ) : null}
-            </div>
+              {profileErrorMessage ? (
+                <div className="dash-status dash-status-error" role="alert">
+                  {profileErrorMessage}
+                </div>
+              ) : null}
+              {profile ? (
+                <>
+                  <div className="dash-form-grid">
+                    <Field label="ФИО" htmlFor="dash-full-name" className="dash-form-full">
+                      <Input
+                        id="dash-full-name"
+                        value={profile.full_name || ""}
+                        onChange={(e) => update("full_name", e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Организация" htmlFor="dash-organization">
+                      <Input
+                        id="dash-organization"
+                        value={profile.organization || ""}
+                        onChange={(e) => update("organization", e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Должность" htmlFor="dash-position">
+                      <Input
+                        id="dash-position"
+                        value={profile.position || ""}
+                        onChange={(e) => update("position", e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Город" htmlFor="dash-city">
+                      <Input
+                        id="dash-city"
+                        value={profile.city || ""}
+                        onChange={(e) => update("city", e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Степень" htmlFor="dash-degree">
+                      <Input
+                        id="dash-degree"
+                        value={profile.degree || ""}
+                        onChange={(e) => update("degree", e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Секция" htmlFor="dash-section">
+                      <Select
+                        id="dash-section"
+                        value={profile.section_id ?? ""}
+                        onChange={(e) =>
+                          update("section_id", e.target.value ? Number(e.target.value) : null)
+                        }
+                      >
+                        <option value="">Выберите секцию</option>
+                        {sections.map((section) => (
+                          <option key={section.id} value={section.id}>
+                            {section.title}
+                            {section.room ? ` — ${section.room}` : ""}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label="Доклад" htmlFor="dash-talk" className="dash-form-full">
+                      <Input
+                        id="dash-talk"
+                        value={profile.talk_title || ""}
+                        onChange={(e) => update("talk_title", e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Телефон" htmlFor="dash-phone">
+                      <Input
+                        id="dash-phone"
+                        value={profile.phone || ""}
+                        onChange={(e) => update("phone", e.target.value)}
+                      />
+                    </Field>
+                  </div>
+                  <div className="dash-sched-join">
+                    <Button onClick={save} disabled={saving}>
+                      {saving ? "Сохранение…" : "Сохранить изменения"}
+                    </Button>
+                  </div>
+                </>
+              ) : null}
+            </Card>
           ) : null}
 
           {tab === "schedule" ? (
-            <div className="card">
-              <h3>Общее расписание конференции</h3>
-              <p className="muted">Для всех участников действует единое расписание дня.</p>
+            <Card>
+              <h2 className="dash-card-title">Ваше расписание</h2>
+              <p className="dash-card-sub">
+                Секция, аудитория и время формируются из утверждённой программы конференции.
+              </p>
 
-              <div className="schedule-live-grid">
-                <article className="schedule-live-card schedule-live-card-current">
-                  <span className="dashboard-summary-label">
-                    {scheduleState.mode === "before" ? "Ближайший этап" : "Сейчас вам нужно"}
-                  </span>
-                  <strong>{liveSummaryItem?.userTitle || "Ожидаем начало программы"}</strong>
-                  <p className="muted">
-                    {liveSummaryItem ? `${liveSummaryItem.time} • ${liveSummaryItem.userPlace}` : conferenceScheduleRange}
-                  </p>
-                  <p>{liveSummaryItem?.userDescription || "Ориентируйтесь на общее расписание дня."}</p>
-                </article>
-
-                <article className="schedule-live-card">
-                  <span className="dashboard-summary-label">Дальше по расписанию</span>
-                  <strong>{nextScheduleItem?.userTitle || "После этого новых этапов нет"}</strong>
-                  <p className="muted">
-                    {nextScheduleItem ? `${nextScheduleItem.time} • ${nextScheduleItem.userPlace}` : "Основная программа дня завершится после текущего блока."}
-                  </p>
-                  <p>
-                    {nextScheduleItem
-                      ? nextScheduleItem.userDescription
-                      : "После завершения текущего блока дополнительных перемещений по расписанию не предусмотрено."}
-                  </p>
-                </article>
-
-                <article className="schedule-live-card">
-                  <span className="dashboard-summary-label">Ваша секция</span>
-                  <strong>{selectedSectionTitle || "Секция пока не выбрана"}</strong>
-                  <p className="muted">
-                    {selectedSectionTitle ? `14:00 - 16:30 • ${selectedSectionPlace}` : "Выберите секцию в личных данных."}
-                  </p>
-                  <p>
-                    {selectedSectionTitle
-                      ? `Во время секционного блока вам нужно ориентироваться на аудиторию «${selectedSectionPlace}».`
-                      : "Без выбранной секции кабинет не сможет подсказать, куда идти во время работы секций."}
-                  </p>
-                </article>
-              </div>
-
-              <div className="common-schedule-list">
-                {personalizedScheduleItems.map((item, index) => (
-                  <article
-                    key={item.id}
-                    className={[
-                      "common-schedule-item",
-                      scheduleState.currentIndex === index ? "common-schedule-item-active" : "",
-                      scheduleState.nextIndex === index ? "common-schedule-item-next" : "",
-                      scheduleState.currentIndex > index ? "common-schedule-item-completed" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                  >
-                    <div className="common-schedule-time">{item.time}</div>
-                    <div className="common-schedule-content">
-                      <div className="common-schedule-title">{item.userTitle}</div>
-                      <div className="session-meta-inline">
-                        {scheduleState.currentIndex === index ? <span className="status-chip status-chip-success">Сейчас</span> : null}
-                        {scheduleState.nextIndex === index ? <span className="status-chip status-chip-warning">Дальше</span> : null}
-                        {scheduleState.currentIndex > index ? <span className="status-chip status-chip-neutral">Пройдено</span> : null}
-                      </div>
-                      {item.userPlace ? <div className="muted">Место: {item.userPlace}</div> : null}
-                      <p className="muted">{item.userDescription}</p>
-                      {item.sessions?.length ? (
-                        <div className="question-history">
-                          {item.sessions.map((session) => (
-                            <div
-                              key={session}
-                              className={
-                                selectedSectionTitle && session.startsWith(selectedSectionTitle)
-                                  ? "common-schedule-session-selected"
-                                  : "muted"
-                              }
-                            >
-                              {session}
-                            </div>
-                          ))}
+              <div className="dash-sched-card">
+                {hasAssignment ? (
+                  <>
+                    <div className="dash-sched-head">
+                      <strong>{schedule.section_title || "Ваша секция"}</strong>
+                      {status ? <Badge variant={status.variant}>{status.label}</Badge> : null}
+                    </div>
+                    <dl className="dash-sched-rows">
+                      {schedule.talk_title ? (
+                        <div className="dash-sched-row">
+                          <dt>Доклад</dt>
+                          <dd>{schedule.talk_title}</dd>
                         </div>
                       ) : null}
-                    </div>
-                  </article>
-                ))}
-              </div>
-
-              <div className="schedule-general-note">
-                {selectedSection ? (
-                  <p className="muted">
-                    Во время блока <strong>«Работа секций»</strong> вы участвуете в секции{" "}
-                    <strong>{selectedSection.title}</strong>
-                    {sectionLocationByTitle[selectedSection.title]
-                      ? `, место проведения — ${sectionLocationByTitle[selectedSection.title]}.`
-                      : "."}
-                  </p>
+                      <div className="dash-sched-row">
+                        <dt>Время</dt>
+                        <dd>{scheduleTimeLabel || "Уточняется"}</dd>
+                      </div>
+                      {scheduleRoom ? (
+                        <div className="dash-sched-row">
+                          <dt>Аудитория</dt>
+                          <dd>{scheduleRoom}</dd>
+                        </div>
+                      ) : null}
+                      <div className="dash-sched-row">
+                        <dt>Формат</dt>
+                        <dd>{participationLabel(currentUserType)}</dd>
+                      </div>
+                    </dl>
+                    {currentUserType === "online" && schedule.join_url ? (
+                      <div className="dash-sched-join">
+                        <a
+                          className={buttonClassName("primary")}
+                          href={schedule.join_url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Подключиться онлайн
+                        </a>
+                      </div>
+                    ) : null}
+                  </>
                 ) : (
-                  <p className="muted">
-                    Секцию можно выбрать во вкладке <strong>«Личные данные»</strong>.
+                  <p className="dash-sched-empty">
+                    {assignmentStatus === "pending" || !assignmentStatus
+                      ? "Назначение секции ещё формируется. Как только организаторы утвердят программу, здесь появятся ваша секция, аудитория и время."
+                      : "Для вас пока нет назначенной секции в программе."}
+                    {!selectedSectionTitle
+                      ? " Выберите желаемую секцию во вкладке «Личные данные»."
+                      : ` Выбранная вами секция: «${selectedSectionTitle}».`}
                   </p>
                 )}
-
-                {currentUserType !== "online" ? (
-                  <div className="form-actions">
-                    <Link className="btn btn-ghost" to="/map">
-                      Открыть карту площадки
-                    </Link>
-                  </div>
-                ) : null}
               </div>
-            </div>
-          ) : null}
 
+              {currentUserType !== "online" ? (
+                <div className="dash-sched-join">
+                  <Link className={buttonClassName("ghost")} to="/map">
+                    Открыть карту площадки
+                  </Link>
+                </div>
+              ) : null}
+            </Card>
+          ) : null}
         </div>
       </div>
     </section>
