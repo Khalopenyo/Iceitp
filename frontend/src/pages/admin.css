@@ -88,7 +88,7 @@
   width: 120px;
   height: 120px;
   border-radius: var(--r-md);
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--border);
 }
 .adm-qr-body {
@@ -157,19 +157,6 @@
   gap: 8px;
 }
 
-.adm-pagination {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-top: 16px;
-}
-.adm-pagination span {
-  color: var(--text-2);
-  font-size: 13px;
-  margin-right: auto;
-}
-
 /* Доска одобренных вопросов */
 .adm-board {
   display: grid;
@@ -198,7 +185,7 @@
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(15, 23, 42, 0.55);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -250,7 +237,7 @@
   height: 60vh;
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  background: #fff;
+  background: var(--surface);
 }
 
 @media (max-width: 760px) {

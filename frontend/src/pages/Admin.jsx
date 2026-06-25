@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiDelete, apiGet, apiPut } from "../lib/api.js";
 import { triggerBlobDownload } from "../lib/download.js";
 import { Card, Field, Input, Select, Button, Badge } from "../components/ui/index.jsx";
+import { Pagination } from "../components/ui/Pagination.jsx";
 import "./admin.css";
 
 const emptyPage = {
@@ -55,34 +56,6 @@ function buildQuery(params) {
   return query ? `?${query}` : "";
 }
 
-function PaginationControls({ page, pageSize, total, onPageChange }) {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-
-  return (
-    <div className="adm-pagination">
-      <span>
-        Страница {page} из {totalPages} · всего {total}
-      </span>
-      <Button
-        variant="ghost"
-        type="button"
-        onClick={() => onPageChange(Math.max(1, page - 1))}
-        disabled={page <= 1}
-      >
-        Назад
-      </Button>
-      <Button
-        variant="ghost"
-        type="button"
-        onClick={() => onPageChange(Math.min(totalPages, page + 1))}
-        disabled={page >= totalPages}
-      >
-        Вперёд
-      </Button>
-    </div>
-  );
-}
-
 export default function Admin() {
   const navigate = useNavigate();
   const [usersPage, setUsersPage] = useState(emptyPage);
@@ -100,6 +73,30 @@ export default function Admin() {
   const [feedbackRatingFilter, setFeedbackRatingFilter] = useState("");
   const [badgeActionKey, setBadgeActionKey] = useState("");
   const [previewBadge, setPreviewBadge] = useState(null);
+  const dialogRef = useRef(null);
+  const lastFocusedRef = useRef(null);
+
+  const dialogFocusables = () =>
+    Array.from(
+      dialogRef.current?.querySelectorAll(
+        'button, [href], input, select, textarea, iframe, [tabindex]:not([tabindex="-1"])'
+      ) || []
+    ).filter((el) => !el.disabled);
+
+  const trapDialogTab = (event) => {
+    if (event.key !== "Tab") return;
+    const focusables = dialogFocusables();
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   useEffect(
     () => () => {
@@ -183,13 +180,28 @@ export default function Admin() {
     if (!previewBadge) {
       return undefined;
     }
+    // Сохраняем триггер, переносим фокус в диалог, блокируем прокрутку фона.
+    lastFocusedRef.current = document.activeElement;
+    const focusables = dialogFocusables();
+    (focusables[0] || dialogRef.current)?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     const onKeyDown = (event) => {
       if (event.key === "Escape") {
         closeBadgePreview();
       }
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      const trigger = lastFocusedRef.current;
+      if (trigger && typeof trigger.focus === "function") {
+        trigger.focus();
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewBadge]);
 
@@ -289,7 +301,7 @@ export default function Admin() {
         </div>
       ) : null}
 
-      <div className="adm-layout">
+      <div className="adm-layout" aria-hidden={previewBadge ? true : undefined}>
         <aside className="adm-tabs" aria-label="Разделы админки">
           <button
             type="button"
@@ -432,7 +444,7 @@ export default function Admin() {
               {usersPage.items.length === 0 ? (
                 <p className="adm-empty">Пользователи не найдены.</p>
               ) : null}
-              <PaginationControls
+              <Pagination
                 page={usersPage.page}
                 pageSize={usersPage.page_size}
                 total={usersPage.total}
@@ -496,7 +508,7 @@ export default function Admin() {
               {feedbackPage.items.length === 0 ? (
                 <p className="adm-empty">Отзывов пока нет.</p>
               ) : null}
-              <PaginationControls
+              <Pagination
                 page={feedbackPage.page}
                 pageSize={feedbackPage.page_size}
                 total={feedbackPage.total}
@@ -514,6 +526,9 @@ export default function Admin() {
             role="dialog"
             aria-modal="true"
             aria-label={previewBadge.title}
+            ref={dialogRef}
+            tabIndex={-1}
+            onKeyDown={trapDialogTab}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="adm-modal-head">

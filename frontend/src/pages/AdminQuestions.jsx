@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiDelete, apiGet, apiPatch } from "../lib/api.js";
 import { Card, Field, Input, Select, Button, Badge } from "../components/ui/index.jsx";
+import { Pagination } from "../components/ui/Pagination.jsx";
 import { buttonClassName } from "../components/ui/buttonClass.js";
 import "./admin.css";
 
@@ -41,34 +42,6 @@ function buildQuery(params) {
   });
   const query = searchParams.toString();
   return query ? `?${query}` : "";
-}
-
-function PaginationControls({ page, pageSize, total, onPageChange }) {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-
-  return (
-    <div className="adm-pagination">
-      <span>
-        Страница {page} из {totalPages} · всего {total}
-      </span>
-      <Button
-        variant="ghost"
-        type="button"
-        onClick={() => onPageChange(Math.max(1, page - 1))}
-        disabled={page <= 1}
-      >
-        Назад
-      </Button>
-      <Button
-        variant="ghost"
-        type="button"
-        onClick={() => onPageChange(Math.min(totalPages, page + 1))}
-        disabled={page >= totalPages}
-      >
-        Вперёд
-      </Button>
-    </div>
-  );
 }
 
 export default function AdminQuestions() {
@@ -323,7 +296,7 @@ export default function AdminQuestions() {
             {questionsPage.items.length === 0 ? (
               <p className="adm-empty">Вопросов пока нет.</p>
             ) : null}
-            <PaginationControls
+            <Pagination
               page={questionsPage.page}
               pageSize={questionsPage.page_size}
               total={questionsPage.total}

@@ -61,6 +61,7 @@
   --on-brand: #fff;
   --link: var(--bl-600);
   --focus: rgba(30, 78, 153, 0.3);
+  --scrim: rgba(18, 23, 34, 0.55);
   /* Radii & shadows */
   --r-sm: 6px;
   --r-md: 8px;
