@@ -242,6 +242,15 @@ var migrations = []migration{
 			return db.AutoMigrate(&models.Conference{})
 		},
 	},
+	{
+		Version: "202606250017",
+		Name:    "add_talk_coauthors_abstract",
+		Up: func(db *gorm.DB) error {
+			// Additive: profiles/registration_attempts coauthors+abstract под шаг
+			// «Доклад» регистрации (SCR-PUB-07). AutoMigrate добавляет колонки.
+			return db.AutoMigrate(&models.Profile{}, &models.RegistrationAttempt{})
+		},
+	},
 }
 
 // tenantConferenceIDNotNull flips the per-event conference_id columns (and

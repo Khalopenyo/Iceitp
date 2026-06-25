@@ -66,6 +66,9 @@ type RegisterRequest struct {
 	Degree              string          `json:"degree"`
 	SectionID           *uint           `json:"section_id"`
 	TalkTitle           string          `json:"talk_title"`
+	Coauthors           string          `json:"coauthors"`
+	Abstract            string          `json:"abstract"`
+	Role                string          `json:"role"`
 	Phone               string          `json:"phone"`
 	ConsentPersonalData bool            `json:"consent_personal_data"`
 	ConsentPublication  bool            `json:"consent_publication"`
@@ -129,6 +132,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			Degree:       normalized.Degree,
 			SectionID:    normalized.SectionID,
 			TalkTitle:    normalized.TalkTitle,
+			Coauthors:    normalized.Coauthors,
+			Abstract:     normalized.Abstract,
 			Phone:        normalized.Phone,
 			ConsentGiven: normalized.ConsentPersonalData && normalized.ConsentPublication,
 		},
@@ -213,6 +218,8 @@ func (h *AuthHandler) RequestRegistrationCode(c *gin.Context) {
 		Degree:              normalized.Degree,
 		SectionID:           normalized.SectionID,
 		TalkTitle:           normalized.TalkTitle,
+		Coauthors:           normalized.Coauthors,
+		Abstract:            normalized.Abstract,
 		Phone:               normalized.Phone,
 		ConsentPersonalData: normalized.ConsentPersonalData,
 		ConsentPublication:  normalized.ConsentPublication,
@@ -313,6 +320,8 @@ func (h *AuthHandler) VerifyRegistrationCode(c *gin.Context) {
 				Degree:       attempt.Degree,
 				SectionID:    attempt.SectionID,
 				TalkTitle:    attempt.TalkTitle,
+				Coauthors:    attempt.Coauthors,
+				Abstract:     attempt.Abstract,
 				Phone:        attempt.Phone,
 				ConsentGiven: attempt.ConsentPersonalData && attempt.ConsentPublication,
 			},
@@ -718,6 +727,9 @@ func (h *AuthHandler) validateRegistrationRequest(c *gin.Context, req RegisterRe
 	req.City = strings.TrimSpace(req.City)
 	req.Degree = strings.TrimSpace(req.Degree)
 	req.TalkTitle = strings.TrimSpace(req.TalkTitle)
+	req.Coauthors = strings.TrimSpace(req.Coauthors)
+	req.Abstract = strings.TrimSpace(req.Abstract)
+	req.Role = strings.TrimSpace(req.Role)
 	req.ConsentVersion = strings.TrimSpace(req.ConsentVersion)
 
 	phone, err := formatPhoneForStorage(req.Phone)
@@ -726,10 +738,23 @@ func (h *AuthHandler) validateRegistrationRequest(c *gin.Context, req RegisterRe
 	}
 	req.Phone = phone
 
-	if req.SectionID == nil {
-		return "", RegisterRequest{}, errors.New("section is required")
+	isListener := req.Role == "listener"
+	if isListener {
+		// Слушатель: секция и доклад не нужны.
+		req.SectionID = nil
+		req.TalkTitle = ""
+		req.Coauthors = ""
+		req.Abstract = ""
+	} else {
+		// Автор доклада: секция и тема обязательны.
+		if req.SectionID == nil {
+			return "", RegisterRequest{}, errors.New("section is required")
+		}
+		if req.TalkTitle == "" {
+			return "", RegisterRequest{}, errors.New("missing required fields or consent")
+		}
 	}
-	if req.Email == "" || req.Password == "" || req.FullName == "" || req.TalkTitle == "" || req.ConsentVersion == "" {
+	if req.Email == "" || req.Password == "" || req.FullName == "" || req.ConsentVersion == "" {
 		return "", RegisterRequest{}, errors.New("missing required fields or consent")
 	}
 	password, err := validatePassword(req.Password)
@@ -745,12 +770,15 @@ func (h *AuthHandler) validateRegistrationRequest(c *gin.Context, req RegisterRe
 	if req.UserType != models.UserTypeOnline && req.UserType != models.UserTypeOffline {
 		return "", RegisterRequest{}, errors.New("invalid user type")
 	}
-	var section models.Section
 	// Scope the section to the resolved conference: a registrant on one tenant's
 	// subdomain must not bind their profile to another tenant's section. (auth runs
 	// on the owner pool which bypasses RLS, so this app-layer scope is the guard.)
-	if err := h.DB.Scopes(tenant.ByConference(c)).First(&section, *req.SectionID).Error; err != nil {
-		return "", RegisterRequest{}, errors.New("selected section not found")
+	// Слушатели регистрируются без секции (req.SectionID == nil).
+	if req.SectionID != nil {
+		var section models.Section
+		if err := h.DB.Scopes(tenant.ByConference(c)).First(&section, *req.SectionID).Error; err != nil {
+			return "", RegisterRequest{}, errors.New("selected section not found")
+		}
 	}
 	if _, err := h.findUserByEmail(h.DB, req.Email); err == nil {
 		return "", RegisterRequest{}, errors.New("user already exists")

@@ -1,13 +1,18 @@
-/* ===== Registration (SCR-PUB-07) — multi-step wizard on the design tokens ===== */
+/* ===== Registration (SCR-PUB-07) — 5-шаговый мастер на дизайн-токенах ===== */
 .reg-card {
   width: 100%;
   max-width: 640px;
 }
 .reg-card h1 {
   font-size: 24px;
-  margin: 0 0 16px;
+  margin: 0 0 4px;
   color: var(--text);
   font-weight: 700;
+}
+.reg-subtitle {
+  color: var(--text-2);
+  font-size: 14px;
+  margin: 0 0 18px;
 }
 
 .reg-stepper {
@@ -18,7 +23,7 @@
 }
 .reg-step {
   flex: 1;
-  min-width: 120px;
+  min-width: 110px;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-2);
@@ -31,6 +36,9 @@
   color: var(--on-brand);
   background: var(--brand);
   border-color: var(--brand);
+}
+.reg-step.skipped {
+  opacity: 0.5;
 }
 
 .reg-hint {
@@ -46,50 +54,60 @@
   margin: 0 0 14px;
 }
 
-/* City autocomplete (доступный комбобокс) */
-.reg-city {
-  position: relative;
+/* Выбор формата / роли / способа входа */
+.reg-group-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin: 6px 0 8px;
 }
-.reg-city-menu {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  margin: 0;
-  list-style: none;
+.reg-choice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.reg-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  font-family: var(--font);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  box-shadow: var(--sh-3);
-  padding: 6px;
-  max-height: 240px;
-  overflow: auto;
-}
-.reg-city-option {
-  display: block;
-  width: 100%;
-  text-align: left;
-  font-size: 14px;
-  color: var(--text);
-  background: transparent;
-  border: none;
-  border-radius: var(--r-sm);
-  padding: 8px;
+  padding: 14px 16px;
   cursor: pointer;
 }
-.reg-city-option:hover,
-.reg-city-option.active {
+.reg-choice strong {
+  color: var(--text);
+  font-size: 14.5px;
+}
+.reg-choice span {
+  color: var(--text-2);
+  font-size: 12px;
+}
+button.reg-choice:hover {
+  border-color: var(--brand);
+}
+.reg-choice.active {
   background: var(--brand-weak);
+  border-color: var(--brand);
+}
+.reg-choice.active strong {
   color: var(--brand-700);
 }
-.reg-city-option:focus-visible {
+button.reg-choice:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--focus);
 }
+.reg-choice-soon {
+  opacity: 0.6;
+  cursor: default;
+}
 
-/* Consent checkboxes */
-.reg-checkbox {
+/* Согласия */
+.reg-consent {
   display: flex;
   gap: 10px;
   align-items: flex-start;
@@ -98,11 +116,28 @@
   line-height: 1.5;
   margin-bottom: 12px;
 }
-.reg-checkbox input {
+.reg-consent input {
   margin-top: 3px;
 }
-.reg-checkbox a {
+.reg-consent a {
   color: var(--brand);
+}
+.reg-consent em {
+  font-style: normal;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.reg-banner {
+  display: flex;
+  gap: 8px;
+  background: var(--brand-weak);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  color: var(--brand-700);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 6px;
 }
 
 .reg-actions {
@@ -110,8 +145,62 @@
   flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
-  margin-top: 8px;
+  margin-top: 16px;
 }
 .reg-resend {
   margin: 8px 0 4px;
+}
+
+/* Экран «готово» */
+.reg-done {
+  text-align: center;
+}
+.reg-done-ic {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 14px;
+  border-radius: var(--r-pill);
+  background: var(--gr-500);
+  color: var(--on-brand);
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+}
+.reg-done h1 {
+  margin-bottom: 6px;
+}
+.reg-done-sub {
+  color: var(--text-2);
+  font-size: 14px;
+  margin: 0 0 18px;
+}
+.reg-summary {
+  display: grid;
+  gap: 12px;
+  text-align: left;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 16px 18px;
+  margin-bottom: 18px;
+}
+.reg-summary-row strong {
+  display: block;
+  color: var(--text);
+  font-size: 15px;
+}
+.reg-summary-row span {
+  display: block;
+  color: var(--text-2);
+  font-size: 13px;
+  margin-top: 2px;
+}
+.reg-done .reg-actions {
+  justify-content: center;
+}
+
+@media (max-width: 480px) {
+  .reg-choice-grid {
+    grid-template-columns: 1fr;
+  }
 }

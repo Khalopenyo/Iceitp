@@ -2,15 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiPost } from "../lib/api.js";
 import { setUser } from "../lib/auth.js";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Card, Field, Input, Select, Button } from "../components/ui/index.jsx";
+import { Card, Field, Input, Select, Textarea, Button } from "../components/ui/index.jsx";
 import { buttonClassName } from "../components/ui/buttonClass.js";
+import { getConferenceTitle, formatConferenceDateRange } from "../lib/conference.js";
 import "./register.css";
 
 function normalizeRussianPhone(value) {
   const digits = String(value || "").replace(/\D/g, "");
-  if (!digits) {
-    return "";
-  }
+  if (!digits) return "";
   let normalized = digits;
   if (normalized.length === 10) {
     normalized = `7${normalized}`;
@@ -25,145 +24,49 @@ function normalizeRussianPhone(value) {
 
 function formatRussianPhone(value) {
   const digits = String(value || "").replace(/\D/g, "");
-  if (!digits) {
-    return "";
-  }
+  if (!digits) return "";
   let normalized = digits;
-  if (normalized.startsWith("8")) {
-    normalized = `7${normalized.slice(1)}`;
-  }
-  if (!normalized.startsWith("7")) {
-    normalized = `7${normalized}`;
-  }
+  if (normalized.startsWith("8")) normalized = `7${normalized.slice(1)}`;
+  if (!normalized.startsWith("7")) normalized = `7${normalized}`;
   normalized = normalized.slice(0, 11);
-  const country = normalized.slice(0, 1);
-  const part1 = normalized.slice(1, 4);
-  const part2 = normalized.slice(4, 7);
-  const part3 = normalized.slice(7, 9);
-  const part4 = normalized.slice(9, 11);
-  let result = `+${country}`;
-  if (part1) result += ` ${part1}`;
-  if (part2) result += ` ${part2}`;
-  if (part3) result += `-${part3}`;
-  if (part4) result += `-${part4}`;
+  let result = `+${normalized.slice(0, 1)}`;
+  if (normalized.slice(1, 4)) result += ` ${normalized.slice(1, 4)}`;
+  if (normalized.slice(4, 7)) result += ` ${normalized.slice(4, 7)}`;
+  if (normalized.slice(7, 9)) result += `-${normalized.slice(7, 9)}`;
+  if (normalized.slice(9, 11)) result += `-${normalized.slice(9, 11)}`;
   return result;
 }
 
 const degreeGroups = [
-  {
-    label: "Основное",
-    options: ["Преподаватель"],
-  },
-  {
-    label: "Учащийся",
-    options: ["Студент", "Магистрант", "Аспирант"],
-  },
+  { label: "Основное", options: ["Преподаватель"] },
+  { label: "Учащийся", options: ["Студент", "Магистрант", "Аспирант"] },
   {
     label: "Ученая степень/звание",
     options: ["Кандидат наук, доцент", "Доктор наук, доцент", "Доктор наук, профессор"],
   },
 ];
 
-const cityOptions = [
-  "Москва",
-  "Санкт-Петербург",
-  "Новосибирск",
-  "Екатеринбург",
-  "Казань",
-  "Нижний Новгород",
-  "Челябинск",
-  "Самара",
-  "Омск",
-  "Ростов-на-Дону",
-  "Уфа",
-  "Красноярск",
-  "Воронеж",
-  "Пермь",
-  "Волгоград",
-  "Краснодар",
-  "Саратов",
-  "Тюмень",
-  "Тольятти",
-  "Ижевск",
-  "Барнаул",
-  "Иркутск",
-  "Хабаровск",
-  "Ярославль",
-  "Владивосток",
-  "Махачкала",
-  "Томск",
-  "Оренбург",
-  "Кемерово",
-  "Новокузнецк",
-  "Рязань",
-  "Астрахань",
-  "Пенза",
-  "Липецк",
-  "Киров",
-  "Чебоксары",
-  "Тула",
-  "Калининград",
-  "Курск",
-  "Ставрополь",
-  "Улан-Удэ",
-  "Тверь",
-  "Магнитогорск",
-  "Сочи",
-  "Белгород",
-  "Владимир",
-  "Архангельск",
-  "Чита",
-  "Набережные Челны",
-  "Севастополь",
-  "Симферополь",
-  "Калуга",
-  "Смоленск",
-  "Якутск",
-  "Сургут",
-  "Ханты-Мансийск",
-  "Нижний Тагил",
-  "Брянск",
-  "Иваново",
-  "Орёл",
-  "Кострома",
-  "Вологда",
-  "Псков",
-  "Саранск",
-  "Ульяновск",
-  "Петрозаводск",
-  "Мурманск",
-  "Тамбов",
-  "Сыктывкар",
-  "Нижневартовск",
-  "Абакан",
-  "Биробиджан",
-  "Грозный",
-  "Майкоп",
-  "Назрань",
-  "Элиста",
-  "Петропавловск-Камчатский",
-  "Южно-Сахалинск",
-  "Кемь",
-];
+const STEPS = ["Тип участия", "Профиль", "Доклад", "Телефон", "Согласия"];
 
 export default function Register() {
   const navigate = useNavigate();
   const location = useLocation();
   const [sections, setSections] = useState([]);
+  const [conference, setConference] = useState(null);
   const [loading, setLoading] = useState(false);
   const [requestingCode, setRequestingCode] = useState(false);
   const [step, setStep] = useState(1);
+  const [phase, setPhase] = useState("form"); // form | code | done
   const [errorMessage, setErrorMessage] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
   const [verificationToken, setVerificationToken] = useState("");
   const [cooldown, setCooldown] = useState(0);
-  const [showCityDropdown, setShowCityDropdown] = useState(false);
-  const [cityActiveIndex, setCityActiveIndex] = useState(-1);
   const [form, setForm] = useState({
     email: "",
     password: "",
-    user_type: "online",
+    user_type: "offline",
+    role: "author",
     full_name: "",
     organization: "",
     position: "",
@@ -171,6 +74,8 @@ export default function Register() {
     degree: "",
     section_id: "",
     talk_title: "",
+    coauthors: "",
+    abstract: "",
     phone: "",
     consent_personal_data: false,
     consent_publication: false,
@@ -178,71 +83,75 @@ export default function Register() {
   });
 
   useEffect(() => {
-    apiGet("/sections")
-      .then(setSections)
-      .catch(() => setSections([]));
+    apiGet("/sections").then(setSections).catch(() => setSections([]));
+    apiGet("/conference").then(setConference).catch(() => setConference(null));
   }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const mode = params.get("mode");
+    const mode = new URLSearchParams(location.search).get("mode");
     if (mode === "online" || mode === "offline") {
       setForm((prev) => ({ ...prev, user_type: mode }));
     }
   }, [location.search]);
 
   useEffect(() => {
-    if (cooldown <= 0) {
-      return undefined;
-    }
-    const timer = window.setInterval(() => {
-      setCooldown((prev) => (prev > 1 ? prev - 1 : 0));
-    }, 1000);
+    if (cooldown <= 0) return undefined;
+    const timer = window.setInterval(() => setCooldown((p) => (p > 1 ? p - 1 : 0)), 1000);
     return () => window.clearInterval(timer);
   }, [cooldown]);
 
   const update = (field, value) => {
     setErrorMessage("");
-    setStatusMessage("");
-    setVerificationToken("");
-    setVerificationCode("");
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  const isListener = form.role === "listener";
   const selectedSection = useMemo(
     () => sections.find((s) => String(s.id) === String(form.section_id)),
     [sections, form.section_id]
   );
-
   const normalizedPhone = useMemo(() => normalizeRussianPhone(form.phone), [form.phone]);
-
-  const cityMatches = useMemo(
-    () =>
-      cityOptions
-        .filter((city) => city.toLowerCase().includes(form.city.toLowerCase()))
-        .slice(0, 8),
-    [form.city]
-  );
 
   const payload = useMemo(
     () => ({
       ...form,
       phone: normalizedPhone || form.phone,
-      section_id: form.section_id ? Number(form.section_id) : null,
+      section_id: isListener || !form.section_id ? null : Number(form.section_id),
     }),
-    [form, normalizedPhone]
+    [form, normalizedPhone, isListener]
   );
 
-  const requestCode = async (e) => {
-    if (e) {
-      e.preventDefault();
+  // Переход между шагами учитывает роль: слушатель пропускает шаг 3 «Доклад».
+  const nextStep = () => {
+    setErrorMessage("");
+    if (step === 2 && isListener) {
+      setStep(4);
+      return;
     }
-    if (!form.section_id) {
-      setErrorMessage("Выберите секцию конференции перед отправкой анкеты.");
+    setStep(step + 1);
+  };
+  const prevStep = () => {
+    setErrorMessage("");
+    setStatusMessage("");
+    if (step === 4 && isListener) {
+      setStep(2);
+      return;
+    }
+    setStep(step - 1);
+  };
+
+  const requestCode = async (e) => {
+    if (e) e.preventDefault();
+    if (!form.consent_personal_data || !form.consent_publication) {
+      setErrorMessage("Подтвердите обязательные согласия.");
       return;
     }
     if (!normalizedPhone) {
       setErrorMessage("Введите российский мобильный номер в формате +7 999 123-45-67.");
+      return;
+    }
+    if (!isListener && !form.section_id) {
+      setErrorMessage("Выберите секцию конференции.");
       return;
     }
     setRequestingCode(true);
@@ -254,7 +163,7 @@ export default function Register() {
       setVerificationCode("");
       setCooldown(Number(data.cooldown_seconds) || 60);
       setStatusMessage(data.message || "Код отправлен в Telegram");
-      setStep(4);
+      setPhase("code");
     } catch (err) {
       setErrorMessage(err.message || "Не удалось отправить код подтверждения.");
     } finally {
@@ -263,7 +172,7 @@ export default function Register() {
   };
 
   const verifyCode = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setLoading(true);
     setErrorMessage("");
     try {
@@ -271,10 +180,8 @@ export default function Register() {
         verification_token: verificationToken,
         code: verificationCode,
       });
-      if (data.user) {
-        setUser(data.user);
-      }
-      navigate("/dashboard");
+      if (data.user) setUser(data.user);
+      setPhase("done");
     } catch (err) {
       setErrorMessage(err.message || "Не удалось подтвердить код.");
     } finally {
@@ -282,36 +189,59 @@ export default function Register() {
     }
   };
 
-  const handleSubmit = (e) => {
-    if (step === 4) {
-      verifyCode(e);
-      return;
-    }
-    if (step === 3) {
-      requestCode(e);
-      return;
-    }
-    e.preventDefault();
-  };
+  const dateLabel = formatConferenceDateRange(conference?.starts_at, conference?.ends_at);
 
-  const steps = ["1. Личные данные", "2. Участие", "3. Доступ", "4. Подтверждение"];
-
-  return (
-    <Card className="reg-card">
-      <h1>Регистрация участника</h1>
-      <div className="reg-stepper" aria-label={`Этапы регистрации, шаг ${step} из ${steps.length}`}>
-        {steps.map((label, idx) => (
-          <div
-            key={label}
-            className={`reg-step ${step === idx + 1 ? "active" : ""}`}
-            aria-current={step === idx + 1 ? "step" : undefined}
-          >
-            {label}
+  // ===== Экран «готово» =====
+  if (phase === "done") {
+    return (
+      <Card className="reg-card reg-done">
+        <div className="reg-done-ic" aria-hidden="true">
+          ✓
+        </div>
+        <h1>Вы зарегистрированы!</h1>
+        <p className="reg-done-sub">Заявка участника принята. Личный кабинет уже доступен.</p>
+        <div className="reg-summary">
+          <div className="reg-summary-row">
+            <strong>{form.full_name || "Участник"}</strong>
+            <span>
+              {isListener ? "Слушатель" : "Автор"} ·{" "}
+              {form.user_type === "online" ? "онлайн" : "офлайн"}
+            </span>
           </div>
-        ))}
-      </div>
+          {!isListener && selectedSection ? (
+            <div className="reg-summary-row">
+              <strong>{selectedSection.title}</strong>
+              {form.talk_title ? <span>«{form.talk_title}»</span> : null}
+            </div>
+          ) : null}
+          {dateLabel ? (
+            <div className="reg-summary-row">
+              <strong>{dateLabel}</strong>
+              <span>{getConferenceTitle(conference)}</span>
+            </div>
+          ) : null}
+        </div>
+        <div className="reg-actions">
+          <button type="button" className={buttonClassName("primary")} onClick={() => navigate("/dashboard")}>
+            Перейти в личный кабинет
+          </button>
+          <Link className={buttonClassName("ghost")} to="/">
+            На сайт конференции
+          </Link>
+        </div>
+      </Card>
+    );
+  }
 
-      <form onSubmit={handleSubmit}>
+  // ===== Экран ввода кода =====
+  if (phase === "code") {
+    return (
+      <Card className="reg-card">
+        <h1>Подтверждение телефона</h1>
+        <p className="reg-note">
+          Мы отправили код подтверждения для номера <strong>{normalizedPhone || form.phone}</strong>.
+          Проверьте Telegram, привязанный к этому номеру.
+        </p>
         {errorMessage ? (
           <div className="auth-status auth-status-error" role="alert">
             {errorMessage}
@@ -322,8 +252,139 @@ export default function Register() {
             {statusMessage}
           </div>
         ) : null}
+        <form onSubmit={verifyCode}>
+          <Field label="Код подтверждения" htmlFor="reg-code">
+            <Input
+              id="reg-code"
+              value={verificationCode}
+              onChange={(e) => setVerificationCode(e.target.value)}
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="4 цифры"
+              required
+            />
+          </Field>
+          <div className="reg-resend">
+            <button
+              type="button"
+              className={buttonClassName("ghost")}
+              onClick={requestCode}
+              disabled={requestingCode || cooldown > 0}
+            >
+              {requestingCode
+                ? "Отправка…"
+                : cooldown > 0
+                  ? `Повтор через ${cooldown}с`
+                  : "Отправить код заново"}
+            </button>
+          </div>
+          <div className="reg-actions">
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => {
+                setPhase("form");
+                setErrorMessage("");
+              }}
+            >
+              Изменить данные
+            </Button>
+            <Button type="submit" disabled={loading || !verificationCode.trim() || !verificationToken}>
+              {loading ? "Проверка…" : "Завершить регистрацию"}
+            </Button>
+          </div>
+        </form>
+      </Card>
+    );
+  }
+
+  // ===== Мастер регистрации =====
+  return (
+    <Card className="reg-card">
+      <h1>Регистрация на конференцию</h1>
+      {conference ? (
+        <p className="reg-subtitle">
+          {getConferenceTitle(conference)}
+          {dateLabel ? ` · ${dateLabel}` : ""}
+        </p>
+      ) : null}
+
+      <div className="reg-stepper" aria-label={`Шаг ${step} из ${STEPS.length}`}>
+        {STEPS.map((label, idx) => (
+          <div
+            key={label}
+            className={`reg-step ${step === idx + 1 ? "active" : ""} ${
+              isListener && idx === 2 ? "skipped" : ""
+            }`}
+            aria-current={step === idx + 1 ? "step" : undefined}
+          >
+            {idx + 1}. {label}
+          </div>
+        ))}
+      </div>
+
+      <form onSubmit={(e) => e.preventDefault()}>
+        {errorMessage ? (
+          <div className="auth-status auth-status-error" role="alert">
+            {errorMessage}
+          </div>
+        ) : null}
 
         {step === 1 && (
+          <>
+            <div className="reg-group-label">Формат участия</div>
+            <div className="reg-choice-grid">
+              {[
+                { v: "offline", t: "Офлайн", d: "на площадке вуза" },
+                { v: "online", t: "Онлайн", d: "трансляция и Q&A" },
+              ].map((opt) => (
+                <button
+                  type="button"
+                  key={opt.v}
+                  className={`reg-choice ${form.user_type === opt.v ? "active" : ""}`}
+                  aria-pressed={form.user_type === opt.v}
+                  onClick={() => update("user_type", opt.v)}
+                >
+                  <strong>{opt.t}</strong>
+                  <span>{opt.d}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="reg-group-label">Роль</div>
+            <div className="reg-choice-grid">
+              {[
+                { v: "author", t: "Автор / докладчик", d: "с докладом и секцией" },
+                { v: "listener", t: "Слушатель", d: "без доклада" },
+              ].map((opt) => (
+                <button
+                  type="button"
+                  key={opt.v}
+                  className={`reg-choice ${form.role === opt.v ? "active" : ""}`}
+                  aria-pressed={form.role === opt.v}
+                  onClick={() => update("role", opt.v)}
+                >
+                  <strong>{opt.t}</strong>
+                  <span>{opt.d}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="reg-group-label">Способ входа</div>
+            <div className="reg-choice-grid">
+              <div className="reg-choice active" aria-disabled="true">
+                <strong>По e-mail / телефону</strong>
+                <span>заполните профиль на следующем шаге</span>
+              </div>
+              <div className="reg-choice reg-choice-soon" aria-disabled="true">
+                <strong>Войти через Госуслуги</strong>
+                <span>ЕСИА — скоро</span>
+              </div>
+            </div>
+          </>
+        )}
+
+        {step === 2 && (
           <>
             <Field label="ФИО" htmlFor="reg-full-name">
               <Input
@@ -334,11 +395,7 @@ export default function Register() {
               />
             </Field>
             <Field label="Ученая степень/звание" htmlFor="reg-degree">
-              <Select
-                id="reg-degree"
-                value={form.degree}
-                onChange={(e) => update("degree", e.target.value)}
-              >
+              <Select id="reg-degree" value={form.degree} onChange={(e) => update("degree", e.target.value)}>
                 <option value="">Выберите степень/звание</option>
                 {degreeGroups.map((group) => (
                   <optgroup key={group.label} label={group.label}>
@@ -352,11 +409,7 @@ export default function Register() {
               </Select>
             </Field>
             <Field label="Должность" htmlFor="reg-position">
-              <Input
-                id="reg-position"
-                value={form.position}
-                onChange={(e) => update("position", e.target.value)}
-              />
+              <Input id="reg-position" value={form.position} onChange={(e) => update("position", e.target.value)} />
             </Field>
             <Field label="Место работы" htmlFor="reg-organization">
               <Input
@@ -365,92 +418,34 @@ export default function Register() {
                 onChange={(e) => update("organization", e.target.value)}
               />
             </Field>
-            <Field label="Город" htmlFor="reg-city" className="reg-city">
+            <Field label="Город" htmlFor="reg-city">
+              <Input id="reg-city" value={form.city} onChange={(e) => update("city", e.target.value)} />
+            </Field>
+            <Field label="Email" htmlFor="reg-email">
               <Input
-                id="reg-city"
-                role="combobox"
-                aria-expanded={showCityDropdown && cityMatches.length > 0}
-                aria-controls="reg-city-listbox"
-                aria-autocomplete="list"
-                aria-activedescendant={
-                  showCityDropdown && cityActiveIndex >= 0
-                    ? `reg-city-opt-${cityActiveIndex}`
-                    : undefined
-                }
-                value={form.city}
-                onChange={(e) => {
-                  update("city", e.target.value);
-                  setShowCityDropdown(true);
-                  setCityActiveIndex(-1);
-                }}
-                onFocus={() => setShowCityDropdown(true)}
-                onBlur={() => setTimeout(() => setShowCityDropdown(false), 150)}
-                onKeyDown={(e) => {
-                  if (!showCityDropdown && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-                    setShowCityDropdown(true);
-                    return;
-                  }
-                  if (e.key === "ArrowDown" && cityMatches.length > 0) {
-                    e.preventDefault();
-                    setCityActiveIndex((prev) => (prev + 1) % cityMatches.length);
-                  } else if (e.key === "ArrowUp" && cityMatches.length > 0) {
-                    e.preventDefault();
-                    setCityActiveIndex((prev) => (prev <= 0 ? cityMatches.length - 1 : prev - 1));
-                  } else if (e.key === "Enter" && cityActiveIndex >= 0 && cityMatches[cityActiveIndex]) {
-                    e.preventDefault();
-                    update("city", cityMatches[cityActiveIndex]);
-                    setShowCityDropdown(false);
-                    setCityActiveIndex(-1);
-                  } else if (e.key === "Escape") {
-                    setShowCityDropdown(false);
-                    setCityActiveIndex(-1);
-                  }
-                }}
-                placeholder="Начните вводить..."
-                autoComplete="off"
+                id="reg-email"
+                type="email"
+                value={form.email}
+                onChange={(e) => update("email", e.target.value)}
+                autoComplete="email"
+                required
               />
-              {showCityDropdown && cityMatches.length > 0 && (
-                <ul className="reg-city-menu" id="reg-city-listbox" role="listbox">
-                  {cityMatches.map((city, idx) => (
-                    <li
-                      key={city}
-                      id={`reg-city-opt-${idx}`}
-                      role="option"
-                      aria-selected={idx === cityActiveIndex}
-                    >
-                      <button
-                        type="button"
-                        className={`reg-city-option${idx === cityActiveIndex ? " active" : ""}`}
-                        onMouseDown={(e) => {
-                          // mousedown срабатывает до blur инпута — выбор не теряется
-                          e.preventDefault();
-                          update("city", city);
-                          setShowCityDropdown(false);
-                          setCityActiveIndex(-1);
-                        }}
-                      >
-                        {city}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+            </Field>
+            <Field label="Пароль" htmlFor="reg-password">
+              <Input
+                id="reg-password"
+                type="password"
+                value={form.password}
+                onChange={(e) => update("password", e.target.value)}
+                autoComplete="new-password"
+                required
+              />
             </Field>
           </>
         )}
 
-        {step === 2 && (
+        {step === 3 && !isListener && (
           <>
-            <Field label="Формат участия" htmlFor="reg-user-type">
-              <Select
-                id="reg-user-type"
-                value={form.user_type}
-                onChange={(e) => update("user_type", e.target.value)}
-              >
-                <option value="online">Онлайн</option>
-                <option value="offline">Оффлайн</option>
-              </Select>
-            </Field>
             <Field label="Секция (тема конференции)" htmlFor="reg-section">
               <Select
                 id="reg-section"
@@ -467,20 +462,39 @@ export default function Register() {
                 ))}
               </Select>
             </Field>
-            {selectedSection && (
-              <p className="reg-hint">
-                Назначенная аудитория:{" "}
-                <strong>{selectedSection.room || "пока не назначена"}</strong>
-              </p>
-            )}
-            <Field label="Название доклада" htmlFor="reg-talk-title">
+            <Field label="Тема доклада" htmlFor="reg-talk">
               <Input
-                id="reg-talk-title"
+                id="reg-talk"
                 value={form.talk_title}
                 onChange={(e) => update("talk_title", e.target.value)}
                 required
               />
             </Field>
+            <Field label="Соавторы (через запятую)" htmlFor="reg-coauthors">
+              <Input
+                id="reg-coauthors"
+                value={form.coauthors}
+                onChange={(e) => update("coauthors", e.target.value)}
+                placeholder="Петрова А. С., ИЦЭиТП"
+              />
+            </Field>
+            <Field label="Аннотация / тезисы" htmlFor="reg-abstract">
+              <Textarea
+                id="reg-abstract"
+                value={form.abstract}
+                onChange={(e) => update("abstract", e.target.value)}
+                rows={4}
+                placeholder="Краткое описание доклада"
+              />
+            </Field>
+            <p className="reg-hint">
+              Файл тезисов можно загрузить в личном кабинете после регистрации.
+            </p>
+          </>
+        )}
+
+        {step === 4 && (
+          <>
             <Field label="Телефон" htmlFor="reg-phone">
               <Input
                 id="reg-phone"
@@ -492,50 +506,28 @@ export default function Register() {
                 required
               />
               <p className="reg-hint">
-                Важно: код подтверждения придет в Telegram на этот номер. Укажите ваш актуальный
-                номер, к которому привязан Telegram.
-              </p>
-              <p className="reg-hint">
-                Допустимые варианты: +7 999 123-45-67, 89991234567, 9991234567.
+                Код подтверждения придёт в Telegram на этот номер. Укажите актуальный номер,
+                привязанный к Telegram.
               </p>
             </Field>
           </>
         )}
 
-        {step === 3 && (
+        {step === 5 && (
           <>
-            <Field label="Email" htmlFor="reg-email">
-              <Input
-                id="reg-email"
-                type="email"
-                value={form.email}
-                onChange={(e) => update("email", e.target.value)}
-                required
-              />
-            </Field>
-            <Field label="Пароль" htmlFor="reg-password">
-              <Input
-                id="reg-password"
-                type="password"
-                value={form.password}
-                onChange={(e) => update("password", e.target.value)}
-                required
-              />
-            </Field>
-            <label className="reg-checkbox">
+            <label className="reg-consent">
               <input
                 type="checkbox"
                 checked={form.consent_personal_data}
                 onChange={(e) => update("consent_personal_data", e.target.checked)}
               />
               <span>
-                Я ознакомлен(а) с{" "}
-                <Link to="/personal-data">Политикой обработки персональных данных</Link> и даю
-                согласие на регистрацию, организацию участия, формирование программы, выпуск бейджа,
-                сертификата и других материалов конференции.
+                Я даю согласие на обработку персональных данных в соответствии с{" "}
+                <Link to="/personal-data">Политикой обработки ПДн (152-ФЗ)</Link>.{" "}
+                <em>Обязательно</em>
               </span>
             </label>
-            <label className="reg-checkbox">
+            <label className="reg-consent">
               <input
                 type="checkbox"
                 checked={form.consent_publication}
@@ -543,98 +535,41 @@ export default function Register() {
               />
               <span>
                 Я принимаю{" "}
-                <Link to="/consent-authors">
-                  согласие на публикацию материалов и сведений об авторе
-                </Link>{" "}
-                в программе конференции, электронном сборнике трудов и на сайте конференции.
+                <Link to="/consent-authors">согласие на публикацию материалов и сведений об авторе</Link>.{" "}
+                <em>Обязательно</em>
               </span>
             </label>
-          </>
-        )}
-
-        {step === 4 && (
-          <>
-            <p className="reg-note">
-              Мы отправили код подтверждения для номера{" "}
-              <strong>{normalizedPhone || form.phone}</strong>. Проверьте Telegram и введите код,
-              чтобы завершить регистрацию.
-            </p>
-            <Field label="Код подтверждения" htmlFor="reg-code">
-              <Input
-                id="reg-code"
-                value={verificationCode}
-                onChange={(e) => setVerificationCode(e.target.value)}
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder="4 цифры"
-                required
-              />
-              <p className="reg-hint">
-                Код подтверждения придет в Telegram, привязанный к этому номеру телефона.
-              </p>
-            </Field>
-            <div className="reg-resend">
-              <button
-                type="button"
-                className={buttonClassName("ghost")}
-                onClick={requestCode}
-                disabled={requestingCode || cooldown > 0}
-              >
-                {requestingCode
-                  ? "Отправка..."
-                  : cooldown > 0
-                    ? `Повтор через ${cooldown}с`
-                    : "Отправить код заново"}
-              </button>
+            <div className="reg-banner">
+              Оператор ПДн — организатор конференции. Вы можете отозвать согласие в личном кабинете.
             </div>
           </>
         )}
 
         <div className="reg-actions">
-          {step > 1 && (
-            <Button
-              variant="ghost"
-              type="button"
-              onClick={() => {
-                setErrorMessage("");
-                setStatusMessage("");
-                setStep(step - 1);
-              }}
-            >
+          {step > 1 ? (
+            <Button variant="ghost" type="button" onClick={prevStep}>
               Назад
             </Button>
-          )}
-          {step < 3 && (
+          ) : null}
+          {step < 5 ? (
             <Button
               type="button"
-              onClick={() => {
-                setErrorMessage("");
-                setStep(step + 1);
-              }}
+              onClick={nextStep}
               disabled={
-                (step === 1 && !form.full_name.trim()) ||
-                (step === 2 && (!form.section_id || !form.talk_title.trim() || !normalizedPhone))
+                (step === 2 && (!form.full_name.trim() || !form.email.trim() || !form.password)) ||
+                (step === 3 && !isListener && (!form.section_id || !form.talk_title.trim())) ||
+                (step === 4 && !normalizedPhone)
               }
             >
               Далее
             </Button>
-          )}
-          {step === 3 && (
+          ) : (
             <Button
-              type="submit"
-              disabled={
-                requestingCode || !form.consent_personal_data || !form.consent_publication
-              }
+              type="button"
+              onClick={requestCode}
+              disabled={requestingCode || !form.consent_personal_data || !form.consent_publication}
             >
-              {requestingCode ? "Отправка..." : "Получить код в Telegram"}
-            </Button>
-          )}
-          {step === 4 && (
-            <Button
-              type="submit"
-              disabled={loading || !verificationCode.trim() || !verificationToken}
-            >
-              {loading ? "Проверка..." : "Подтвердить и зарегистрироваться"}
+              {requestingCode ? "Отправка…" : "Завершить регистрацию"}
             </Button>
           )}
         </div>

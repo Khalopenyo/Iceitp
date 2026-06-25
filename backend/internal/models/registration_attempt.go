@@ -14,7 +14,9 @@ type RegistrationAttempt struct {
 	City                string
 	Degree              string
 	SectionID           *uint
-	TalkTitle           string     `gorm:"not null"`
+	TalkTitle           string `gorm:"not null"`
+	Coauthors           string
+	Abstract            string
 	Phone               string     `gorm:"type:varchar(32);index;not null"`
 	ConsentPersonalData bool       `gorm:"not null"`
 	ConsentPublication  bool       `gorm:"not null"`
