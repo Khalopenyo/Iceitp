@@ -263,17 +263,13 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 24px 48px;
-  background: linear-gradient(120deg, var(--red-dark) 0%, var(--red) 100%);
-  background-size: 200% 200%;
-  animation: gradientShift 8s ease infinite, slideInHeader 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-  border-bottom: 2px solid rgba(255, 255, 255, 0.25);
+  padding: 20px 48px;
+  background: var(--brand);
+  border-bottom: 1px solid var(--brand-700);
   color: var(--white);
   position: sticky;
   top: 0;
   z-index: 10;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 .brand {
@@ -439,11 +435,11 @@ a {
 
 .header .btn-primary {
   background: var(--white);
-  color: var(--red-dark);
+  color: var(--brand-700);
 }
 
 .header .btn-primary:hover {
-  background: #FFF2F1;
+  background: var(--brand-weak);
 }
 
 .header .btn-ghost {
@@ -471,10 +467,8 @@ a {
   align-items: flex-start;
   gap: 18px;
   padding: 24px 48px;
-  background: linear-gradient(120deg, var(--red-dark) 0%, var(--red) 100%);
-  background-size: 200% 200%;
-  animation: gradientShift 8s ease infinite;
-  border-top: 1px solid rgba(255, 255, 255, 0.25);
+  background: var(--brand-700);
+  border-top: 1px solid var(--brand-700);
   color: var(--white);
   font-size: 13px;
 }
