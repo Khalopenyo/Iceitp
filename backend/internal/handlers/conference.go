@@ -24,6 +24,10 @@ type updateConferencePayload struct {
 	Status         models.ConferenceStatus `json:"status"`
 	ProceedingsURL string                  `json:"proceedings_url"`
 	SupportEmail   string                  `json:"support_email"`
+	SupportPhone   string                  `json:"support_phone"`
+	VenueAddress   string                  `json:"venue_address"`
+	VenueMapURL    string                  `json:"venue_map_url"`
+	VenueTransport string                  `json:"venue_transport"`
 }
 
 func (h *ConferenceHandler) GetConference(c *gin.Context) {
@@ -57,6 +61,10 @@ func (h *ConferenceHandler) UpdateConference(c *gin.Context) {
 		conf.EndsAt = *payload.EndsAt
 	}
 	conf.SupportEmail = strings.TrimSpace(payload.SupportEmail)
+	conf.SupportPhone = strings.TrimSpace(payload.SupportPhone)
+	conf.VenueAddress = strings.TrimSpace(payload.VenueAddress)
+	conf.VenueMapURL = strings.TrimSpace(payload.VenueMapURL)
+	conf.VenueTransport = strings.TrimSpace(payload.VenueTransport)
 	conf.ProceedingsURL = strings.TrimSpace(payload.ProceedingsURL)
 	if payload.Status != "" {
 		switch payload.Status {

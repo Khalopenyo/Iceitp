@@ -143,6 +143,7 @@ export default function Layout() {
     { to: "/program", label: "Программа" },
     { to: "/sections", label: "Секции" },
     { to: "/speakers", label: "Спикеры" },
+    { to: "/venue", label: "Площадка" },
   ];
   const desktopNavItems = user
     ? [
@@ -340,6 +341,9 @@ export default function Layout() {
             : null}
           {conferenceSupportEmail ? (
             <a href={`mailto:${conferenceSupportEmail}`}>Email: {conferenceSupportEmail}</a>
+          ) : null}
+          {conference?.support_phone ? (
+            <a href={`tel:${conference.support_phone}`}>Телефон: {conference.support_phone}</a>
           ) : null}
           <Link to="/personal-data">Политика обработки данных</Link>
           <Link to="/consent-authors">Согласие авторов</Link>

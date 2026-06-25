@@ -224,6 +224,15 @@ var migrations = []migration{
 			return nil
 		},
 	},
+	{
+		Version: "202606250015",
+		Name:    "add_conference_venue_fields",
+		Up: func(db *gorm.DB) error {
+			// Additive: support_phone + venue_address/map_url/transport под
+			// публичную страницу площадки (SCR-PUB-12). AutoMigrate добавляет колонки.
+			return db.AutoMigrate(&models.Conference{})
+		},
+	},
 }
 
 // tenantConferenceIDNotNull flips the per-event conference_id columns (and

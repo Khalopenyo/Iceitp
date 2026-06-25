@@ -21,6 +21,7 @@ import Sections from "./pages/Sections.jsx";
 import About from "./pages/About.jsx";
 import SectionDetail from "./pages/SectionDetail.jsx";
 import Speakers from "./pages/Speakers.jsx";
+import Venue from "./pages/Venue.jsx";
 import Map from "./pages/Map.jsx";
 import PersonalData from "./pages/PersonalData.jsx";
 import ConsentAuthors from "./pages/ConsentAuthors.jsx";
@@ -144,6 +145,7 @@ export default function App() {
         <Route path="sections/:id" element={<SectionDetail />} />
         <Route path="about" element={<About />} />
         <Route path="speakers" element={<Speakers />} />
+        <Route path="venue" element={<Venue />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

@@ -24,6 +24,10 @@ type Conference struct {
 	Status         ConferenceStatus `gorm:"type:varchar(20);not null;default:'draft'" json:"status"`
 	ProceedingsURL string           `json:"proceedings_url"`
 	SupportEmail   string           `json:"support_email"`
+	SupportPhone   string           `json:"support_phone"`
+	VenueAddress   string           `json:"venue_address"`
+	VenueMapURL    string           `json:"venue_map_url"`
+	VenueTransport string           `json:"venue_transport"`
 	CreatedAt      time.Time        `json:"created_at"`
 	UpdatedAt      time.Time        `json:"updated_at"`
 	// Soft-delete (ADR-0004): Conference only in Phase 0. Inert column —
