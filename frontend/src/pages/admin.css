@@ -1,0 +1,208 @@
+/* ===== Админка (ADM) на дизайн-токенах ===== */
+.adm {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 28px 20px 56px;
+}
+.adm-head h1 {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+.adm-head p {
+  color: var(--text-2);
+  font-size: 14px;
+  margin: 0 0 16px;
+}
+
+.adm-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.adm-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: sticky;
+  top: 20px;
+}
+.adm-tab {
+  text-align: left;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.adm-tab:hover {
+  background: var(--surface-2);
+}
+.adm-tab.active {
+  background: var(--brand-weak);
+  color: var(--brand-700);
+}
+.adm-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.adm-card-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+.adm-card-sub {
+  color: var(--text-2);
+  font-size: 14px;
+  margin: 0 0 16px;
+}
+
+.adm-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+/* QR-карточка */
+.adm-qr {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  background: var(--surface-2);
+  margin-bottom: 18px;
+}
+.adm-qr img {
+  width: 120px;
+  height: 120px;
+  border-radius: var(--r-md);
+  background: #fff;
+  border: 1px solid var(--border);
+}
+.adm-qr-body {
+  flex: 1;
+  min-width: 220px;
+}
+.adm-qr-body strong {
+  display: block;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.adm-qr-body p {
+  color: var(--text-2);
+  font-size: 13.5px;
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+.adm-qr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.adm-qr-link {
+  color: var(--text-2);
+  font-size: 12.5px;
+  margin-top: 8px;
+  word-break: break-all;
+}
+
+/* Таблица-список */
+.adm-table {
+  display: grid;
+  gap: 10px;
+}
+.adm-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  background: var(--surface);
+}
+.adm-row-main {
+  min-width: 240px;
+  flex: 1;
+}
+.adm-row-main strong {
+  color: var(--text);
+}
+.adm-row-note {
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+.adm-row-main p {
+  margin: 8px 0 0;
+  color: var(--text);
+  line-height: 1.5;
+}
+.adm-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.adm-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+.adm-pagination span {
+  color: var(--text-2);
+  font-size: 13px;
+  margin-right: auto;
+}
+
+/* Доска одобренных вопросов */
+.adm-board {
+  display: grid;
+  gap: 12px;
+}
+.adm-board-item {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brand);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  background: var(--surface);
+}
+.adm-board-item p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.55;
+}
+.adm-empty {
+  color: var(--text-2);
+  font-size: 14px;
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .adm-layout {
+    grid-template-columns: 1fr;
+  }
+  .adm-tabs {
+    flex-direction: row;
+    position: static;
+    flex-wrap: wrap;
+  }
+  .adm-row {
+    flex-direction: column;
+  }
+}

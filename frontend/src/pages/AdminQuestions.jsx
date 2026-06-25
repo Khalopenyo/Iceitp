@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiDelete, apiGet, apiPatch } from "../lib/api.js";
+import { Card, Field, Input, Select, Button, Badge } from "../components/ui/index.jsx";
+import { buttonClassName } from "../components/ui/buttonClass.js";
+import "./admin.css";
 
 const emptyPage = {
   items: [],
@@ -12,7 +15,13 @@ const emptyPage = {
 const questionStatusLabels = {
   pending: "На модерации",
   approved: "Одобрен",
-  rejected: "Отклонен",
+  rejected: "Отклонён",
+};
+
+const questionStatusBadge = {
+  pending: "warn",
+  approved: "success",
+  rejected: "danger",
 };
 
 function normalizePageResponse(response) {
@@ -38,26 +47,26 @@ function PaginationControls({ page, pageSize, total, onPageChange }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="row-actions">
-      <span className="muted">
+    <div className="adm-pagination">
+      <span>
         Страница {page} из {totalPages} · всего {total}
       </span>
-      <button
+      <Button
+        variant="ghost"
         type="button"
-        className="btn btn-ghost"
         onClick={() => onPageChange(Math.max(1, page - 1))}
         disabled={page <= 1}
       >
         Назад
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
         type="button"
-        className="btn btn-ghost"
         onClick={() => onPageChange(Math.min(totalPages, page + 1))}
         disabled={page >= totalPages}
       >
-        Вперед
-      </button>
+        Вперёд
+      </Button>
     </div>
   );
 }
@@ -78,7 +87,6 @@ export default function AdminQuestions() {
 
   const loadQuestions = async (page = questionsPage.page) => {
     try {
-      setErrorMessage("");
       const response = await apiGet(
         `/admin/questions${buildQuery({
           page,
@@ -88,6 +96,7 @@ export default function AdminQuestions() {
         })}`
       );
       setQuestionsPage(normalizePageResponse(response));
+      setErrorMessage("");
     } catch (error) {
       if (error?.status === 403) {
         handleForbidden();
@@ -99,9 +108,9 @@ export default function AdminQuestions() {
 
   const loadQuestionQR = async () => {
     try {
-      setErrorMessage("");
       const response = await apiGet("/admin/questions/qr");
       setQuestionQr(response);
+      setErrorMessage("");
     } catch (error) {
       if (error?.status === 403) {
         handleForbidden();
@@ -133,11 +142,11 @@ export default function AdminQuestions() {
     try {
       await apiPatch(`/admin/questions/${id}`, { status });
       const statusLabels = {
-        pending: "Вопрос возвращен в очередь.",
+        pending: "Вопрос возвращён в очередь.",
         approved: "Вопрос одобрен.",
-        rejected: "Вопрос отклонен.",
+        rejected: "Вопрос отклонён.",
       };
-      setStatusMessage(statusLabels[status] || "Статус вопроса обновлен.");
+      setStatusMessage(statusLabels[status] || "Статус вопроса обновлён.");
       await loadQuestions(questionsPage.page);
     } catch (error) {
       setStatusMessage("");
@@ -156,7 +165,7 @@ export default function AdminQuestions() {
     setErrorMessage("");
     try {
       await apiDelete(`/admin/questions/${id}`);
-      setStatusMessage("Вопрос удален.");
+      setStatusMessage("Вопрос удалён.");
       await loadQuestions(questionsPage.page);
     } catch (error) {
       setStatusMessage("");
@@ -166,124 +175,161 @@ export default function AdminQuestions() {
     }
   };
 
-  return (
-    <section className="panel">
-      <h2>Вопросы</h2>
-      {statusMessage ? <p className="form-status success">{statusMessage}</p> : null}
-      {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
+  const actionBusy = questionActionKey !== "";
 
-      <div className="dashboard-layout">
-        <aside className="dashboard-tabs">
-          <button className="tab-btn" onClick={() => navigate("/admin/questions/approved")}>
+  return (
+    <section className="adm">
+      <div className="adm-head">
+        <h1>Модерация вопросов</h1>
+        <p>Все заданные вопросы. Новые подтягиваются автоматически.</p>
+      </div>
+      {statusMessage ? (
+        <div className="ui-status ui-status-success" role="status">
+          {statusMessage}
+        </div>
+      ) : null}
+      {errorMessage ? (
+        <div className="ui-status ui-status-error" role="alert">
+          {errorMessage}
+        </div>
+      ) : null}
+
+      <div className="adm-layout">
+        <aside className="adm-tabs" aria-label="Разделы админки">
+          <button type="button" className="adm-tab active" aria-current="page">
+            Модерация вопросов
+          </button>
+          <button
+            type="button"
+            className="adm-tab"
+            onClick={() => navigate("/admin/questions/approved")}
+          >
             Одобренные вопросы
           </button>
-          <button className="tab-btn" onClick={() => navigate("/admin")}>
+          <button type="button" className="adm-tab" onClick={() => navigate("/admin")}>
             Назад в админку
-          </button>
-          <button className="tab-btn active" type="button">
-            Модерация вопросов
           </button>
         </aside>
 
-        <div className="dashboard-content">
-          <div className="card">
-            <h3>Модерация вопросов</h3>
-            <p className="muted">Здесь отображаются все заданные вопросы. Новые вопросы подтягиваются автоматически.</p>
+        <div className="adm-content">
+          <Card>
+            <h2 className="adm-card-title">Модерация вопросов</h2>
+            <p className="adm-card-sub">
+              Подтверждайте, отклоняйте или удаляйте вопросы участников.
+            </p>
 
             {questionQr ? (
-              <div className="question-qr-admin-card">
+              <div className="adm-qr">
                 <img src={questionQr.qr_data_url} alt="QR для вопросов" />
-                <div className="question-qr-admin-body">
+                <div className="adm-qr-body">
                   <strong>Отдельный QR для вопросов</strong>
-                  <p className="muted">
-                    Этот QR ведет только на форму вопросов и не затрагивает обычный QR бейджа.
-                  </p>
-                  <div className="row-actions">
-                    <a className="btn btn-primary" href={questionQr.url} target="_blank" rel="noreferrer">
+                  <p>Этот QR ведёт только на форму вопросов и не затрагивает обычный QR бейджа.</p>
+                  <div className="adm-qr-actions">
+                    <a
+                      className={buttonClassName("primary")}
+                      href={questionQr.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       Открыть страницу вопросов
                     </a>
-                    <a className="btn btn-ghost" href={questionQr.qr_data_url} download="questions-qr.png">
+                    <a
+                      className={buttonClassName("ghost")}
+                      href={questionQr.qr_data_url}
+                      download="questions-qr.png"
+                    >
                       Скачать QR
                     </a>
                   </div>
-                  <div className="muted question-qr-admin-link">{questionQr.url}</div>
+                  <div className="adm-qr-link">{questionQr.url}</div>
                 </div>
               </div>
             ) : null}
 
-            <div className="form-grid">
-              <label>
-                Поиск
-                <input
+            <div className="adm-form-grid">
+              <Field label="Поиск" htmlFor="aq-search">
+                <Input
+                  id="aq-search"
                   value={questionQuery}
                   onChange={(e) => setQuestionQuery(e.target.value)}
                   placeholder="Имя, email, текст вопроса"
                 />
-              </label>
-              <label>
-                Статус
-                <select value={questionStatusFilter} onChange={(e) => setQuestionStatusFilter(e.target.value)}>
+              </Field>
+              <Field label="Статус" htmlFor="aq-status">
+                <Select
+                  id="aq-status"
+                  value={questionStatusFilter}
+                  onChange={(e) => setQuestionStatusFilter(e.target.value)}
+                >
                   <option value="">Все</option>
                   <option value="pending">{questionStatusLabels.pending}</option>
                   <option value="approved">{questionStatusLabels.approved}</option>
                   <option value="rejected">{questionStatusLabels.rejected}</option>
-                </select>
-              </label>
+                </Select>
+              </Field>
             </div>
 
-            <div className="table compact">
+            <div className="adm-table">
               {(questionsPage.items || []).map((question) => (
-                <div key={question.id} className="row">
-                  <div>
+                <div key={question.id} className="adm-row">
+                  <div className="adm-row-main">
                     <strong>{question.author_name || question.user_email || "Участник"}</strong>
-                    {question.user_email ? <div className="muted">{question.user_email}</div> : null}
-                    <div className="muted">
-                      {question.created_at ? new Date(question.created_at).toLocaleString() : "Дата не указана"}
+                    {question.user_email ? (
+                      <div className="adm-row-note">{question.user_email}</div>
+                    ) : null}
+                    <div className="adm-row-note">
+                      {question.created_at
+                        ? new Date(question.created_at).toLocaleString("ru-RU")
+                        : "Дата не указана"}
                     </div>
                     <p>{question.text}</p>
                   </div>
-                  <div className="row-actions">
-                    <span className="pill">{questionStatusLabels[question.status] || question.status}</span>
-                    <button
-                      className="btn btn-ghost"
+                  <div className="adm-row-actions">
+                    <Badge variant={questionStatusBadge[question.status] || "neutral"}>
+                      {questionStatusLabels[question.status] || question.status}
+                    </Badge>
+                    <Button
+                      variant="ghost"
                       onClick={() => updateQuestionStatus(question.id, "approved")}
-                      disabled={questionActionKey !== "" && questionActionKey !== `${question.id}:approved`}
+                      disabled={actionBusy && questionActionKey !== `${question.id}:approved`}
                     >
-                      {questionActionKey === `${question.id}:approved` ? "..." : "Одобрить"}
-                    </button>
-                    <button
-                      className="btn btn-ghost"
+                      {questionActionKey === `${question.id}:approved` ? "…" : "Одобрить"}
+                    </Button>
+                    <Button
+                      variant="ghost"
                       onClick={() => updateQuestionStatus(question.id, "rejected")}
-                      disabled={questionActionKey !== "" && questionActionKey !== `${question.id}:rejected`}
+                      disabled={actionBusy && questionActionKey !== `${question.id}:rejected`}
                     >
-                      {questionActionKey === `${question.id}:rejected` ? "..." : "Отклонить"}
-                    </button>
-                    <button
-                      className="btn btn-ghost"
+                      {questionActionKey === `${question.id}:rejected` ? "…" : "Отклонить"}
+                    </Button>
+                    <Button
+                      variant="ghost"
                       onClick={() => updateQuestionStatus(question.id, "pending")}
-                      disabled={questionActionKey !== "" && questionActionKey !== `${question.id}:pending`}
+                      disabled={actionBusy && questionActionKey !== `${question.id}:pending`}
                     >
-                      {questionActionKey === `${question.id}:pending` ? "..." : "В очередь"}
-                    </button>
-                    <button
-                      className="btn btn-danger"
+                      {questionActionKey === `${question.id}:pending` ? "…" : "В очередь"}
+                    </Button>
+                    <Button
+                      variant="danger"
                       onClick={() => deleteQuestion(question.id)}
-                      disabled={questionActionKey !== "" && questionActionKey !== `delete:${question.id}`}
+                      disabled={actionBusy && questionActionKey !== `delete:${question.id}`}
                     >
-                      {questionActionKey === `delete:${question.id}` ? "Удаление..." : "Удалить"}
-                    </button>
+                      {questionActionKey === `delete:${question.id}` ? "Удаление…" : "Удалить"}
+                    </Button>
                   </div>
                 </div>
               ))}
             </div>
-            {questionsPage.items.length === 0 ? <p className="muted">Вопросов пока нет.</p> : null}
+            {questionsPage.items.length === 0 ? (
+              <p className="adm-empty">Вопросов пока нет.</p>
+            ) : null}
             <PaginationControls
               page={questionsPage.page}
               pageSize={questionsPage.page_size}
               total={questionsPage.total}
               onPageChange={loadQuestions}
             />
-          </div>
+          </Card>
         </div>
       </div>
     </section>

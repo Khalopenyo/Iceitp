@@ -160,3 +160,26 @@
   color: var(--rd-700);
   border-color: var(--rd-500);
 }
+
+/* Status / alert plate — общий для всех зон (вместо per-page дублей) */
+.ui-status {
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  font-size: 14px;
+  margin-bottom: 14px;
+}
+.ui-status-success {
+  background: var(--gr-50);
+  color: var(--gr-700);
+  border: 1px solid var(--gr-500);
+}
+.ui-status-error {
+  background: var(--rd-50);
+  color: var(--rd-700);
+  border: 1px solid var(--rd-500);
+}
+.ui-status-info {
+  background: var(--brand-weak);
+  color: var(--brand-700);
+  border: 1px solid var(--border);
+}

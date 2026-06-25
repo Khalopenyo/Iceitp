@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiGet } from "../lib/api.js";
+import { Card } from "../components/ui/index.jsx";
+import "./admin.css";
 
 const emptyPage = {
   items: [],
@@ -23,48 +25,57 @@ export default function AdminApprovedQuestions() {
   const [questionsPage, setQuestionsPage] = useState(emptyPage);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const loadQuestions = async () => {
-    try {
-      setErrorMessage("");
-      const response = await apiGet("/admin/questions?page=1&page_size=100&status=approved");
-      setQuestionsPage(normalizePageResponse(response));
-    } catch (error) {
-      if (error?.status === 403) {
-        navigate("/forbidden", { replace: true });
-        return;
+  useEffect(() => {
+    let active = true;
+    // Загрузчик определён внутри эффекта (setState только в .then/await-ветках —
+    // не триггерит set-state-in-effect), вызывается на маунте и каждые 4с.
+    const load = async () => {
+      try {
+        const response = await apiGet("/admin/questions?page=1&page_size=100&status=approved");
+        if (!active) return;
+        setQuestionsPage(normalizePageResponse(response));
+        setErrorMessage("");
+      } catch (error) {
+        if (!active) return;
+        if (error?.status === 403) {
+          navigate("/forbidden", { replace: true });
+          return;
+        }
+        setErrorMessage(error?.message || "Не удалось загрузить одобренные вопросы.");
       }
-      setErrorMessage(error?.message || "Не удалось загрузить одобренные вопросы.");
-    }
-  };
-
-  useEffect(() => {
-    loadQuestions();
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      loadQuestions();
-    }, 4000);
-    return () => window.clearInterval(timer);
-  }, []);
+    };
+    load();
+    const timer = window.setInterval(load, 4000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [navigate]);
 
   return (
-    <section className="panel">
-      <h2>Вопросы</h2>
-      {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
-      <div className="card">
-        <div className="question-board">
+    <section className="adm">
+      <div className="adm-head">
+        <h1>Одобренные вопросы</h1>
+        <p>Вопросы, прошедшие модерацию. Список обновляется автоматически.</p>
+      </div>
+      {errorMessage ? (
+        <div className="ui-status ui-status-error" role="alert">
+          {errorMessage}
+        </div>
+      ) : null}
+      <Card>
+        <div className="adm-board" aria-live="polite">
           {questionsPage.items.length > 0 ? (
             questionsPage.items.map((question) => (
-              <article key={question.id} className="question-board-item">
+              <article key={question.id} className="adm-board-item">
                 <p>{question.text}</p>
               </article>
             ))
           ) : (
-            <p className="muted">Пока нет одобренных вопросов.</p>
+            <p className="adm-empty">Пока нет одобренных вопросов.</p>
           )}
         </div>
-      </div>
+      </Card>
     </section>
   );
 }
