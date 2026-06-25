@@ -1,0 +1,154 @@
+/* ===== Registration (SCR-PUB-07) — multi-step wizard on the design tokens ===== */
+.reg-card {
+  width: 100%;
+  max-width: 640px;
+}
+.reg-card h1 {
+  font-size: 24px;
+  margin: 0 0 16px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.reg-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.reg-step {
+  flex: 1;
+  min-width: 120px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-3);
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.reg-step.active {
+  color: var(--on-brand);
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.reg-hint {
+  font-size: 12px;
+  color: var(--text-3);
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+.reg-note {
+  font-size: 13.5px;
+  color: var(--text-2);
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+
+/* Degree dropdown */
+.reg-dropdown {
+  position: relative;
+}
+.reg-dropdown-trigger {
+  width: 100%;
+  text-align: left;
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.reg-dropdown-trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus);
+}
+.reg-dropdown-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-3);
+  padding: 6px;
+  max-height: 260px;
+  overflow: auto;
+}
+.reg-dropdown-group-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-3);
+  padding: 8px 8px 4px;
+}
+.reg-dropdown-item,
+.reg-city-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-size: 14px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  padding: 8px;
+  cursor: pointer;
+}
+.reg-dropdown-item:hover,
+.reg-city-option:hover {
+  background: var(--brand-weak);
+  color: var(--brand-700);
+}
+
+/* City autocomplete */
+.reg-city {
+  position: relative;
+}
+.reg-city-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-3);
+  padding: 6px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+/* Consent checkboxes */
+.reg-checkbox {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13.5px;
+  color: var(--text-2);
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+.reg-checkbox input {
+  margin-top: 3px;
+}
+.reg-checkbox a {
+  color: var(--brand);
+}
+
+.reg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.reg-resend {
+  margin: 8px 0 4px;
+}

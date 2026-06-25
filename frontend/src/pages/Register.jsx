@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiPost } from "../lib/api.js";
 import { setUser } from "../lib/auth.js";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Card, Field, Input, Select, Button } from "../components/ui/index.jsx";
+import { buttonClassName } from "../components/ui/buttonClass.js";
+import "./register.css";
 
 function normalizeRussianPhone(value) {
   const digits = String(value || "").replace(/\D/g, "");
@@ -46,6 +49,103 @@ function formatRussianPhone(value) {
   return result;
 }
 
+const degreeGroups = [
+  {
+    label: "Основное",
+    options: ["Преподаватель"],
+  },
+  {
+    label: "Учащийся",
+    options: ["Студент", "Магистрант", "Аспирант"],
+  },
+  {
+    label: "Ученая степень/звание",
+    options: ["Кандидат наук, доцент", "Доктор наук, доцент", "Доктор наук, профессор"],
+  },
+];
+
+const cityOptions = [
+  "Москва",
+  "Санкт-Петербург",
+  "Новосибирск",
+  "Екатеринбург",
+  "Казань",
+  "Нижний Новгород",
+  "Челябинск",
+  "Самара",
+  "Омск",
+  "Ростов-на-Дону",
+  "Уфа",
+  "Красноярск",
+  "Воронеж",
+  "Пермь",
+  "Волгоград",
+  "Краснодар",
+  "Саратов",
+  "Тюмень",
+  "Тольятти",
+  "Ижевск",
+  "Барнаул",
+  "Иркутск",
+  "Хабаровск",
+  "Ярославль",
+  "Владивосток",
+  "Махачкала",
+  "Томск",
+  "Оренбург",
+  "Кемерово",
+  "Новокузнецк",
+  "Рязань",
+  "Астрахань",
+  "Пенза",
+  "Липецк",
+  "Киров",
+  "Чебоксары",
+  "Тула",
+  "Калининград",
+  "Курск",
+  "Ставрополь",
+  "Улан-Удэ",
+  "Тверь",
+  "Магнитогорск",
+  "Сочи",
+  "Белгород",
+  "Владимир",
+  "Архангельск",
+  "Чита",
+  "Набережные Челны",
+  "Севастополь",
+  "Симферополь",
+  "Калуга",
+  "Смоленск",
+  "Якутск",
+  "Сургут",
+  "Ханты-Мансийск",
+  "Нижний Тагил",
+  "Брянск",
+  "Иваново",
+  "Орёл",
+  "Кострома",
+  "Вологда",
+  "Псков",
+  "Саранск",
+  "Ульяновск",
+  "Петрозаводск",
+  "Мурманск",
+  "Тамбов",
+  "Сыктывкар",
+  "Нижневартовск",
+  "Абакан",
+  "Биробиджан",
+  "Грозный",
+  "Майкоп",
+  "Назрань",
+  "Элиста",
+  "Петропавловск-Камчатский",
+  "Южно-Сахалинск",
+  "Кемь",
+];
+
 export default function Register() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -58,105 +158,6 @@ export default function Register() {
   const [verificationCode, setVerificationCode] = useState("");
   const [verificationToken, setVerificationToken] = useState("");
   const [cooldown, setCooldown] = useState(0);
-  const degreeGroups = [
-    {
-      label: "Основное",
-      options: ["Преподаватель"],
-    },
-    {
-      label: "Учащийся",
-      options: ["Студент", "Магистрант", "Аспирант"],
-    },
-    {
-      label: "Ученая степень/звание",
-      options: [
-        "Кандидат наук, доцент",
-        "Доктор наук, доцент",
-        "Доктор наук, профессор",
-      ],
-    },
-  ];
-  const cityOptions = [
-    "Москва",
-    "Санкт-Петербург",
-    "Новосибирск",
-    "Екатеринбург",
-    "Казань",
-    "Нижний Новгород",
-    "Челябинск",
-    "Самара",
-    "Омск",
-    "Ростов-на-Дону",
-    "Уфа",
-    "Красноярск",
-    "Воронеж",
-    "Пермь",
-    "Волгоград",
-    "Краснодар",
-    "Саратов",
-    "Тюмень",
-    "Тольятти",
-    "Ижевск",
-    "Барнаул",
-    "Иркутск",
-    "Хабаровск",
-    "Ярославль",
-    "Владивосток",
-    "Махачкала",
-    "Томск",
-    "Оренбург",
-    "Кемерово",
-    "Новокузнецк",
-    "Рязань",
-    "Астрахань",
-    "Пенза",
-    "Липецк",
-    "Киров",
-    "Чебоксары",
-    "Тула",
-    "Калининград",
-    "Курск",
-    "Ставрополь",
-    "Улан-Удэ",
-    "Тверь",
-    "Магнитогорск",
-    "Сочи",
-    "Белгород",
-    "Владимир",
-    "Архангельск",
-    "Чита",
-    "Набережные Челны",
-    "Севастополь",
-    "Симферополь",
-    "Калуга",
-    "Смоленск",
-    "Якутск",
-    "Сургут",
-    "Ханты-Мансийск",
-    "Нижний Тагил",
-    "Брянск",
-    "Иваново",
-    "Орёл",
-    "Кострома",
-    "Вологда",
-    "Псков",
-    "Саранск",
-    "Ульяновск",
-    "Петрозаводск",
-    "Мурманск",
-    "Тамбов",
-    "Сыктывкар",
-    "Нижневартовск",
-    "Абакан",
-    "Биробиджан",
-    "Грозный",
-    "Майкоп",
-    "Назрань",
-    "Элиста",
-    "Петропавловск-Камчатский",
-    "Южно-Сахалинск",
-    "Кемь"
-  ];
   const [showCityDropdown, setShowCityDropdown] = useState(false);
   const [showDegreeDropdown, setShowDegreeDropdown] = useState(false);
   const [form, setForm] = useState({
@@ -285,44 +286,54 @@ export default function Register() {
     e.preventDefault();
   };
 
+  const steps = ["1. Личные данные", "2. Участие", "3. Доступ", "4. Подтверждение"];
+
   return (
-    <section className="panel">
-      <h2>Регистрация участника</h2>
-      <div className="stepper">
-        <div className={`step ${step === 1 ? "active" : ""}`}>1. Личные данные</div>
-        <div className={`step ${step === 2 ? "active" : ""}`}>2. Участие</div>
-        <div className={`step ${step === 3 ? "active" : ""}`}>3. Доступ</div>
-        <div className={`step ${step === 4 ? "active" : ""}`}>4. Подтверждение</div>
+    <Card className="reg-card">
+      <h1>Регистрация участника</h1>
+      <div className="reg-stepper">
+        {steps.map((label, idx) => (
+          <div key={label} className={`reg-step ${step === idx + 1 ? "active" : ""}`}>
+            {label}
+          </div>
+        ))}
       </div>
-      <form className="form-grid" onSubmit={handleSubmit}>
-        {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
-        {statusMessage ? <p className="form-status info">{statusMessage}</p> : null}
+
+      <form onSubmit={handleSubmit}>
+        {errorMessage ? <div className="auth-status auth-status-error">{errorMessage}</div> : null}
+        {statusMessage ? (
+          <div className="auth-status auth-status-success">{statusMessage}</div>
+        ) : null}
+
         {step === 1 && (
           <>
-            <label>
-              ФИО
-              <input value={form.full_name} onChange={(e) => update("full_name", e.target.value)} required />
-            </label>
-            <label>
-              Ученая степень/звание
-              <div className="dropdown">
+            <Field label="ФИО" htmlFor="reg-full-name">
+              <Input
+                id="reg-full-name"
+                value={form.full_name}
+                onChange={(e) => update("full_name", e.target.value)}
+                required
+              />
+            </Field>
+            <Field label="Ученая степень/звание">
+              <div className="reg-dropdown">
                 <button
                   type="button"
-                  className="dropdown-trigger"
+                  className="reg-dropdown-trigger"
                   onClick={() => setShowDegreeDropdown((prev) => !prev)}
                 >
                   {form.degree || "Выберите степень/звание"}
                 </button>
                 {showDegreeDropdown && (
-                  <div className="dropdown-menu">
+                  <div className="reg-dropdown-menu">
                     {degreeGroups.map((group) => (
-                      <div key={group.label} className="dropdown-group">
-                        <div className="dropdown-group-title">{group.label}</div>
+                      <div key={group.label}>
+                        <div className="reg-dropdown-group-title">{group.label}</div>
                         {group.options.map((degree) => (
                           <button
                             type="button"
                             key={degree}
-                            className="dropdown-item"
+                            className="reg-dropdown-item"
                             onClick={() => {
                               update("degree", degree);
                               setShowDegreeDropdown(false);
@@ -336,18 +347,24 @@ export default function Register() {
                   </div>
                 )}
               </div>
-            </label>
-            <label>
-              Должность
-              <input value={form.position} onChange={(e) => update("position", e.target.value)} />
-            </label>
-            <label>
-              Место работы
-              <input value={form.organization} onChange={(e) => update("organization", e.target.value)} />
-            </label>
-            <label className="city-field">
-              Город
-              <input
+            </Field>
+            <Field label="Должность" htmlFor="reg-position">
+              <Input
+                id="reg-position"
+                value={form.position}
+                onChange={(e) => update("position", e.target.value)}
+              />
+            </Field>
+            <Field label="Место работы" htmlFor="reg-organization">
+              <Input
+                id="reg-organization"
+                value={form.organization}
+                onChange={(e) => update("organization", e.target.value)}
+              />
+            </Field>
+            <Field label="Город" htmlFor="reg-city" className="reg-city">
+              <Input
+                id="reg-city"
                 value={form.city}
                 onChange={(e) => {
                   update("city", e.target.value);
@@ -358,7 +375,7 @@ export default function Register() {
                 placeholder="Начните вводить..."
               />
               {showCityDropdown && (
-                <div className="city-dropdown">
+                <div className="reg-city-menu">
                   {cityOptions
                     .filter((city) => city.toLowerCase().includes(form.city.toLowerCase()))
                     .slice(0, 8)
@@ -366,7 +383,7 @@ export default function Register() {
                       <button
                         type="button"
                         key={city}
-                        className="city-option"
+                        className="reg-city-option"
                         onClick={() => {
                           update("city", city);
                           setShowCityDropdown(false);
@@ -377,41 +394,55 @@ export default function Register() {
                     ))}
                 </div>
               )}
-            </label>
+            </Field>
           </>
         )}
+
         {step === 2 && (
           <>
-            <label>
-              Формат участия
-              <select value={form.user_type} onChange={(e) => update("user_type", e.target.value)}>
+            <Field label="Формат участия" htmlFor="reg-user-type">
+              <Select
+                id="reg-user-type"
+                value={form.user_type}
+                onChange={(e) => update("user_type", e.target.value)}
+              >
                 <option value="online">Онлайн</option>
                 <option value="offline">Оффлайн</option>
-              </select>
-            </label>
-            <label>
-              Секция (тема конференции)
-              <select value={form.section_id} onChange={(e) => update("section_id", e.target.value)} required>
+              </Select>
+            </Field>
+            <Field label="Секция (тема конференции)" htmlFor="reg-section">
+              <Select
+                id="reg-section"
+                value={form.section_id}
+                onChange={(e) => update("section_id", e.target.value)}
+                required
+              >
                 <option value="">Выберите секцию</option>
                 {sections.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.title}{s.room ? ` — ${s.room}` : ""}
+                    {s.title}
+                    {s.room ? ` — ${s.room}` : ""}
                   </option>
                 ))}
-              </select>
-            </label>
+              </Select>
+            </Field>
             {selectedSection && (
-              <p className="muted">
-                Назначенная аудитория: <strong>{selectedSection.room || "пока не назначена"}</strong>
+              <p className="reg-hint">
+                Назначенная аудитория:{" "}
+                <strong>{selectedSection.room || "пока не назначена"}</strong>
               </p>
             )}
-            <label>
-              Название доклада
-              <input value={form.talk_title} onChange={(e) => update("talk_title", e.target.value)} required />
-            </label>
-            <label>
-              Телефон
-              <input
+            <Field label="Название доклада" htmlFor="reg-talk-title">
+              <Input
+                id="reg-talk-title"
+                value={form.talk_title}
+                onChange={(e) => update("talk_title", e.target.value)}
+                required
+              />
+            </Field>
+            <Field label="Телефон" htmlFor="reg-phone">
+              <Input
+                id="reg-phone"
                 type="tel"
                 inputMode="tel"
                 placeholder="+7 999 123-45-67"
@@ -419,24 +450,38 @@ export default function Register() {
                 onChange={(e) => update("phone", formatRussianPhone(e.target.value))}
                 required
               />
-              <small className="muted">
-                Важно: код подтверждения придет в Telegram на этот номер. Укажите ваш актуальный номер, к которому привязан Telegram.
-              </small>
-              <small className="muted">Допустимые варианты: `+7 999 123-45-67`, `89991234567`, `9991234567`.</small>
-            </label>
+              <p className="reg-hint">
+                Важно: код подтверждения придет в Telegram на этот номер. Укажите ваш актуальный
+                номер, к которому привязан Telegram.
+              </p>
+              <p className="reg-hint">
+                Допустимые варианты: +7 999 123-45-67, 89991234567, 9991234567.
+              </p>
+            </Field>
           </>
         )}
+
         {step === 3 && (
           <>
-            <label>
-              Email
-              <input type="email" value={form.email} onChange={(e) => update("email", e.target.value)} required />
-            </label>
-            <label>
-              Пароль
-              <input type="password" value={form.password} onChange={(e) => update("password", e.target.value)} required />
-            </label>
-            <label className="checkbox">
+            <Field label="Email" htmlFor="reg-email">
+              <Input
+                id="reg-email"
+                type="email"
+                value={form.email}
+                onChange={(e) => update("email", e.target.value)}
+                required
+              />
+            </Field>
+            <Field label="Пароль" htmlFor="reg-password">
+              <Input
+                id="reg-password"
+                type="password"
+                value={form.password}
+                onChange={(e) => update("password", e.target.value)}
+                required
+              />
+            </Field>
+            <label className="reg-checkbox">
               <input
                 type="checkbox"
                 checked={form.consent_personal_data}
@@ -444,12 +489,12 @@ export default function Register() {
               />
               <span>
                 Я ознакомлен(а) с{" "}
-                <Link to="/personal-data">Политикой обработки персональных данных</Link> и даю согласие на
-                регистрацию, организацию участия, формирование программы, выпуск бейджа, сертификата и других
-                материалов конференции.
+                <Link to="/personal-data">Политикой обработки персональных данных</Link> и даю
+                согласие на регистрацию, организацию участия, формирование программы, выпуск бейджа,
+                сертификата и других материалов конференции.
               </span>
             </label>
-            <label className="checkbox">
+            <label className="reg-checkbox">
               <input
                 type="checkbox"
                 checked={form.consent_publication}
@@ -457,20 +502,25 @@ export default function Register() {
               />
               <span>
                 Я принимаю{" "}
-                <Link to="/consent-authors">согласие на публикацию материалов и сведений об авторе</Link> в
-                программе конференции, электронном сборнике трудов и на сайте конференции.
+                <Link to="/consent-authors">
+                  согласие на публикацию материалов и сведений об авторе
+                </Link>{" "}
+                в программе конференции, электронном сборнике трудов и на сайте конференции.
               </span>
             </label>
           </>
         )}
+
         {step === 4 && (
           <>
-            <p className="muted">
-              Мы отправили код подтверждения для номера <strong>{normalizedPhone || form.phone}</strong>. Проверьте Telegram и введите код, чтобы завершить регистрацию.
+            <p className="reg-note">
+              Мы отправили код подтверждения для номера{" "}
+              <strong>{normalizedPhone || form.phone}</strong>. Проверьте Telegram и введите код,
+              чтобы завершить регистрацию.
             </p>
-            <label>
-              Код подтверждения
-              <input
+            <Field label="Код подтверждения" htmlFor="reg-code">
+              <Input
+                id="reg-code"
                 value={verificationCode}
                 onChange={(e) => setVerificationCode(e.target.value)}
                 inputMode="numeric"
@@ -478,25 +528,32 @@ export default function Register() {
                 placeholder="4 цифры"
                 required
               />
-              <small className="muted">Код подтверждения придет в Telegram, привязанный к этому номеру телефона.</small>
-            </label>
-            <div className="auth-inline-actions">
+              <p className="reg-hint">
+                Код подтверждения придет в Telegram, привязанный к этому номеру телефона.
+              </p>
+            </Field>
+            <div className="reg-resend">
               <button
                 type="button"
-                className="btn btn-ghost"
+                className={buttonClassName("ghost")}
                 onClick={requestCode}
                 disabled={requestingCode || cooldown > 0}
               >
-                {requestingCode ? "Отправка..." : cooldown > 0 ? `Повтор через ${cooldown}с` : "Отправить код заново"}
+                {requestingCode
+                  ? "Отправка..."
+                  : cooldown > 0
+                    ? `Повтор через ${cooldown}с`
+                    : "Отправить код заново"}
               </button>
             </div>
           </>
         )}
-        <div className="form-actions">
+
+        <div className="reg-actions">
           {step > 1 && (
-            <button
+            <Button
+              variant="ghost"
               type="button"
-              className="btn btn-ghost"
               onClick={() => {
                 setErrorMessage("");
                 setStatusMessage("");
@@ -504,12 +561,11 @@ export default function Register() {
               }}
             >
               Назад
-            </button>
+            </Button>
           )}
           {step < 3 && (
-            <button
+            <Button
               type="button"
-              className="btn btn-primary"
               onClick={() => {
                 setErrorMessage("");
                 setStep(step + 1);
@@ -520,24 +576,32 @@ export default function Register() {
               }
             >
               Далее
-            </button>
+            </Button>
           )}
           {step === 3 && (
-            <button
-              className="btn btn-primary"
+            <Button
               type="submit"
-              disabled={requestingCode || !form.consent_personal_data || !form.consent_publication}
+              disabled={
+                requestingCode || !form.consent_personal_data || !form.consent_publication
+              }
             >
               {requestingCode ? "Отправка..." : "Получить код в Telegram"}
-            </button>
+            </Button>
           )}
           {step === 4 && (
-            <button className="btn btn-primary" type="submit" disabled={loading || !verificationCode.trim() || !verificationToken}>
+            <Button
+              type="submit"
+              disabled={loading || !verificationCode.trim() || !verificationToken}
+            >
               {loading ? "Проверка..." : "Подтвердить и зарегистрироваться"}
-            </button>
+            </Button>
           )}
         </div>
       </form>
-    </section>
+
+      <p className="auth-links">
+        Уже зарегистрированы? <Link to="/login">Войти</Link>
+      </p>
+    </Card>
   );
 }
