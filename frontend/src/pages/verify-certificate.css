@@ -69,7 +69,7 @@
   font-size: 14px;
 }
 .verify-row dt {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 .verify-row dd {
   margin: 0;

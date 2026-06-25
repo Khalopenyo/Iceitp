@@ -86,7 +86,9 @@ export default function Feedback() {
                 </button>
               ))}
             </div>
-            <p className="fb-hint">{ratingHint(rating)}</p>
+            <p className="fb-hint" role="status">
+              {ratingHint(rating)}
+            </p>
           </div>
 
           <Field label="Отзыв и предложения по улучшению" htmlFor="fb-comment">

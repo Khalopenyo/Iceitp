@@ -208,7 +208,7 @@ export default function Dashboard() {
           <button
             type="button"
             className={`dash-tab ${tab === "profile" ? "active" : ""}`}
-            aria-current={tab === "profile" ? "page" : undefined}
+            aria-pressed={tab === "profile"}
             onClick={() => setTab("profile")}
           >
             Личные данные
@@ -216,7 +216,7 @@ export default function Dashboard() {
           <button
             type="button"
             className={`dash-tab ${tab === "schedule" ? "active" : ""}`}
-            aria-current={tab === "schedule" ? "page" : undefined}
+            aria-pressed={tab === "schedule"}
             onClick={() => setTab("schedule")}
           >
             Расписание
@@ -367,6 +367,10 @@ export default function Dashboard() {
                       </div>
                     ) : null}
                   </>
+                ) : isApproved && schedule?.section_title ? (
+                  <p className="dash-sched-empty">
+                    Секция «{schedule.section_title}» назначена — время и аудитория уточняются.
+                  </p>
                 ) : (
                   <p className="dash-sched-empty">
                     {assignmentStatus === "pending" || !assignmentStatus

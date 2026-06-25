@@ -381,7 +381,7 @@ export default function Chat() {
             </p>
           </div>
 
-          <div className="chat-channel-list" role="tablist" aria-label="Список каналов чата">
+          <div className="chat-channel-list" role="group" aria-label="Список каналов чата">
             {channels.map((channel) => {
               const isActive = channel.scope === activeScope;
               const showUnread = hasUnreadMessages(channel, activeScope);
@@ -421,8 +421,8 @@ export default function Chat() {
             <div>
               <div className="chat-heading-row">
                 <h3>{currentChannel?.title || "Загрузка чата..."}</h3>
-                <span className={`chat-status-pill${syncing ? " syncing" : ""}`}>
-                  {syncing ? "Синхронизация..." : "Онлайн"}
+                <span className={`chat-status-pill${syncing ? " syncing" : ""}`} role="status">
+                  {syncing ? "Синхронизация…" : "Онлайн"}
                 </span>
               </div>
               <p>{currentChannel?.description || "Подготавливаем историю сообщений и участников."}</p>
@@ -445,7 +445,11 @@ export default function Chat() {
             </div>
           </header>
 
-          {error ? <div className="chat-alert chat-alert-error">{error}</div> : null}
+          {error ? (
+            <div className="chat-alert chat-alert-error" role="alert">
+              {error}
+            </div>
+          ) : null}
 
           <div className="chat-message-stream" ref={listRef}>
             {loading ? (
@@ -533,7 +537,7 @@ export default function Chat() {
                                   <div key={attachment.id} className="chat-attachment-item">
                                     <div className="chat-attachment-meta">
                                       <strong>{attachment.file_name}</strong>
-                                      <div className="muted">{formatFileSize(attachment.file_size)}</div>
+                                      <div className="chat-note">{formatFileSize(attachment.file_size)}</div>
                                     </div>
                                     <button
                                       type="button"
@@ -561,7 +565,7 @@ export default function Chat() {
               <strong>{currentChannel?.title || "Сообщение"}</strong>
               <span>Enter отправляет, Shift+Enter переносит строку</span>
             </div>
-            <label className="chat-file-input muted">
+            <label className="chat-file-input">
               <span>Вложения</span>
               <input
                 ref={fileInputRef}
@@ -578,7 +582,7 @@ export default function Chat() {
                   <div key={`${file.name}-${index}`} className="chat-attachment-item">
                     <div className="chat-attachment-meta">
                       <strong>{file.name}</strong>
-                      <div className="muted">{formatFileSize(file.size)}</div>
+                      <div className="chat-note">{formatFileSize(file.size)}</div>
                     </div>
                     <button
                       type="button"

@@ -47,7 +47,7 @@
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: var(--text-3);
+  color: var(--text-2);
   font-weight: 600;
 }
 .dash-summary-card strong {
@@ -171,7 +171,7 @@
   font-size: 14px;
 }
 .dash-sched-row dt {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 .dash-sched-row dd {
   margin: 0;
