@@ -10,7 +10,6 @@ import {
   getConferenceTitle,
 } from "../lib/conference.js";
 import { fetchBranding } from "../lib/org.js";
-import { fetchContentBlocks } from "../lib/content.js";
 
 // Нейтральное имя платформы для тенант-фолбэков (как в AuthLayout) — без привязки
 // к конкретному вузу/подразделению.
@@ -23,7 +22,6 @@ export default function Layout() {
   const [conference, setConference] = useState(null);
   const [conferenceLoaded, setConferenceLoaded] = useState(false);
   const [branding, setBranding] = useState(null);
-  const [contentBlocks, setContentBlocks] = useState([]);
   const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
@@ -32,12 +30,6 @@ export default function Layout() {
     fetchBranding().then((value) => {
       if (value) setBranding(value);
     });
-  }, []);
-
-  useEffect(() => {
-    // CMS-блоки тенанта — источник пунктов маркетинговой навигации (вместо
-    // захардкоженных «О вузе/Об ИЦЭиТП»). Тихий фолбэк на [] при сбое.
-    fetchContentBlocks().then((list) => setContentBlocks(Array.isArray(list) ? list : []));
   }, []);
 
   useEffect(() => {
@@ -144,12 +136,13 @@ export default function Layout() {
   };
 
   const showMapLink = !!user;
-  // Пункты строятся из реально опубликованных CMS-блоков тенанта (якоря ведут на
-  // id={block.kind} лендинга — см. Welcome.jsx). Блок hero — это сам верх страницы,
-  // отдельным пунктом не показываем. Пустой список — норма для тенанта без блоков.
-  const marketingNavItems = contentBlocks
-    .filter((block) => block && block.kind !== "hero" && (block.title || "").trim())
-    .map((block) => ({ href: `/#${block.kind}`, label: block.title.trim() }));
+  // Фиксированная публичная навигация по реальным страницам витрины (как pubbar
+  // макетов). Спикеры/Площадка добавятся, когда появятся их страницы.
+  const marketingNavItems = [
+    { to: "/about", label: "О конференции" },
+    { to: "/program", label: "Программа" },
+    { to: "/sections", label: "Секции" },
+  ];
   const desktopNavItems = user
     ? [
         { to: "/", label: "Главная", end: true },
@@ -303,17 +296,17 @@ export default function Layout() {
           ) : (
             <>
               <nav id="site-navigation" className="nav desktop-nav marketing-nav" aria-label="Основные разделы">
-                {marketingNavItems.map((item, idx) => (
-                  <a key={`${item.href}-${idx}`} href={item.href}>
+                {marketingNavItems.map((item) => (
+                  <NavLink key={item.to} to={item.to}>
                     {item.label}
-                  </a>
+                  </NavLink>
                 ))}
               </nav>
               <nav className="nav mobile-menu-nav marketing-nav" aria-label="Основные разделы">
-                {marketingNavItems.map((item, idx) => (
-                  <a key={`${item.href}-${idx}`} href={item.href} onClick={() => setNavOpen(false)}>
+                {marketingNavItems.map((item) => (
+                  <NavLink key={item.to} to={item.to} onClick={() => setNavOpen(false)}>
                     {item.label}
-                  </a>
+                  </NavLink>
                 ))}
               </nav>
               <div className="auth-actions desktop-auth-actions">
@@ -338,10 +331,10 @@ export default function Layout() {
         </div>
         <div className="footer-links">
           {!user
-            ? marketingNavItems.map((item, idx) => (
-                <a key={`${item.href}-${idx}`} href={item.href}>
+            ? marketingNavItems.map((item) => (
+                <Link key={item.to} to={item.to}>
                   {item.label}
-                </a>
+                </Link>
               ))
             : null}
           {conferenceSupportEmail ? (

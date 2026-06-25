@@ -1,0 +1,110 @@
+/* ===== О конференции / о вузе (SCR-PUB-02) на токенах ===== */
+.about-page {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 28px 20px 56px;
+}
+.about-head h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+.about-sub {
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.6;
+  max-width: 660px;
+  margin: 0 0 22px;
+}
+
+.about-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+.about-block {
+  margin-bottom: 22px;
+}
+.about-block h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+.about-block p {
+  color: var(--text-2);
+  font-size: 14.5px;
+  line-height: 1.65;
+  margin: 0 0 10px;
+}
+.about-note {
+  color: var(--text-2);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.about-side-card {
+  position: sticky;
+  top: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 20px;
+  box-shadow: var(--sh-1);
+}
+.about-side-card h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 14px;
+}
+.about-date {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--text-2);
+}
+.about-date:last-of-type {
+  border-bottom: none;
+}
+.about-date strong {
+  color: var(--text);
+}
+.about-side-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.about-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--brand-weak);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 18px 22px;
+  margin-top: 12px;
+}
+.about-banner span {
+  color: var(--brand-700);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+@media (max-width: 760px) {
+  .about-layout {
+    grid-template-columns: 1fr;
+  }
+  .about-side-card {
+    position: static;
+  }
+}
