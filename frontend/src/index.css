@@ -4373,8 +4373,7 @@ h4 {
     scrollbar-width: none;
   }
 
-  .map-location-list::-webkit-scrollbar,
-  .chat-channel-list::-webkit-scrollbar {
+  .map-location-list::-webkit-scrollbar {
     display: none;
   }
 
@@ -4395,46 +4394,6 @@ h4 {
     max-width: min(132px, 60vw);
     padding: 6px 10px;
     font-size: 11px;
-  }
-
-  .chat-shell {
-    gap: 16px;
-    min-height: auto;
-  }
-
-  .chat-channel-list {
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(240px, 82vw);
-    overflow-x: auto;
-    padding-bottom: 4px;
-  }
-
-  .chat-sidebar,
-  .chat-main-head,
-  .chat-message-stream,
-  .chat-composer {
-    border-radius: 22px;
-  }
-
-  .chat-main {
-    grid-template-rows: auto auto minmax(240px, 1fr) auto;
-    gap: 14px;
-  }
-
-  .chat-main-head,
-  .chat-message-stream,
-  .chat-composer {
-    padding: 20px;
-  }
-
-  .chat-message-stream {
-    min-height: 320px;
-    max-height: 54svh;
-  }
-
-  .chat-main-head h3,
-  .chat-sidebar-head h2 {
-    font-size: 24px;
   }
 
   .table .row > div:first-child,
@@ -4503,15 +4462,6 @@ h4 {
 
   .feedback-rating-grid {
     grid-template-columns: 1fr;
-  }
-
-  .chat-channel-list {
-    grid-auto-columns: minmax(220px, 88vw);
-  }
-
-  .chat-main-head h3,
-  .chat-sidebar-head h2 {
-    font-size: 22px;
   }
 
   .panorama-viewer {
@@ -4917,10 +4867,6 @@ h4 {
 
   .panorama-viewer {
     min-height: 340px;
-  }
-
-  .chat-main-head p {
-    display: none;
   }
 
   .row {
@@ -5452,13 +5398,6 @@ h4 {
   .map-location-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-auto-flow: row !important;
-    grid-auto-columns: auto !important;
-    overflow: visible !important;
-  }
-
-  .chat-channel-list {
-    grid-auto-flow: row !important;
-    grid-template-columns: 1fr !important;
     grid-auto-columns: auto !important;
     overflow: visible !important;
   }
