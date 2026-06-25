@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiGet, apiPost } from "../lib/api.js";
+import { Card, Field, Textarea, Button } from "../components/ui/index.jsx";
+import { buttonClassName } from "../components/ui/buttonClass.js";
+import "./kiosk.css";
 
 const emptyContext = {
   conference: null,
@@ -87,52 +90,68 @@ export default function QuestionPrompt() {
 
   if (!token) {
     return (
-      <section className="panel narrow">
-        <h2>Задать вопрос</h2>
-        <p className="form-status error">Ссылка на форму вопросов недействительна.</p>
+      <section className="kiosk">
+        <Card>
+          <h1>Задать вопрос</h1>
+          <div className="kiosk-status kiosk-status-error" role="alert">
+            Ссылка на форму вопросов недействительна.
+          </div>
+        </Card>
       </section>
     );
   }
 
   return (
-    <section className="panel narrow">
-      <h2>Задать вопрос</h2>
-      {loading ? <p className="form-status info">Загружаю форму вопросов...</p> : null}
-      {statusMessage ? <p className="form-status success">{statusMessage}</p> : null}
-      {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
-
-      {!loading && !errorMessage ? (
-        <>
-          <div className="question-badge-context">
-            <strong>{context.conference?.title || "Конференция"}</strong>
-            <p className="muted">Введите вопрос и отправьте его. Он сразу попадет в админскую модерацию.</p>
+    <section className="kiosk">
+      <Card>
+        <h1>Задать вопрос</h1>
+        {loading ? (
+          <div className="kiosk-status kiosk-status-info" role="status">
+            Загружаю форму вопросов…
           </div>
+        ) : null}
+        {statusMessage ? (
+          <div className="kiosk-status kiosk-status-success" role="status">
+            {statusMessage}
+          </div>
+        ) : null}
+        {errorMessage ? (
+          <div className="kiosk-status kiosk-status-error" role="alert">
+            {errorMessage}
+          </div>
+        ) : null}
 
-          <form className="form-grid" onSubmit={submitQuestion}>
-            <label>
-              Ваш вопрос
-              <textarea
-                rows="5"
-                value={questionText}
-                onChange={(event) => setQuestionText(event.target.value)}
-                placeholder="Напишите вопрос для модератора"
-                maxLength={1000}
-              />
-            </label>
-            <div className="form-actions">
-              <button className="btn btn-primary" type="submit" disabled={submitting}>
-                {submitting ? "Отправка..." : "Отправить вопрос"}
-              </button>
+        {!loading && !errorMessage ? (
+          <>
+            <div className="kiosk-context">
+              <strong>{context.conference?.title || "Конференция"}</strong>
+              <p>Введите вопрос и отправьте его. Он сразу попадёт в админскую модерацию.</p>
             </div>
-          </form>
-        </>
-      ) : null}
 
-      <div className="form-actions">
-        <Link className="btn btn-ghost" to="/">
-          На главную
-        </Link>
-      </div>
+            <form onSubmit={submitQuestion}>
+              <Field label="Ваш вопрос" htmlFor="qp-text">
+                <Textarea
+                  id="qp-text"
+                  rows={5}
+                  value={questionText}
+                  onChange={(event) => setQuestionText(event.target.value)}
+                  placeholder="Напишите вопрос для модератора"
+                  maxLength={1000}
+                />
+              </Field>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Отправка…" : "Отправить вопрос"}
+              </Button>
+            </form>
+          </>
+        ) : null}
+
+        <div className="kiosk-actions">
+          <Link className={buttonClassName("ghost")} to="/">
+            На главную
+          </Link>
+        </div>
+      </Card>
     </section>
   );
 }

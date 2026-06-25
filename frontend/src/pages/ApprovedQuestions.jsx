@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiGet } from "../lib/api.js";
+import { Card } from "../components/ui/index.jsx";
+import { buttonClassName } from "../components/ui/buttonClass.js";
+import "./kiosk.css";
 
 const emptyState = {
   conference: null,
@@ -67,48 +70,62 @@ export default function ApprovedQuestions() {
 
   if (!token) {
     return (
-      <section className="panel narrow">
-        <h2>Одобренные вопросы</h2>
-        <p className="form-status error">Ссылка на страницу вопросов недействительна.</p>
+      <section className="kiosk">
+        <Card>
+          <h1>Одобренные вопросы</h1>
+          <div className="kiosk-status kiosk-status-error" role="alert">
+            Ссылка на страницу вопросов недействительна.
+          </div>
+        </Card>
       </section>
     );
   }
 
   return (
-    <section className="panel">
-      <h2>Одобренные вопросы</h2>
-      {loading ? <p className="form-status info">Загружаю вопросы...</p> : null}
-      {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
-
-      {!loading && !errorMessage ? (
-        <>
-          <div className="question-badge-context">
-            <strong>{data.conference?.title || "Конференция"}</strong>
-            <p className="muted">Здесь появляются только вопросы, которые уже одобрил модератор.</p>
+    <section className="kiosk kiosk-wide">
+      <Card>
+        <h1>Одобренные вопросы</h1>
+        {loading ? (
+          <div className="kiosk-status kiosk-status-info" role="status">
+            Загружаю вопросы…
           </div>
-
-          <div className="question-board">
-            {data.items.length > 0 ? (
-              data.items.map((question) => (
-                <article key={question.id} className="question-board-item">
-                  <p>{question.text}</p>
-                </article>
-              ))
-            ) : (
-              <p className="muted">Пока нет одобренных вопросов.</p>
-            )}
+        ) : null}
+        {errorMessage ? (
+          <div className="kiosk-status kiosk-status-error" role="alert">
+            {errorMessage}
           </div>
-        </>
-      ) : null}
+        ) : null}
 
-      <div className="form-actions">
-        <Link className="btn btn-ghost" to={`/questions/${token}`}>
-          К форме вопроса
-        </Link>
-        <Link className="btn btn-ghost" to="/">
-          На главную
-        </Link>
-      </div>
+        {!loading && !errorMessage ? (
+          <>
+            <div className="kiosk-context">
+              <strong>{data.conference?.title || "Конференция"}</strong>
+              <p>Здесь появляются только вопросы, которые уже одобрил модератор.</p>
+            </div>
+
+            <div className="qa-board" aria-live="polite">
+              {data.items.length > 0 ? (
+                data.items.map((question) => (
+                  <article key={question.id} className="qa-item">
+                    <p>{question.text}</p>
+                  </article>
+                ))
+              ) : (
+                <p className="qa-empty">Пока нет одобренных вопросов.</p>
+              )}
+            </div>
+          </>
+        ) : null}
+
+        <div className="kiosk-actions">
+          <Link className={buttonClassName("ghost")} to={`/questions/${token}`}>
+            К форме вопроса
+          </Link>
+          <Link className={buttonClassName("ghost")} to="/">
+            На главную
+          </Link>
+        </div>
+      </Card>
     </section>
   );
 }

@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiGet, apiPost } from "../lib/api.js";
+import { Card } from "../components/ui/index.jsx";
+import { buttonClassName } from "../components/ui/buttonClass.js";
+import "./kiosk.css";
 
 function formatDateTime(value) {
   if (!value) return "";
@@ -28,7 +31,7 @@ function createCheckInRequestOptions() {
 
 function formatCheckInError(error) {
   if (error?.name === "AbortError") {
-    return "Сервер слишком долго отвечает. Попробуйте еще раз чуть позже.";
+    return "Сервер слишком долго отвечает. Попробуйте ещё раз чуть позже.";
   }
   if (error?.status === 403) {
     return "Отмечать присутствие могут только администратор или оргкомитет.";
@@ -110,47 +113,71 @@ export default function BadgeCheckIn() {
 
   if (!token) {
     return (
-      <section className="panel narrow">
-        <h2>Проверка бейджа</h2>
-        <p className="form-status error">Ссылка на бейдж недействительна.</p>
+      <section className="kiosk">
+        <Card>
+          <h1>Проверка бейджа</h1>
+          <div className="kiosk-status kiosk-status-error" role="alert">
+            Ссылка на бейдж недействительна.
+          </div>
+        </Card>
       </section>
     );
   }
 
   if (authRequired) {
     return (
-      <section className="panel narrow">
-        <h2>Проверка бейджа</h2>
-        <p className="form-status info">
-          Для отметки участника войдите под администратором или оргкомитетом.
-        </p>
-        <div className="form-actions">
-          <Link className="btn btn-primary" to={`/login?next=${encodeURIComponent(`/badge/${token}`)}`}>
-            Войти
-          </Link>
-        </div>
+      <section className="kiosk">
+        <Card>
+          <h1>Проверка бейджа</h1>
+          <div className="kiosk-status kiosk-status-info" role="status">
+            Для отметки участника войдите под администратором или оргкомитетом.
+          </div>
+          <div className="kiosk-actions">
+            <Link
+              className={buttonClassName("primary")}
+              to={`/login?next=${encodeURIComponent(`/badge/${token}`)}`}
+            >
+              Войти
+            </Link>
+          </div>
+        </Card>
       </section>
     );
   }
 
   return (
-    <section className="panel narrow">
-      <h2>Проверка бейджа</h2>
-      {loading ? <p className="form-status info">Проверяю бейдж и отмечаю участника...</p> : null}
-      {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
+    <section className="kiosk">
+      <Card>
+        <h1>Проверка бейджа</h1>
+        {loading ? (
+          <div className="kiosk-status kiosk-status-info" role="status">
+            Проверяю бейдж и отмечаю участника…
+          </div>
+        ) : null}
+        {errorMessage ? (
+          <div className="kiosk-status kiosk-status-error" role="alert">
+            {errorMessage}
+          </div>
+        ) : null}
 
-      {!loading && result ? (
-        <div className="question-badge-context">
-          <strong>{result.user?.full_name || "Участник"}</strong>
-          <p className="muted">{result.conference?.title || "Конференция"}</p>
-          <p className={`form-status ${result.already_checked_in ? "info" : "success"}`}>
-            {result.already_checked_in
-              ? "Участник уже был отмечен ранее."
-              : "Присутствие отмечено успешно."}
-          </p>
-          <p className="muted">Время: {formatDateTime(result.checked_in_at)}</p>
-        </div>
-      ) : null}
+        {!loading && result ? (
+          <div className="kiosk-context">
+            <strong>{result.user?.full_name || "Участник"}</strong>
+            <p>{result.conference?.title || "Конференция"}</p>
+            <div
+              className={`kiosk-status ${
+                result.already_checked_in ? "kiosk-status-info" : "kiosk-status-success"
+              }`}
+              role="status"
+            >
+              {result.already_checked_in
+                ? "Участник уже был отмечен ранее."
+                : "Присутствие отмечено успешно."}
+            </div>
+            <p className="kiosk-time">Время: {formatDateTime(result.checked_in_at)}</p>
+          </div>
+        ) : null}
+      </Card>
     </section>
   );
 }
