@@ -65,7 +65,7 @@
 }
 .ui-btn-danger {
   background: var(--rd-500);
-  color: #fff;
+  color: var(--on-brand);
 }
 .ui-btn-danger:hover:not(:disabled) {
   background: var(--rd-700);

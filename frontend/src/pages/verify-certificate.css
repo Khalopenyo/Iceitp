@@ -51,7 +51,7 @@
   height: 26px;
   border-radius: var(--r-pill);
   background: var(--gr-500);
-  color: #fff;
+  color: var(--on-brand);
   display: inline-flex;
   align-items: center;
   justify-content: center;

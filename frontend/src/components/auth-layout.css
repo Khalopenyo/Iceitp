@@ -34,6 +34,11 @@
 .auth-shell-back:hover {
   color: var(--brand);
 }
+.auth-shell-back:focus-visible {
+  outline: none;
+  border-radius: var(--r-sm);
+  box-shadow: 0 0 0 3px var(--focus);
+}
 .auth-shell-main {
   flex: 1;
   display: flex;
