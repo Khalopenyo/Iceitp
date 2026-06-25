@@ -251,6 +251,15 @@ var migrations = []migration{
 			return db.AutoMigrate(&models.Profile{}, &models.RegistrationAttempt{})
 		},
 	},
+	{
+		Version: "202606250018",
+		Name:    "add_certificate_revocation",
+		Up: func(db *gorm.DB) error {
+			// Additive: certificates revoked_at + revoke_reason под статус
+			// «аннулирован» в публичной верификации (SCR-PUB-11-states).
+			return db.AutoMigrate(&models.Certificate{})
+		},
+	},
 }
 
 // tenantConferenceIDNotNull flips the per-event conference_id columns (and

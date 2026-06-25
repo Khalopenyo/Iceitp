@@ -1,0 +1,159 @@
+/* ===== Auth screens (SCR-PUB-08/09/10) — на дизайн-токенах ===== */
+.auth-narrow {
+  max-width: 400px;
+}
+.auth-centered h1 {
+  text-align: center;
+  margin-bottom: 4px;
+}
+.auth-centered > .auth-sub {
+  text-align: center;
+  margin-bottom: 18px;
+}
+.auth-form {
+  margin: 0;
+}
+
+/* Иконка-кружок над заголовком (восстановление/сброс/итог) */
+.auth-ic {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  border-radius: var(--r-pill);
+  background: var(--brand-weak);
+  color: var(--brand-700);
+  display: grid;
+  place-items: center;
+}
+.auth-ic.auth-ic-warn {
+  background: var(--am-50, #fff7ed);
+  color: var(--am-700, #b45309);
+}
+.auth-ic svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Поле пароля с глазком */
+.auth-pw {
+  position: relative;
+}
+.auth-pw .ui-input {
+  padding-right: 42px;
+}
+.auth-eye {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  border-radius: var(--r-sm);
+}
+.auth-eye:hover {
+  color: var(--text);
+}
+.auth-eye:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.auth-links-right {
+  text-align: right;
+  margin: 6px 0 14px;
+  font-size: 12.5px;
+}
+.auth-links-center {
+  text-align: center;
+}
+
+/* Разделитель «или» */
+.auth-sep {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.auth-sep::before,
+.auth-sep::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* Кнопка ЕСИА (пока недоступна) */
+.auth-esia {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 11px 16px;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.auth-esia em {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--on-brand);
+  background: var(--text-3);
+  border-radius: var(--r-pill);
+  padding: 1px 7px;
+}
+
+/* Список правил пароля (сброс) */
+.auth-rules {
+  display: grid;
+  gap: 4px;
+  margin: -4px 0 14px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.auth-rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.auth-rule svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+.auth-rule.ok {
+  color: var(--gr-700);
+}
+.auth-rule.ok svg {
+  color: var(--gr-500);
+}
+.auth-rule.bad svg {
+  color: var(--text-3);
+}
+
+/* Таймер повторной отправки */
+.auth-timer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-3);
+  font-size: 12.5px;
+  margin-bottom: 14px;
+}

@@ -394,10 +394,18 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
-	req.Email = normalizeEmail(req.Email)
+	identifier := strings.TrimSpace(req.Email)
 	req.Password = strings.TrimSpace(req.Password)
 
-	user, err := h.findUserByEmail(h.DB.Preload("Profile"), req.Email)
+	// Идентификатор — e-mail или телефон (по макету SCR-PUB-08). Любая ошибка
+	// поиска отдаётся как 401, чтобы не раскрывать существование аккаунта.
+	var user models.User
+	var err error
+	if strings.Contains(identifier, "@") {
+		user, err = h.findUserByEmail(h.DB.Preload("Profile"), normalizeEmail(identifier))
+	} else {
+		user, err = h.findUserByPhone(h.DB.Preload("Profile"), identifier)
+	}
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return

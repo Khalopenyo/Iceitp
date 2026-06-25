@@ -559,16 +559,34 @@ func (h *DocumentHandler) VerifyCertificate(c *gin.Context) {
 		return
 	}
 
+	// Тип сертификата выводим из профиля: есть тема доклада → докладчик.
+	certType := "Участник"
+	if strings.TrimSpace(user.Profile.TalkTitle) != "" {
+		certType = "Докладчик"
+	}
+
+	// Статус: действителен или аннулирован (SCR-PUB-11 / 11-states).
+	status := "valid"
+	if cert.RevokedAt != nil {
+		status = "revoked"
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"number":    cert.Number,
-		"issued_at": cert.IssuedAt,
+		"number":        cert.Number,
+		"issued_at":     cert.IssuedAt,
+		"status":        status,
+		"type":          certType,
+		"revoked_at":    cert.RevokedAt,
+		"revoke_reason": cert.RevokeReason,
 		"user": gin.H{
 			"id":        user.ID,
 			"full_name": user.Profile.FullName,
 		},
 		"conference": gin.H{
-			"id":    conf.ID,
-			"title": conf.Title,
+			"id":        conf.ID,
+			"title":     conf.Title,
+			"starts_at": conf.StartsAt,
+			"ends_at":   conf.EndsAt,
 		},
 	})
 }
