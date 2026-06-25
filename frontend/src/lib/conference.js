@@ -1,7 +1,9 @@
 const fallbackConferenceTitle = "Научная конференция";
 const fallbackConferenceDescription =
   "Единая платформа для регистрации, программы, коммуникации и документов научной конференции.";
-const fallbackConferenceSupportEmail = "madinaborz@mail.ru";
+// Тенант-нейтрально: нет личной/вузовской почты по умолчанию. Если у конференции
+// не задан support_email — блок контакта просто не рендерится (см. Layout-футер).
+const fallbackConferenceSupportEmail = "";
 
 function parseDate(value) {
   const date = new Date(value);

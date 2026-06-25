@@ -10,6 +10,11 @@ import {
   getConferenceTitle,
 } from "../lib/conference.js";
 import { fetchBranding } from "../lib/org.js";
+import { fetchContentBlocks } from "../lib/content.js";
+
+// Нейтральное имя платформы для тенант-фолбэков (как в AuthLayout) — без привязки
+// к конкретному вузу/подразделению.
+const PLATFORM_NAME = "КонференцХаб";
 
 export default function Layout() {
   const location = useLocation();
@@ -17,6 +22,7 @@ export default function Layout() {
   const [user, setUserState] = useState(getUser());
   const [conference, setConference] = useState(null);
   const [branding, setBranding] = useState(null);
+  const [contentBlocks, setContentBlocks] = useState([]);
   const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
@@ -25,6 +31,12 @@ export default function Layout() {
     fetchBranding().then((value) => {
       if (value) setBranding(value);
     });
+  }, []);
+
+  useEffect(() => {
+    // CMS-блоки тенанта — источник пунктов маркетинговой навигации (вместо
+    // захардкоженных «О вузе/Об ИЦЭиТП»). Тихий фолбэк на [] при сбое.
+    fetchContentBlocks().then((list) => setContentBlocks(Array.isArray(list) ? list : []));
   }, []);
 
   useEffect(() => {
@@ -129,12 +141,12 @@ export default function Layout() {
   };
 
   const showMapLink = !!user;
-  const marketingNavItems = [
-    { href: "/#university", label: "О вузе" },
-    { href: "/#iceitp", label: "Об ИЦЭиТП" },
-    { href: "/#conference", label: "О конференции" },
-    { href: "/#contacts", label: "Контакты" },
-  ];
+  // Пункты строятся из реально опубликованных CMS-блоков тенанта (якоря ведут на
+  // id={block.kind} лендинга — см. Welcome.jsx). Блок hero — это сам верх страницы,
+  // отдельным пунктом не показываем. Пустой список — норма для тенанта без блоков.
+  const marketingNavItems = contentBlocks
+    .filter((block) => block && block.kind !== "hero" && (block.title || "").trim())
+    .map((block) => ({ href: `/#${block.kind}`, label: block.title.trim() }));
   const desktopNavItems = user
     ? [
         { to: "/", label: "Главная", end: true },
@@ -172,6 +184,7 @@ export default function Layout() {
     ? [...mobilePrimaryNavItems, adminQuestionNavItem]
     : mobilePrimaryNavItems;
   const conferenceTitle = getConferenceTitle(conference);
+  const brandName = branding?.display_name?.trim() || conferenceTitle || PLATFORM_NAME;
   const conferenceSupportEmail = getConferenceSupportEmail(conference);
   const conferenceDateLabel = formatConferenceDateRange(conference?.starts_at, conference?.ends_at);
   const conferenceStatusLabel = getConferenceStatusLabel(conference?.status);
@@ -196,12 +209,11 @@ export default function Layout() {
             setNavOpen(false);
           }}
         >
-          <div className="logo" aria-label={`Логотип ${branding?.display_name || "ИЦЭиТП"}`}>
-            <img
-              src={branding?.logo_url || "/LOGO1.svg"}
-              alt={`Логотип ${branding?.display_name || "ИЦЭиТП"}`}
-            />
-          </div>
+          {branding?.logo_url ? (
+            <div className="logo" aria-label={`Логотип ${brandName}`}>
+              <img src={branding.logo_url} alt={`Логотип ${brandName}`} />
+            </div>
+          ) : null}
           <div className="brand-copy">
             <div className="title">{conferenceTitle}</div>
             <div className="subtitle">{subtitle}</div>
@@ -287,15 +299,15 @@ export default function Layout() {
           ) : (
             <>
               <nav id="site-navigation" className="nav desktop-nav marketing-nav" aria-label="Основные разделы">
-                {marketingNavItems.map((item) => (
-                  <a key={item.href} href={item.href}>
+                {marketingNavItems.map((item, idx) => (
+                  <a key={`${item.href}-${idx}`} href={item.href}>
                     {item.label}
                   </a>
                 ))}
               </nav>
               <nav className="nav mobile-menu-nav marketing-nav" aria-label="Основные разделы">
-                {marketingNavItems.map((item) => (
-                  <a key={item.href} href={item.href} onClick={() => setNavOpen(false)}>
+                {marketingNavItems.map((item, idx) => (
+                  <a key={`${item.href}-${idx}`} href={item.href} onClick={() => setNavOpen(false)}>
                     {item.label}
                   </a>
                 ))}
@@ -322,14 +334,15 @@ export default function Layout() {
         </div>
         <div className="footer-links">
           {!user
-            ? marketingNavItems.map((item) => (
-                <a key={item.href} href={item.href}>
+            ? marketingNavItems.map((item, idx) => (
+                <a key={`${item.href}-${idx}`} href={item.href}>
                   {item.label}
                 </a>
               ))
             : null}
-          <a href={`mailto:${conferenceSupportEmail}`}>Email: {conferenceSupportEmail}</a>
-          <a href="tel:+79298920700">Телефон: 8 (929) 892-07-00</a>
+          {conferenceSupportEmail ? (
+            <a href={`mailto:${conferenceSupportEmail}`}>Email: {conferenceSupportEmail}</a>
+          ) : null}
           <Link to="/personal-data">Политика обработки данных</Link>
           <Link to="/consent-authors">Согласие авторов</Link>
           <span className="footer-legal">© 2026 {conferenceTitle}</span>
