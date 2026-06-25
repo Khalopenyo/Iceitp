@@ -186,7 +186,7 @@
 }
 .lk-label {
   font-size: 11px;
-  color: var(--text-3);
+  color: var(--text-2);
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
@@ -239,7 +239,7 @@ a.lk-li:hover {
   color: var(--text);
   font-weight: 600;
 }
-.lk-li-tx span {
+.lk-li-tx > span:not(.lk-chip) {
   display: block;
   font-size: 11.5px;
   color: var(--text-2);
@@ -324,7 +324,7 @@ a.lk-li:hover {
   padding: 4px 2px;
   font-size: 10.5px;
   font-weight: 600;
-  color: var(--text-3);
+  color: var(--text-2);
   text-decoration: none;
   position: relative;
 }
@@ -407,6 +407,17 @@ a.lk-li:hover {
   box-shadow: var(--sh-1);
 }
 
+/* Ряд инструментов (вид + в календарь) */
+.lk-toolrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.lk-chip-soon {
+  opacity: 0.55;
+}
+
 /* Дневные табы */
 .lk-daytabs {
   display: flex;
@@ -434,7 +445,7 @@ a.lk-li:hover {
 .lk-day-sep {
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--text-3);
+  color: var(--text-2);
   text-transform: capitalize;
   margin: 4px 0 10px;
 }
@@ -542,6 +553,21 @@ a.lk-li:hover {
 .lk-qr-close svg {
   width: 22px;
   height: 22px;
+}
+
+/* Единое видимое фокус-кольцо для клавиатурной навигации по ЛК */
+.lk-tab:focus-visible,
+.lk-iconbtn:focus-visible,
+.lk-topbar-action:focus-visible,
+.lk-daytab:focus-visible,
+.lk-segm-tab:focus-visible,
+a.lk-li:focus-visible,
+button.lk-li:focus-visible,
+.lk-tile:focus-visible,
+.lk-qr-close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus);
+  border-radius: var(--r-sm);
 }
 
 /* Статус-сообщения внутри ЛК */

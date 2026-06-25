@@ -1,28 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiGet, buildApiUrl } from "../lib/api.js";
 import { openUrlInNewTab, triggerBlobDownload } from "../lib/download.js";
+import { icons as I } from "../components/lkIcons.jsx";
 import "./lk.css";
 
 const DOC_LIST = [
-  { key: "full_program", title: "Полная программа конференции", path: "/documents/program?type=full", filename: "program-full.pdf", mode: "download" },
-  { key: "certificate", title: "Сертификат участника", path: "/documents/certificate", filename: "certificate.pdf", mode: "download" },
-  { key: "proceedings", title: "Сборник трудов", path: "/documents/proceedings", mode: "external" },
+  { key: "personal_program", title: "Персональная программа", path: "/documents/program", filename: "program-personal.pdf", mode: "download", icon: "file" },
+  { key: "full_program", title: "Полная программа конференции", path: "/documents/program?type=full", filename: "program-full.pdf", mode: "download", icon: "file" },
+  { key: "certificate", title: "Сертификат участника", path: "/documents/certificate", filename: "certificate.pdf", mode: "download", icon: "cert" },
+  { key: "proceedings", title: "Сборник трудов", path: "/documents/proceedings", mode: "external", icon: "folder" },
 ];
-
-const I = {
-  download: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>,
-  id: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M14 9h4M14 13h4M6 16c.5-1.5 1.7-2 3-2s2.5.5 3 2"/></svg>,
-  eye: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12c1.5-3.5 5-7 9-7s7.5 3.5 9 7c-1.5 3.5-5 7-9 7s-7.5-3.5-9-7Z"/><circle cx="12" cy="12" r="2.6"/></svg>,
-  file: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>,
-  cert: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="9" r="5"/><path d="m8.5 13-1.5 8 5-3 5 3-1.5-8"/></svg>,
-  folder: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>,
-  shield: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3 5 6v5c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3Z"/></svg>,
-  cloud: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 18a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1.5A3.5 3.5 0 0 1 18 18H7Z"/></svg>,
-  close: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M18 6 6 18"/></svg>,
-};
-
-const listIcon = { full_program: "file", certificate: "cert", proceedings: "folder" };
 
 async function downloadPdf(path, filename) {
   const res = await apiGet(path);
@@ -33,20 +21,49 @@ async function downloadPdf(path, filename) {
 export default function Documents() {
   const [materials, setMaterials] = useState(null);
   const [me, setMe] = useState(null);
+  const [sections, setSections] = useState([]);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [fullscreen, setFullscreen] = useState(false);
+  const closeRef = useRef(null);
 
   useEffect(() => {
     apiGet("/documents/status").then(setMaterials).catch((e) => setError(e.message || "Не удалось загрузить документы."));
     apiGet("/me").then(setMe).catch(() => {});
+    apiGet("/sections").then((r) => setSections(Array.isArray(r) ? r : [])).catch(() => setSections([]));
   }, []);
+
+  // Модальный QR-оверлей: фокус-трап, Esc, блокировка прокрутки, возврат фокуса.
+  useEffect(() => {
+    if (!fullscreen) return undefined;
+    const prev = document.activeElement;
+    closeRef.current?.focus();
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e) => {
+      if (e.key === "Escape") setFullscreen(false);
+      if (e.key === "Tab") {
+        e.preventDefault();
+        closeRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+      if (prev && typeof prev.focus === "function") prev.focus();
+    };
+  }, [fullscreen]);
 
   const profile = me?.profile || {};
   const isOnline = me?.user_type === "online";
   const isAuthor = Boolean(profile.talk_title);
   const badgeAvailable = Boolean(materials?.badge?.available);
-  const badgeSub = [isOnline ? "Онлайн" : "Офлайн", isAuthor ? "Автор" : "Слушатель", profile.section_title ? `Секция «${profile.section_title}»` : null]
+  const sectionTitle = useMemo(
+    () => sections.find((s) => String(s.id) === String(profile.section_id))?.title || "",
+    [sections, profile.section_id]
+  );
+  const badgeSub = [isOnline ? "Онлайн" : "Офлайн", isAuthor ? "Автор" : "Слушатель", sectionTitle ? `Секция «${sectionTitle}»` : null]
     .filter(Boolean)
     .join(" · ");
 
@@ -129,11 +146,11 @@ export default function Documents() {
             const notApplicable = m?.status === "not_applicable";
             return (
               <div key={item.key} className="lk-li" style={{ cursor: "default" }}>
-                <span className="lk-li-ic">{I[listIcon[item.key]]}</span>
+                <span className="lk-li-ic">{I[item.icon]}</span>
                 <span className="lk-li-tx">
                   <b>{item.title}</b>
                   {available ? (
-                    <span className="lk-chip lk-chip-ok" style={{ display: "inline-flex", marginTop: "3px" }}>Готов</span>
+                    <span className="lk-chip lk-chip-ok" style={{ marginTop: "3px" }}>Готов</span>
                   ) : (
                     <span>{notApplicable ? "Не требуется для вашего формата" : m?.message || "Откроется позже"}</span>
                   )}
@@ -163,7 +180,7 @@ export default function Documents() {
 
       {fullscreen && badgeAvailable ? (
         <div className="lk-qr-overlay" role="dialog" aria-modal="true" aria-label="QR-код бейджа" onClick={() => setFullscreen(false)}>
-          <button type="button" className="lk-qr-close" aria-label="Закрыть">{I.close}</button>
+          <button ref={closeRef} type="button" className="lk-qr-close" aria-label="Закрыть" onClick={(e) => { e.stopPropagation(); setFullscreen(false); }}>{I.close}</button>
           <img src={buildApiUrl("/documents/badge/qr")} alt="QR-код бейджа участника" onClick={(e) => e.stopPropagation()} />
           <div className="lk-qr-overlay-name">{profile.full_name || "Участник"}</div>
           {badgeSub ? <div className="lk-qr-overlay-sub">{badgeSub}</div> : null}

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { apiGet, apiPut } from "../lib/api.js";
 import { setUser } from "../lib/auth.js";
 import { Field, Input, Select, Button } from "../components/ui/index.jsx";
+import { icons as I } from "../components/lkIcons.jsx";
 import "./lk.css";
 
 function initials(name) {
@@ -10,15 +11,6 @@ function initials(name) {
   if (!parts.length) return "У";
   return (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
 }
-
-const I = {
-  back: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 6l-6 6 6 6"/></svg>,
-  edit: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 20h4l10-10-4-4L4 16v4ZM13.5 6.5l4 4"/></svg>,
-  key: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="8" cy="15" r="4"/><path d="m10.85 12.15 7.65-7.65M16 6l2 2M18 4l2 2"/></svg>,
-  shield: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3 5 6v5c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3Z"/></svg>,
-  ok: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>,
-  no: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/></svg>,
-};
 
 function maskPhone(phone) {
   const p = String(phone || "").trim();
@@ -183,18 +175,36 @@ export default function Profile() {
             <div className="lk-list">
               <div className="lk-li" style={{ cursor: "default" }}>
                 <span className="lk-li-ic" style={{ background: "var(--gr-50)", color: "var(--gr-700)" }}>{I.ok}</span>
-                <span className="lk-li-tx"><b>Обработка персональных данных</b><span>выдано при регистрации · 152-ФЗ</span></span>
+                <span className="lk-li-tx">
+                  <b>Обработка персональных данных</b>
+                  <span>выдано при регистрации · 152-ФЗ · <Link to="/personal-data">текст</Link></span>
+                </span>
               </div>
               <div className="lk-li" style={{ cursor: "default" }}>
                 <span className="lk-li-ic" style={{ background: "var(--gr-50)", color: "var(--gr-700)" }}>{I.ok}</span>
-                <span className="lk-li-tx"><b>Публикация в сборнике трудов</b><span>выдано при регистрации</span></span>
+                <span className="lk-li-tx">
+                  <b>Публикация в сборнике трудов</b>
+                  <span>выдано при регистрации · <Link to="/consent-authors">текст</Link></span>
+                </span>
+              </div>
+              <div className="lk-li" style={{ cursor: "default" }}>
+                <span className="lk-li-ic" style={{ background: "var(--surface-2)", color: "var(--text-3)" }}>{I.no}</span>
+                <span className="lk-li-tx"><b>Фото- и видеосъёмка</b><span>не выдано</span></span>
               </div>
             </div>
 
             <div className="lk-card-flat" style={{ marginTop: "12px" }}>
               <div className="lk-label" style={{ marginBottom: "8px" }}>Управление данными</div>
+              <div className="lk-chips" style={{ marginBottom: "8px" }}>
+                <button type="button" className="ui-btn ui-btn-ghost ui-btn-sm" onClick={() => navigate("/personal-data")}>
+                  {I.download} Экспорт данных
+                </button>
+                <button type="button" className="ui-btn ui-btn-ghost ui-btn-sm" onClick={() => navigate("/personal-data")}>
+                  {I.ban} Отозвать согласие
+                </button>
+              </div>
               <button type="button" className="ui-btn ui-btn-ghost ui-btn-sm ui-btn-block" onClick={() => navigate("/personal-data")}>
-                Текст согласия и политики
+                {I.trash} Удалить аккаунт в конференции
               </button>
             </div>
           </>

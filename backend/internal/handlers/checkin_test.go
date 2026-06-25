@@ -104,6 +104,7 @@ func TestScanBadgeCreatesCheckInWithoutAuth(t *testing.T) {
 	router := newCheckInTestRouter(db, secret)
 	section := seedSection(t, db, "Хайпарк")
 	user := seedParticipant(t, db, "scan@example.com", models.UserTypeOffline, &section.ID, "Доклад")
+	db.Model(&models.User{}).Where("id = ?", user.ID).Update("badge_issued", true)
 	conf := seedCheckInConference(t, db)
 	token := makeBadgeToken(t, secret, user.ID, conf.ID)
 
@@ -132,12 +133,33 @@ func TestScanBadgeCreatesCheckInWithoutAuth(t *testing.T) {
 	}
 }
 
+func TestScanBadgeRejectedWhenBadgeRevoked(t *testing.T) {
+	db := newCheckInTestDB(t)
+	secret := "test-secret"
+	router := newCheckInTestRouter(db, secret)
+	section := seedSection(t, db, "Хайпарк")
+	// Бейдж не выдан (или отозван) — токен валиден, но check-in должен отказать.
+	user := seedParticipant(t, db, "revoked@example.com", models.UserTypeOffline, &section.ID, "Доклад")
+	conf := seedCheckInConference(t, db)
+	token := makeBadgeToken(t, secret, user.ID, conf.ID)
+
+	recorder := performCheckInRequest(t, router, "/api/checkin/scan", token, nil)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d for revoked badge, got %d: %s", http.StatusForbidden, recorder.Code, recorder.Body.String())
+	}
+	var checkIn models.CheckIn
+	if err := db.Where("conference_id = ? AND user_id = ?", conf.ID, user.ID).First(&checkIn).Error; err == nil {
+		t.Fatalf("expected no check-in row to be created for revoked badge")
+	}
+}
+
 func TestScanBadgeReturnsAlreadyCheckedInOnRepeat(t *testing.T) {
 	db := newCheckInTestDB(t)
 	secret := "test-secret"
 	router := newCheckInTestRouter(db, secret)
 	section := seedSection(t, db, "Хайпарк")
 	user := seedParticipant(t, db, "repeat@example.com", models.UserTypeOffline, &section.ID, "Доклад")
+	db.Model(&models.User{}).Where("id = ?", user.ID).Update("badge_issued", true)
 	conf := seedCheckInConference(t, db)
 	token := makeBadgeToken(t, secret, user.ID, conf.ID)
 
@@ -166,6 +188,7 @@ func TestVerifyBadgeStoresVerifier(t *testing.T) {
 	router := newCheckInTestRouter(db, secret)
 	section := seedSection(t, db, "Хайпарк")
 	user := seedParticipant(t, db, "verify@example.com", models.UserTypeOffline, &section.ID, "Доклад")
+	db.Model(&models.User{}).Where("id = ?", user.ID).Update("badge_issued", true)
 	verifier := seedParticipant(t, db, "org@example.com", models.UserTypeOffline, &section.ID, "Организатор")
 	if err := db.Model(&models.User{}).Where("id = ?", verifier.ID).Update("role", models.RoleOrg).Error; err != nil {
 		t.Fatalf("update verifier role: %v", err)

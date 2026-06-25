@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -54,6 +55,7 @@ func newDocumentsTestRouter(db *gorm.DB) *gin.Engine {
 	router.GET("/api/admin/users/:id/badge", handler.AdminBadgePDF)
 	router.GET("/api/documents/certificate", handler.CertificatePDF)
 	router.GET("/api/documents/proceedings", handler.Proceedings)
+	router.GET("/api/certificates/:number", handler.VerifyCertificate)
 	return router
 }
 
@@ -448,6 +450,193 @@ func TestCrossTenantFullProgramPDFIsolation(t *testing.T) {
 	}
 	if alpha.Body.Len() == 0 {
 		t.Fatalf("alpha full program expected a non-empty pdf body")
+	}
+}
+
+// newCertNumberPattern matches the post-fix issued number: a human-readable
+// sequential body plus a 6-char crypto-random base32 suffix (alphabet A–Z, 2–7).
+var newCertNumberPattern = regexp.MustCompile(`^CERT-\d{4}-\d{6}-[A-Z2-7]{6}$`)
+
+// issueCertificateNumber drives the certificate PDF endpoint (which mints the
+// certificate via ensureCertificate) and returns the stored number.
+func issueCertificateNumber(t *testing.T, db *gorm.DB, router *gin.Engine, conf models.Conference, user models.User) string {
+	t.Helper()
+
+	recorder := performDocumentsRequest(t, router, "/api/documents/certificate", user)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("issue certificate: expected status %d, got %d: %s", http.StatusOK, recorder.Code, recorder.Body.String())
+	}
+	var cert models.Certificate
+	if err := db.Where("conference_id = ? AND user_id = ?", conf.ID, user.ID).First(&cert).Error; err != nil {
+		t.Fatalf("load issued certificate: %v", err)
+	}
+	return cert.Number
+}
+
+// TestCertificateNumberIsUnpredictable proves new certificate numbers carry an
+// unguessable crypto-random suffix (so sequential ids can't be enumerated to
+// harvest holders) and that two issued numbers do not share a suffix.
+func TestCertificateNumberIsUnpredictable(t *testing.T) {
+	db := newDocumentsTestDB(t)
+	router := newDocumentsTestRouter(db)
+	section := seedSection(t, db, "Аудитория 408")
+	conf := seedConferenceRecord(t, db, models.ConferenceStatusLive, "")
+	userA := seedParticipant(t, db, "cert-suffix-a@example.com", models.UserTypeOnline, &section.ID, "Доклад A")
+	userB := seedParticipant(t, db, "cert-suffix-b@example.com", models.UserTypeOnline, &section.ID, "Доклад B")
+
+	numberA := issueCertificateNumber(t, db, router, conf, userA)
+	numberB := issueCertificateNumber(t, db, router, conf, userB)
+
+	if !newCertNumberPattern.MatchString(numberA) {
+		t.Fatalf("number %q does not match expected unpredictable format", numberA)
+	}
+	if !newCertNumberPattern.MatchString(numberB) {
+		t.Fatalf("number %q does not match expected unpredictable format", numberB)
+	}
+	suffixA := numberA[strings.LastIndexByte(numberA, '-')+1:]
+	suffixB := numberB[strings.LastIndexByte(numberB, '-')+1:]
+	if suffixA == suffixB {
+		t.Fatalf("expected distinct random suffixes, both were %q", suffixA)
+	}
+}
+
+// TestVerifyCertificateResolvesLegacyAndNewNumbers proves the public verify still
+// resolves both already-issued legacy numbers (no suffix — backward compatibility)
+// and the new unpredictable numbers, and that it withholds internal identifiers.
+func TestVerifyCertificateResolvesLegacyAndNewNumbers(t *testing.T) {
+	db := newDocumentsTestDB(t)
+	router := newDocumentsTestRouter(db)
+	section := seedSection(t, db, "Аудитория 409")
+	conf := seedConferenceRecord(t, db, models.ConferenceStatusLive, "")
+	user := seedParticipant(t, db, "verify-new@example.com", models.UserTypeOnline, &section.ID, "Доклад")
+	// A second holder carries the legacy number — Certificate is unique per
+	// (conference, user), so the legacy row needs its own user.
+	legacyUser := seedParticipant(t, db, "verify-legacy@example.com", models.UserTypeOnline, &section.ID, "Доклад")
+
+	// New-format number minted by the handler.
+	newNumber := issueCertificateNumber(t, db, router, conf, user)
+
+	// Legacy-format number written directly, as if issued before this change.
+	legacy := models.Certificate{
+		ConferenceID: conf.ID,
+		UserID:       legacyUser.ID,
+		Number:       "CERT-2025-000007",
+		IssuedAt:     time.Date(2025, time.March, 1, 9, 0, 0, 0, time.UTC),
+	}
+	if err := db.Create(&legacy).Error; err != nil {
+		t.Fatalf("create legacy certificate: %v", err)
+	}
+
+	for _, number := range []string{newNumber, legacy.Number} {
+		recorder := performDocumentsRequest(t, router, "/api/certificates/"+number, user)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("verify %q: expected status %d, got %d: %s", number, http.StatusOK, recorder.Code, recorder.Body.String())
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("unmarshal verify response: %v", err)
+		}
+		if payload["number"] != number {
+			t.Fatalf("verify %q: response number %v", number, payload["number"])
+		}
+		if payload["status"] != "valid" {
+			t.Fatalf("verify %q: expected valid status, got %v", number, payload["status"])
+		}
+		userObj, ok := payload["user"].(map[string]any)
+		if !ok {
+			t.Fatalf("verify %q: missing user object: %v", number, payload["user"])
+		}
+		if userObj["full_name"] != "Участник" {
+			t.Fatalf("verify %q: unexpected full_name %v", number, userObj["full_name"])
+		}
+		if _, leaked := userObj["id"]; leaked {
+			t.Fatalf("verify %q: public response must not expose internal user id", number)
+		}
+		confObj, ok := payload["conference"].(map[string]any)
+		if !ok {
+			t.Fatalf("verify %q: missing conference object: %v", number, payload["conference"])
+		}
+		if _, leaked := confObj["id"]; leaked {
+			t.Fatalf("verify %q: public response must not expose internal conference id", number)
+		}
+	}
+}
+
+// TestVerifyCertificateUnknownNumberIsNotFound guards the 404 path for a number
+// that does not exist (the enumeration attempt the unpredictable suffix defeats).
+func TestVerifyCertificateUnknownNumberIsNotFound(t *testing.T) {
+	db := newDocumentsTestDB(t)
+	router := newDocumentsTestRouter(db)
+	section := seedSection(t, db, "Аудитория 410")
+	seedConferenceRecord(t, db, models.ConferenceStatusLive, "")
+	user := seedParticipant(t, db, "verify-missing@example.com", models.UserTypeOnline, &section.ID, "Доклад")
+
+	recorder := performDocumentsRequest(t, router, "/api/certificates/CERT-2026-000001", user)
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d for unknown number, got %d: %s", http.StatusNotFound, recorder.Code, recorder.Body.String())
+	}
+}
+
+// TestVerifyCertificateIsTenantScoped proves the public verify resolves a
+// certificate only on the organization that issued it: org B's public page must
+// not confirm — nor disclose the holder of — a certificate issued under org A,
+// even though Certificate.Number is globally unique. Exercises the org-scoping
+// subquery (skipped by the other handler tests, which run without the resolver).
+func TestVerifyCertificateIsTenantScoped(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, err := gorm.Open(sqlite.Open("file:cert_verify_iso?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(
+		&models.Organization{}, &models.Conference{}, &models.User{}, &models.Profile{},
+		&models.Section{}, &models.Certificate{},
+	); err != nil {
+		t.Fatalf("automigrate: %v", err)
+	}
+
+	orgA := models.Organization{Slug: "alpha", DisplayName: "Alpha"}
+	orgB := models.Organization{Slug: "beta", DisplayName: "Beta"}
+	mustCreateH(t, db, &orgA)
+	mustCreateH(t, db, &orgB)
+
+	confA := models.Conference{Title: "Conf A", Status: models.ConferenceStatusFinished, OrganizationID: &orgA.ID}
+	confB := models.Conference{Title: "Conf B", Status: models.ConferenceStatusFinished, OrganizationID: &orgB.ID}
+	mustCreateH(t, db, &confA)
+	mustCreateH(t, db, &confB)
+
+	userA := models.User{Email: "holder@alpha.test", Role: models.RoleParticipant, UserType: models.UserTypeOnline,
+		OrganizationID: &orgA.ID, Profile: models.Profile{FullName: "Alpha Holder"}}
+	mustCreateH(t, db, &userA)
+
+	cert := models.Certificate{ConferenceID: confA.ID, UserID: userA.ID, Number: "CERT-2026-000042-ABC234"}
+	mustCreateH(t, db, &cert)
+
+	r := gin.New()
+	r.Use(tenant.Middleware(db))
+	handler := &DocumentHandler{DB: db, JWTSecret: "test-secret"}
+	r.GET("/api/certificates/:number", handler.VerifyCertificate)
+
+	verify := func(host string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "http://"+host+"/api/certificates/"+cert.Number, nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w
+	}
+
+	// Issuing org resolves the certificate.
+	alpha := verify("alpha.platform.ru")
+	if alpha.Code != http.StatusOK {
+		t.Fatalf("alpha verify -> %d, want 200: %s", alpha.Code, alpha.Body.String())
+	}
+
+	// Another tenant must get a 404 — no cross-tenant disclosure of the holder.
+	beta := verify("beta.platform.ru")
+	if beta.Code != http.StatusNotFound {
+		t.Fatalf("beta verify -> %d, want 404 (cross-tenant leak?): %s", beta.Code, beta.Body.String())
+	}
+	if strings.Contains(beta.Body.String(), "Alpha Holder") {
+		t.Fatalf("beta verify leaked the holder name: %s", beta.Body.String())
 	}
 }
 

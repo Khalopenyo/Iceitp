@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/tenant"
 	"errors"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
 )
@@ -21,9 +23,10 @@ var (
 	errInvalidBadgeToken   = errors.New("invalid badge token")
 	errInvalidTokenType    = errors.New("invalid token type")
 	errInvalidTokenPayload = errors.New("invalid token payload")
+	errBadgeNotIssued      = errors.New("badge no longer valid")
 )
 
-func loadBadgeTokenContext(db *gorm.DB, jwtSecret, rawToken string) (*badgeTokenContext, error) {
+func loadBadgeTokenContext(c *gin.Context, db *gorm.DB, jwtSecret, rawToken string) (*badgeTokenContext, error) {
 	claims, err := parseSignedTokenClaims(jwtSecret, rawToken)
 	if err != nil {
 		return nil, err
@@ -43,13 +46,16 @@ func loadBadgeTokenContext(db *gorm.DB, jwtSecret, rawToken string) (*badgeToken
 	userID := uint(userIDFloat)
 	conferenceID := uint(confIDFloat)
 
-	var user models.User
-	if err := db.Preload("Profile").First(&user, userID).Error; err != nil {
+	// Скоупим по тенанту запроса: бейдж-токен, выпущенный для пользователя/
+	// конференции ДРУГОГО вуза, не должен валидироваться здесь даже при общем
+	// JWT-секрете и RLS_ENFORCED=off. Несовпадение тенанта → ErrRecordNotFound.
+	var conf models.Conference
+	if err := db.Scopes(tenant.ByOrg(c)).First(&conf, conferenceID).Error; err != nil {
 		return nil, err
 	}
 
-	var conf models.Conference
-	if err := db.First(&conf, conferenceID).Error; err != nil {
+	var user models.User
+	if err := db.Scopes(tenant.ByOrg(c)).Preload("Profile").First(&user, userID).Error; err != nil {
 		return nil, err
 	}
 

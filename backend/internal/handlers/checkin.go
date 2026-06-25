@@ -67,12 +67,18 @@ func bindBadgePayload(c *gin.Context) (verifyBadgePayload, bool) {
 }
 
 func (h *CheckInHandler) processBadgeCheckIn(c *gin.Context, rawToken string, verifierID *uint, source string) (*checkInResponse, error) {
-	context, err := loadBadgeTokenContext(tenant.DB(c, h.DB), h.JWTSecret, rawToken)
+	context, err := loadBadgeTokenContext(c, tenant.DB(c, h.DB), h.JWTSecret, rawToken)
 	if err != nil {
 		return nil, err
 	}
 	user := context.User
 	conf := context.Conference
+
+	// Сверяем актуальное состояние в момент скана, а не только при выпуске токена:
+	// снятый бейдж или смена формата на online инвалидируют ранее выпущенный QR.
+	if !user.BadgeIssued || user.UserType == models.UserTypeOnline {
+		return nil, errBadgeNotIssued
+	}
 
 	var checkIn models.CheckIn
 	err = tenant.DB(c, h.DB).Where("conference_id = ? AND user_id = ?", conf.ID, user.ID).First(&checkIn).Error
@@ -104,7 +110,6 @@ func buildCheckInResponse(checkedInAt time.Time, alreadyCheckedIn bool, user mod
 		User: gin.H{
 			"id":        user.ID,
 			"full_name": user.Profile.FullName,
-			"email":     user.Email,
 		},
 		Conference: gin.H{
 			"id":    conf.ID,
@@ -121,6 +126,8 @@ func writeCheckInError(c *gin.Context, err error) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token type"})
 	case errors.Is(err, errInvalidTokenPayload):
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token payload"})
+	case errors.Is(err, errBadgeNotIssued):
+		c.JSON(http.StatusForbidden, gin.H{"error": "badge no longer valid"})
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": "user or conference not found"})
 	default:

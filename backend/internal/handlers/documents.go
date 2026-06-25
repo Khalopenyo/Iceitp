@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"conferenceplatforma/internal/models"
 	"conferenceplatforma/internal/tenant"
+	"crypto/rand"
+	"encoding/base32"
 	"errors"
 	"fmt"
 	"image/png"
@@ -571,20 +573,34 @@ func (h *DocumentHandler) VerifyCertificate(c *gin.Context) {
 		return
 	}
 
+	db := tenant.DB(c, h.DB)
+
+	// Scope the public lookup to the resolved tenant: a certificate is only
+	// verifiable on the organization that issued it (its conference belongs to
+	// that org). Certificate.Number is globally unique, but without this scope one
+	// tenant's public page would confirm — and disclose the holder of — another
+	// tenant's certificates. No-op for non-tenant requests (handler unit tests
+	// without the resolver middleware), so global lookups there are unaffected.
+	query := db.Where("number = ?", number)
+	if s, ok := tenant.FromContext(c); ok && s.OrgID != 0 {
+		orgConferenceIDs := db.Model(&models.Conference{}).Select("id").Where("organization_id = ?", s.OrgID)
+		query = query.Where("conference_id IN (?)", orgConferenceIDs)
+	}
+
 	var cert models.Certificate
-	if err := h.DB.Where("number = ?", number).First(&cert).Error; err != nil {
+	if err := query.First(&cert).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "certificate not found"})
 		return
 	}
 
 	var user models.User
-	if err := h.DB.Preload("Profile").First(&user, cert.UserID).Error; err != nil {
+	if err := db.Preload("Profile").First(&user, cert.UserID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "certificate owner not found"})
 		return
 	}
 
 	var conf models.Conference
-	if err := h.DB.First(&conf, cert.ConferenceID).Error; err != nil {
+	if err := db.First(&conf, cert.ConferenceID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "conference not found"})
 		return
 	}
@@ -601,6 +617,10 @@ func (h *DocumentHandler) VerifyCertificate(c *gin.Context) {
 		status = "revoked"
 	}
 
+	// Public surface: expose only what the verify page renders. The holder's name
+	// is the point of verification (the unpredictable number above is what blocks
+	// mass harvesting), but internal database identifiers (user.id, conference.id)
+	// are withheld — they are not used by the client and only aid correlation.
 	c.JSON(http.StatusOK, gin.H{
 		"number":        cert.Number,
 		"issued_at":     cert.IssuedAt,
@@ -609,11 +629,9 @@ func (h *DocumentHandler) VerifyCertificate(c *gin.Context) {
 		"revoked_at":    cert.RevokedAt,
 		"revoke_reason": cert.RevokeReason,
 		"user": gin.H{
-			"id":        user.ID,
 			"full_name": user.Profile.FullName,
 		},
 		"conference": gin.H{
-			"id":        conf.ID,
 			"title":     conf.Title,
 			"starts_at": conf.StartsAt,
 			"ends_at":   conf.EndsAt,
@@ -635,7 +653,8 @@ func (h *DocumentHandler) generateBadgeToken(userID, conferenceID uint) (string,
 		"user_id":       userID,
 		"conference_id": conferenceID,
 		"iat":           time.Now().Unix(),
-		"exp":           time.Now().Add(72 * time.Hour).Unix(),
+		// Окно события, а не 72ч: сокращает риск переигрывания утёкшего scan-URL.
+		"exp": time.Now().Add(24 * time.Hour).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(h.JWTSecret))
@@ -675,7 +694,17 @@ func (h *DocumentHandler) ensureCertificate(conferenceID, userID uint) (*models.
 		if err := tx.Create(&cert).Error; err != nil {
 			return err
 		}
-		cert.Number = fmt.Sprintf("CERT-%d-%06d", now.Year(), cert.ID)
+		// Append a crypto-random base32 suffix so the number is not enumerable:
+		// the sequential cert.ID keeps it human-readable and unique, while the
+		// suffix means a guessed/leaked sequential number can't be turned into a
+		// valid public lookup without also guessing ~30 bits of entropy. Old
+		// numbers issued before this (no suffix) keep verifying — VerifyCertificate
+		// matches on the exact stored string, so only generation changes here.
+		suffix, err := newCertificateNumberSuffix()
+		if err != nil {
+			return err
+		}
+		cert.Number = fmt.Sprintf("CERT-%d-%06d-%s", now.Year(), cert.ID, suffix)
 		return tx.Model(&cert).Update("number", cert.Number).Error
 	})
 	if err != nil {
@@ -683,6 +712,24 @@ func (h *DocumentHandler) ensureCertificate(conferenceID, userID uint) (*models.
 	}
 
 	return &cert, nil
+}
+
+// certificateNumberSuffixLen is the number of base32 characters appended to a
+// certificate number. 6 chars = 30 bits of entropy (~1.07e9 values), which makes
+// brute-forcing a specific number's suffix infeasible under the public
+// verify rate limiter.
+const certificateNumberSuffixLen = 6
+
+// newCertificateNumberSuffix returns an unpredictable uppercase base32 suffix
+// (crypto/rand). The base32 alphabet (A–Z, 2–7) avoids ambiguous 0/1/8/9 glyphs,
+// which keeps printed certificate numbers transcribable.
+func newCertificateNumberSuffix() (string, error) {
+	buf := make([]byte, 5) // 40 bits -> 8 base32 chars; we keep the first 6
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	enc := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(buf)
+	return enc[:certificateNumberSuffixLen], nil
 }
 
 func configureDocumentFont(pdf *gofpdf.Fpdf) string {

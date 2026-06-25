@@ -86,6 +86,9 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	loginLimiter := ratelimit.New(10, 10*time.Minute)
 	resetLimiter := ratelimit.New(5, 15*time.Minute)
 	questionLimiter := ratelimit.New(8, 5*time.Minute)
+	// Публичная верификация сертификата: троттлим перебор последовательных
+	// номеров (защита от массового сбора ФИО обладателей).
+	certVerifyLimiter := ratelimit.New(30, 10*time.Minute)
 
 	api := r.Group("/api")
 	// Phase 2.1: resolve org (single existing org) + active conference into the
@@ -115,7 +118,7 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	api.GET("/org", orgHandler.GetOrg)
 	api.GET("/content", contentHandler.ListPublic)
 	api.GET("/speakers", personHandler.ListPublic)
-	api.GET("/certificates/:number", docHandler.VerifyCertificate)
+	api.GET("/certificates/:number", certVerifyLimiter.Middleware("cert_verify"), docHandler.VerifyCertificate)
 	api.GET("/questions/public", questionHandler.PublicQuestionContext)
 	api.GET("/questions/approved", questionHandler.ApprovedQuestions)
 	api.POST("/questions/public", questionLimiter.Middleware("public_questions"), questionHandler.CreatePublicQuestion)

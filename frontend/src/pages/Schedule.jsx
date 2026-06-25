@@ -1,52 +1,50 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiGet } from "../lib/api.js";
+import { icons as I } from "../components/lkIcons.jsx";
 import "./lk.css";
 
-const I = {
-  filter: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 5h18l-7 8v6l-4-2v-4L3 5Z"/></svg>,
-  door: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 21V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17M4 21h16M14 12h.01"/></svg>,
-  grid: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg>,
-  map: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 4-6 2v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>,
-  message: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 5h16v11H9l-4 4V5z"/></svg>,
-  download: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>,
-};
-
-function dayKey(value) {
+// Go-нулевая дата ("0001-01-01T00:00:00Z") валидна для Date, но не является
+// настоящим временем — секции без назначенного слота не должны попадать в дни.
+function hasRealTime(value) {
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("ru-RU");
+  return !Number.isNaN(d.getTime()) && d.getUTCFullYear() > 1;
+}
+function dayKey(value) {
+  return new Date(value).toLocaleDateString("ru-RU");
 }
 function dayLabel(value) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("ru-RU", { weekday: "short", day: "numeric", month: "long" });
+  return new Date(value).toLocaleDateString("ru-RU", { weekday: "short", day: "numeric", month: "long" });
 }
 function dayTab(value) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+  return new Date(value).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 function hhmm(value) {
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  return new Date(value).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 }
 
 function icsStamp(value) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  return new Date(value).toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+}
+// Экранирование текста по RFC 5545 §3.3.11.
+function escapeICS(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\n/g, "\\n")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;");
 }
 
 function buildICS(sections) {
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//ConferenceHub//RU", "CALSCALE:GREGORIAN"];
   sections.forEach((s, i) => {
-    if (!s.start_at) return;
+    if (!hasRealTime(s.start_at)) return;
     lines.push("BEGIN:VEVENT");
     lines.push(`UID:section-${s.id}-${i}@conferencehub`);
     lines.push(`DTSTART:${icsStamp(s.start_at)}`);
-    if (s.end_at) lines.push(`DTEND:${icsStamp(s.end_at)}`);
-    lines.push(`SUMMARY:${(s.title || "Сессия").replace(/[,;\n]/g, " ")}`);
-    if (s.room) lines.push(`LOCATION:Зал «${s.room}»`);
+    if (hasRealTime(s.end_at)) lines.push(`DTEND:${icsStamp(s.end_at)}`);
+    lines.push(`SUMMARY:${escapeICS(s.title || "Сессия")}`);
+    if (s.room) lines.push(`LOCATION:${escapeICS(`Зал «${s.room}»`)}`);
     lines.push("END:VEVENT");
   });
   lines.push("END:VCALENDAR");
@@ -72,7 +70,7 @@ export default function Schedule() {
   const days = useMemo(() => {
     const map = new Map();
     sections
-      .filter((s) => s.start_at)
+      .filter((s) => hasRealTime(s.start_at))
       .forEach((s) => {
         const k = dayKey(s.start_at);
         if (!map.has(k)) map.set(k, []);
@@ -91,7 +89,7 @@ export default function Schedule() {
   const day = days[activeDay] || null;
 
   const exportICS = () => {
-    const ics = buildICS(sections.filter((s) => s.start_at));
+    const ics = buildICS(sections.filter((s) => hasRealTime(s.start_at)));
     const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -112,18 +110,26 @@ export default function Schedule() {
       </div>
 
       <div className="lk-main">
-        <div className="lk-segm" role="tablist" aria-label="Вид программы">
-          <button type="button" className="lk-segm-tab active" aria-selected="true">Моё расписание</button>
+        <nav className="lk-segm" aria-label="Вид программы">
+          <button type="button" className="lk-segm-tab active" aria-current="page">Моё расписание</button>
           <Link to="/program" className="lk-segm-tab">Полная программа</Link>
+        </nav>
+
+        <div className="lk-toolrow">
+          <span className="lk-chip lk-chip-solid">{I.list} Список</span>
+          <span className="lk-chip lk-chip-soon" aria-disabled="true">{I.layout} Сетка</span>
+          <div className="lk-spacer" />
+          <button type="button" className="ui-btn ui-btn-ghost ui-btn-sm" onClick={exportICS}>{I.cal} В календарь</button>
         </div>
 
         {days.length > 1 ? (
-          <div className="lk-daytabs">
+          <div className="lk-daytabs" role="group" aria-label="День программы">
             {days.map((d, idx) => (
               <button
                 key={d.key}
                 type="button"
                 className={`lk-daytab ${idx === activeDay ? "active" : ""}`}
+                aria-pressed={idx === activeDay}
                 onClick={() => setActiveDay(idx)}
               >
                 {d.tab}
