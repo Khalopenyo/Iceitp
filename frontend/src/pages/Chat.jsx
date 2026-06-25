@@ -1,9 +1,9 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm } from "../lib/api.js";
 import { getUser } from "../lib/auth.js";
 import { triggerBlobDownload } from "../lib/download.js";
-import { Badge, Button } from "../components/ui/index.jsx";
-import "./chat.css";
+import { icons as I } from "../components/lkIcons.jsx";
+import "./lk.css";
 
 const CHAT_SCOPE_CONFERENCE = "conference";
 const CHAT_SCOPE_SECTION = "section";
@@ -15,13 +15,8 @@ const CHAT_ATTACHMENT_ACCEPT = ".csv,.doc,.docx,.jpeg,.jpg,.pdf,.png,.ppt,.pptx,
 const rawApiBaseUrl = typeof import.meta.env.VITE_API_URL === "string" ? import.meta.env.VITE_API_URL.trim() : "";
 const apiBaseUrl = rawApiBaseUrl.replace(/\/+$/, "");
 
-function getDraftKey(scope) {
-  return `${CHAT_DRAFT_PREFIX}${scope}`;
-}
-
-function getSeenKey(scope) {
-  return `${CHAT_SEEN_PREFIX}${scope}`;
-}
+const getDraftKey = (scope) => `${CHAT_DRAFT_PREFIX}${scope}`;
+const getSeenKey = (scope) => `${CHAT_SEEN_PREFIX}${scope}`;
 
 function readStorage(key, fallback = "") {
   try {
@@ -30,7 +25,6 @@ function readStorage(key, fallback = "") {
     return fallback;
   }
 }
-
 function writeStorage(key, value) {
   try {
     localStorage.setItem(key, value);
@@ -41,94 +35,45 @@ function writeStorage(key, value) {
 
 function getInitialScope(user) {
   const savedScope = readStorage(CHAT_LAST_SCOPE_KEY, CHAT_SCOPE_CONFERENCE);
-  if (savedScope === CHAT_SCOPE_SECTION && user?.profile?.section_id) {
-    return CHAT_SCOPE_SECTION;
-  }
+  if (savedScope === CHAT_SCOPE_SECTION && user?.profile?.section_id) return CHAT_SCOPE_SECTION;
   return CHAT_SCOPE_CONFERENCE;
 }
-
-function getDraft(scope) {
-  return readStorage(getDraftKey(scope), "");
-}
-
-function setDraft(scope, value) {
-  writeStorage(getDraftKey(scope), value);
-}
+const getDraft = (scope) => readStorage(getDraftKey(scope), "");
+const setDraft = (scope, value) => writeStorage(getDraftKey(scope), value);
 
 function markChannelSeen(scope, lastMessageAt) {
   if (!lastMessageAt) return;
   writeStorage(getSeenKey(scope), lastMessageAt);
 }
-
-function hasUnreadMessages(channel, activeScope) {
-  if (!channel?.last_message_at || channel.scope === activeScope) return false;
+function hasUnreadMessages(channel) {
+  if (!channel?.last_message_at) return false;
   const seenAt = readStorage(getSeenKey(channel.scope), "");
   if (!seenAt) return true;
   return new Date(channel.last_message_at).getTime() > new Date(seenAt).getTime();
 }
 
-function getInitials(name) {
-  const parts = (name || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2);
-  if (parts.length === 0) return "Ч";
-  return parts.map((part) => part[0]?.toUpperCase() || "").join("");
-}
-
-function formatMessageTime(value) {
-  return new Date(value).toLocaleTimeString("ru-RU", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatMessageDate(value) {
-  return new Date(value).toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "long",
-  });
-}
-
-function formatMessageDateTime(value) {
-  return new Date(value).toLocaleString("ru-RU", {
-    day: "numeric",
-    month: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+const formatMessageTime = (v) => new Date(v).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+const formatMessageDate = (v) => new Date(v).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+const formatMessageDateTime = (v) =>
+  new Date(v).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 
 function formatRelativeActivity(value) {
   if (!value) return "Пока без сообщений";
-  const timestamp = new Date(value).getTime();
-  const diffMinutes = Math.max(0, Math.round((Date.now() - timestamp) / 60000));
-
+  const diffMinutes = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60000));
   if (diffMinutes < 1) return "только что";
   if (diffMinutes < 60) return `${diffMinutes} мин назад`;
-
   const diffHours = Math.round(diffMinutes / 60);
   if (diffHours < 24) return `${diffHours} ч назад`;
-
   return formatMessageDateTime(value);
 }
 
 function filterMessages(messages, query) {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) return messages;
-
-  return messages.filter((message) => {
-    const attachmentNames = (message.attachments || []).map((attachment) => attachment.file_name || "").join(" ");
-    const haystack = [message.user_name, message.user_meta, message.content, attachmentNames].join(" ").toLowerCase();
-    return haystack.includes(normalizedQuery);
+  const q = query.trim().toLowerCase();
+  if (!q) return messages;
+  return messages.filter((m) => {
+    const names = (m.attachments || []).map((a) => a.file_name || "").join(" ");
+    return [m.user_name, m.user_meta, m.content, names].join(" ").toLowerCase().includes(q);
   });
-}
-
-function getChannelInputPlaceholder(channel) {
-  if (!channel?.available) return "Чат секции станет доступен после выбора секции";
-  if (channel.scope === CHAT_SCOPE_SECTION) return "Напишите в чат вашей секции";
-  return "Напишите сообщение в общий чат конференции";
 }
 
 function formatFileSize(size) {
@@ -137,11 +82,9 @@ function formatFileSize(size) {
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} КБ`;
   return `${(size / (1024 * 1024)).toFixed(1)} МБ`;
 }
+const buildAttachmentUrl = (downloadUrl) => (!downloadUrl ? "" : apiBaseUrl ? `${apiBaseUrl}${downloadUrl}` : downloadUrl);
 
-function buildAttachmentUrl(downloadUrl) {
-  if (!downloadUrl) return "";
-  return apiBaseUrl ? `${apiBaseUrl}${downloadUrl}` : downloadUrl;
-}
+const channelIcon = (scope) => (scope === CHAT_SCOPE_SECTION ? I.users : scope === CHAT_SCOPE_CONFERENCE ? I.broadcast : I.help);
 
 export default function Chat() {
   const user = getUser();
@@ -149,6 +92,7 @@ export default function Chat() {
   const listRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  const [view, setView] = useState("list"); // list | thread
   const [activeScope, setActiveScope] = useState(initialScope);
   const [channels, setChannels] = useState([]);
   const [currentChannel, setCurrentChannel] = useState(null);
@@ -156,6 +100,7 @@ export default function Chat() {
   const [content, setContent] = useState(() => getDraft(initialScope));
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [search, setSearch] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -166,12 +111,10 @@ export default function Chat() {
 
   useEffect(() => {
     let disposed = false;
-
     const loadChat = async (silent = false) => {
       try {
         const data = await apiGet(`/chat?scope=${activeScope}`);
         if (disposed) return;
-
         setChannels(data.channels || []);
         setCurrentChannel(data.current_channel || null);
         setMessages(data.messages || []);
@@ -179,7 +122,6 @@ export default function Chat() {
         markChannelSeen(data.current_scope, data.current_channel?.last_message_at);
       } catch (err) {
         if (disposed) return;
-
         setError(err.message || "Не удалось загрузить чат");
         if (!silent) {
           setChannels([]);
@@ -193,12 +135,8 @@ export default function Chat() {
         }
       }
     };
-
     loadChat();
-    const intervalId = window.setInterval(() => {
-      loadChat(true);
-    }, CHAT_POLL_INTERVAL_MS);
-
+    const intervalId = window.setInterval(() => loadChat(true), CHAT_POLL_INTERVAL_MS);
     return () => {
       disposed = true;
       window.clearInterval(intervalId);
@@ -206,46 +144,44 @@ export default function Chat() {
   }, [activeScope, refreshVersion]);
 
   useEffect(() => {
+    if (view !== "thread") return;
     const node = listRef.current;
-    if (!node) return;
-    node.scrollTop = node.scrollHeight;
-  }, [messages, activeScope]);
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [messages, view]);
 
-  const filteredMessages = filterMessages(messages, search);
+  const filteredMessages = useMemo(() => filterMessages(messages, search), [messages, search]);
 
-  const switchChannel = (scope) => {
-    const nextChannel = channels.find((channel) => channel.scope === scope);
-    if (!nextChannel?.available || scope === activeScope) return;
-
-    setDraft(activeScope, content);
-    writeStorage(CHAT_LAST_SCOPE_KEY, scope);
-    setActiveScope(scope);
-    setContent(getDraft(scope));
-    setSearch("");
-    setError("");
-    setLoading(true);
-    setSyncing(false);
-    setEditingMessageId(null);
-    setEditingContent("");
-    setCurrentChannel(nextChannel);
-    setMessages([]);
-    setSelectedFiles([]);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+  const openChannel = (channel) => {
+    if (!channel?.available) return;
+    if (channel.scope !== activeScope) {
+      setDraft(activeScope, content);
+      writeStorage(CHAT_LAST_SCOPE_KEY, channel.scope);
+      setActiveScope(channel.scope);
+      setContent(getDraft(channel.scope));
+      setSearch("");
+      setShowSearch(false);
+      setError("");
+      setLoading(true);
+      setSyncing(false);
+      setEditingMessageId(null);
+      setEditingContent("");
+      setCurrentChannel(channel);
+      setMessages([]);
+      setSelectedFiles([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
+    setView("thread");
   };
 
-  const handleComposerChange = (event) => {
-    const nextValue = event.target.value;
-    setContent(nextValue);
-    setDraft(activeScope, nextValue);
+  const handleComposerChange = (e) => {
+    setContent(e.target.value);
+    setDraft(activeScope, e.target.value);
   };
 
-  const handleSend = async (event) => {
-    event.preventDefault();
+  const handleSend = async (e) => {
+    e.preventDefault();
     const trimmed = content.trim();
     if ((!trimmed && selectedFiles.length === 0) || !currentChannel?.available) return;
-
     setSending(true);
     setError("");
     try {
@@ -256,20 +192,14 @@ export default function Chat() {
         selectedFiles.forEach((file) => formData.append("files", file));
         await apiPostForm("/chat", formData);
       } else {
-        await apiPost("/chat", {
-          scope: activeScope,
-          content: trimmed,
-        });
+        await apiPost("/chat", { scope: activeScope, content: trimmed });
       }
-
       setContent("");
       setDraft(activeScope, "");
       setSelectedFiles([]);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
       setSyncing(true);
-      setRefreshVersion((value) => value + 1);
+      setRefreshVersion((v) => v + 1);
     } catch (err) {
       setError(err.message || "Не удалось отправить сообщение");
     } finally {
@@ -277,69 +207,57 @@ export default function Chat() {
     }
   };
 
-  const handleFileChange = (event) => {
-    const nextFiles = Array.from(event.target.files || []);
-    setSelectedFiles(nextFiles);
-  };
-
-  const removeSelectedFile = (indexToRemove) => {
-    setSelectedFiles((prev) => prev.filter((_, index) => index !== indexToRemove));
-    const remainingFiles = selectedFiles.filter((_, index) => index !== indexToRemove);
+  const handleFileChange = (e) => setSelectedFiles(Array.from(e.target.files || []));
+  const removeSelectedFile = (idx) => {
+    const remaining = selectedFiles.filter((_, i) => i !== idx);
+    setSelectedFiles(remaining);
     if (fileInputRef.current) {
       const transfer = new DataTransfer();
-      remainingFiles.forEach((file) => transfer.items.add(file));
+      remaining.forEach((file) => transfer.items.add(file));
       fileInputRef.current.files = transfer.files;
     }
   };
 
-  const startEditing = (message) => {
-    setEditingMessageId(message.id);
-    setEditingContent(message.content);
+  const startEditing = (m) => {
+    setEditingMessageId(m.id);
+    setEditingContent(m.content);
   };
-
   const cancelEditing = () => {
     setEditingMessageId(null);
     setEditingContent("");
   };
-
   const handleSaveEdit = async (messageId) => {
     const trimmed = editingContent.trim();
     if (!trimmed) return;
-
     setSyncing(true);
     setError("");
     try {
       await apiPatch(`/chat/${messageId}`, { content: trimmed });
       cancelEditing();
-      setRefreshVersion((value) => value + 1);
+      setRefreshVersion((v) => v + 1);
     } catch (err) {
       setError(err.message || "Не удалось сохранить изменения");
       setSyncing(false);
     }
   };
-
-  const handleDelete = async (message) => {
-    const confirmed = window.confirm("Удалить это сообщение?");
-    if (!confirmed) return;
-
+  const handleDelete = async (m) => {
+    if (!window.confirm("Удалить это сообщение?")) return;
     setSyncing(true);
     setError("");
     try {
-      await apiDelete(`/chat/${message.id}`);
-      if (editingMessageId === message.id) {
-        cancelEditing();
-      }
-      setRefreshVersion((value) => value + 1);
+      await apiDelete(`/chat/${m.id}`);
+      if (editingMessageId === m.id) cancelEditing();
+      setRefreshVersion((v) => v + 1);
     } catch (err) {
       setError(err.message || "Не удалось удалить сообщение");
       setSyncing(false);
     }
   };
 
-  const handleComposerKeyDown = (event) => {
-    if (event.key !== "Enter" || event.shiftKey) return;
-    event.preventDefault();
-    event.currentTarget.form?.requestSubmit();
+  const handleComposerKeyDown = (e) => {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    e.preventDefault();
+    e.currentTarget.form?.requestSubmit();
   };
 
   const handleDownloadAttachment = async (attachment) => {
@@ -347,18 +265,13 @@ export default function Chat() {
       window.location.href = "/login";
       return;
     }
-
     try {
-      const res = await fetch(buildAttachmentUrl(attachment.download_url), {
-        credentials: "include",
-      });
+      const res = await fetch(buildAttachmentUrl(attachment.download_url), { credentials: "include" });
       if (res.status === 401) {
         window.location.href = "/login";
         return;
       }
-      if (!res.ok) {
-        throw new Error("Не удалось скачать вложение");
-      }
+      if (!res.ok) throw new Error("Не удалось скачать вложение");
       const blob = await res.blob();
       triggerBlobDownload(blob, attachment.file_name || "attachment");
     } catch (err) {
@@ -368,257 +281,227 @@ export default function Chat() {
 
   const canCompose = Boolean(currentChannel?.available) && !sending;
 
-  return (
-    <section className="chat-page">
-      <div className="chat-shell">
-        <aside className="chat-sidebar">
-          <div className="chat-sidebar-head">
-            <Badge variant="brand">Общение</Badge>
-            <h2>Чаты конференции</h2>
-            <p>
-              Главный канал для всех участников и отдельный чат вашей секции с автоматическим
-              обновлением.
-            </p>
+  // ===== Лента канала (SCR-LK-05b) =====
+  if (view === "thread") {
+    return (
+      <>
+        <div className="lk-topbar">
+          <button type="button" className="lk-iconbtn" onClick={() => setView("list")} aria-label="К списку чатов">
+            {I.back}
+          </button>
+          <div className="lk-topbar-id">
+            <div className="lk-topbar-name">{currentChannel?.title || "Чат"}</div>
+            <div className="lk-topbar-sub" role={syncing ? "status" : undefined}>
+              {syncing
+                ? "Синхронизация…"
+                : `${currentChannel?.member_count || 0} участников${activeScope === CHAT_SCOPE_CONFERENCE ? " · модерируемый" : ""}`}
+            </div>
           </div>
+          <div className="lk-spacer" />
+          <button
+            type="button"
+            className="lk-iconbtn"
+            onClick={() => setShowSearch((v) => !v)}
+            aria-label="Поиск по сообщениям"
+            aria-pressed={showSearch}
+          >
+            {I.search}
+          </button>
+        </div>
 
-          <div className="chat-channel-list" role="group" aria-label="Список каналов чата">
+        {showSearch ? (
+          <div className="lk-chat-searchbar">
+            <span className="lk-chat-search">
+              {I.search}
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Поиск по имени или тексту"
+                aria-label="Поиск по сообщениям"
+              />
+            </span>
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="ui-status ui-status-error" role="alert" style={{ margin: "10px 14px 0" }}>
+            {error}
+          </div>
+        ) : null}
+
+        <div className="lk-chat-stream" ref={listRef}>
+          {loading ? (
+            <div className="lk-chat-empty">Загружаем историю сообщений…</div>
+          ) : filteredMessages.length === 0 ? (
+            <div className="lk-chat-empty">
+              {search.trim()
+                ? "По вашему запросу сообщений не найдено."
+                : currentChannel?.available
+                  ? "Пока здесь тихо. Начните обсуждение первым сообщением."
+                  : "Чат секции станет доступен после выбора секции в профиле."}
+            </div>
+          ) : (
+            filteredMessages.map((m, index) => {
+              const prev = filteredMessages[index - 1];
+              const showDate = formatMessageDate(m.created_at) !== (prev ? formatMessageDate(prev.created_at) : null);
+              const isEditing = editingMessageId === m.id;
+              return (
+                <Fragment key={m.id}>
+                  {showDate ? <div className="lk-chat-date">{formatMessageDate(m.created_at)}</div> : null}
+                  <div className={`lk-msg ${m.is_own ? "me" : ""}`}>
+                    {!m.is_own ? (
+                      <div className="lk-msg-who">
+                        {m.user_name}
+                        {m.user_meta ? ` · ${m.user_meta}` : ""} · {formatMessageTime(m.created_at)}
+                      </div>
+                    ) : null}
+                    {isEditing ? (
+                      <div className="lk-chat-editor">
+                        <textarea
+                          value={editingContent}
+                          onChange={(e) => setEditingContent(e.target.value)}
+                          rows={3}
+                          maxLength={2000}
+                        />
+                        <div className="lk-chat-editor-foot">
+                          <span>{editingContent.trim().length}/2000</span>
+                          <button type="button" className="ui-btn ui-btn-ghost ui-btn-sm" onClick={cancelEditing}>Отмена</button>
+                          <button type="button" className="ui-btn ui-btn-primary ui-btn-sm" onClick={() => handleSaveEdit(m.id)}>Сохранить</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {m.content ? <div className="lk-msg-text">{m.content}</div> : null}
+                        {m.attachments?.length
+                          ? m.attachments.map((a) => (
+                              <button key={a.id} type="button" className="lk-msg-file" onClick={() => handleDownloadAttachment(a)}>
+                                {I.file}
+                                <span>
+                                  <b>{a.file_name}</b>
+                                  <em>{formatFileSize(a.file_size)}</em>
+                                </span>
+                                {I.download}
+                              </button>
+                            ))
+                          : null}
+                        <div className="lk-msg-foot">
+                          {m.is_own ? <span className="lk-msg-time">{formatMessageTime(m.created_at)}</span> : null}
+                          {m.edited_at ? <span className="lk-msg-edited">изменено</span> : null}
+                          {m.can_edit ? (
+                            <button type="button" className="lk-msg-act" onClick={() => startEditing(m)}>Изменить</button>
+                          ) : null}
+                          {m.can_delete ? (
+                            <button type="button" className="lk-msg-act danger" onClick={() => handleDelete(m)}>Удалить</button>
+                          ) : null}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </Fragment>
+              );
+            })
+          )}
+        </div>
+
+        <form className="lk-chat-composer" onSubmit={handleSend}>
+          {selectedFiles.length ? (
+            <div className="lk-chat-files">
+              {selectedFiles.map((file, index) => (
+                <div key={`${file.name}-${index}`} className="lk-chat-file-chip">
+                  {I.file}
+                  <span>{file.name}</span>
+                  <button type="button" onClick={() => removeSelectedFile(index)} aria-label="Убрать файл">{I.close}</button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <div className="lk-chat-composer-row">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept={CHAT_ATTACHMENT_ACCEPT}
+              onChange={handleFileChange}
+              disabled={!canCompose}
+              style={{ display: "none" }}
+              id="lk-chat-file"
+            />
+            <button
+              type="button"
+              className="lk-iconbtn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!canCompose}
+              aria-label="Прикрепить файл"
+            >
+              {I.paperclip}
+            </button>
+            <textarea
+              className="lk-chat-input"
+              value={content}
+              onChange={handleComposerChange}
+              onKeyDown={handleComposerKeyDown}
+              placeholder={currentChannel?.available ? "Сообщение…" : "Чат секции недоступен"}
+              rows={1}
+              maxLength={2000}
+              disabled={!canCompose}
+            />
+            <button
+              type="submit"
+              className="lk-chat-send"
+              disabled={!canCompose || (!content.trim() && selectedFiles.length === 0)}
+              aria-label="Отправить"
+            >
+              {I.send}
+            </button>
+          </div>
+        </form>
+      </>
+    );
+  }
+
+  // ===== Список каналов (SCR-LK-05) =====
+  return (
+    <>
+      <div className="lk-topbar">
+        <div className="lk-topbar-title">Чат</div>
+      </div>
+      <div className="lk-main">
+        {error ? <div className="ui-status ui-status-error" role="alert" style={{ marginBottom: "10px" }}>{error}</div> : null}
+        {loading && channels.length === 0 ? (
+          <div className="lk-card-flat">Загружаем каналы…</div>
+        ) : (
+          <div className="lk-list">
             {channels.map((channel) => {
-              const isActive = channel.scope === activeScope;
-              const showUnread = hasUnreadMessages(channel, activeScope);
-
+              const unread = channel.available && hasUnreadMessages(channel);
               return (
                 <button
                   key={channel.scope}
                   type="button"
-                  className={`chat-channel-card${isActive ? " active" : ""}`}
-                  onClick={() => switchChannel(channel.scope)}
+                  className={`lk-li ${channel.available ? "" : "disabled"}`}
+                  onClick={() => openChannel(channel)}
                   disabled={!channel.available}
-                  aria-pressed={isActive}
                 >
-                  <div className="chat-channel-card-head">
-                    <div>
-                      <strong>{channel.title}</strong>
-                      <p>{channel.description}</p>
-                    </div>
-                    {showUnread ? <span className="chat-unread-dot" aria-hidden="true" /> : null}
-                  </div>
-                  <div className="chat-channel-card-meta">
-                    <span>{channel.member_count} участников</span>
-                    <span>{channel.message_count} сообщений</span>
-                  </div>
-                  <div className="chat-channel-card-foot">
-                    <span>{formatRelativeActivity(channel.last_message_at)}</span>
-                    {!channel.available ? <span className="chat-disabled-pill">недоступно</span> : null}
-                  </div>
+                  <span className="lk-li-ic">{channelIcon(channel.scope)}</span>
+                  <span className="lk-li-tx">
+                    <b>{channel.title}</b>
+                    <span>
+                      {channel.available
+                        ? channel.description || formatRelativeActivity(channel.last_message_at)
+                        : "Откроется после выбора секции"}
+                    </span>
+                  </span>
+                  {unread ? (
+                    <span className="lk-chip lk-chip-count">{channel.message_count || "•"}</span>
+                  ) : channel.available ? (
+                    <span className="lk-li-chevron">{I.chevron}</span>
+                  ) : null}
                 </button>
               );
             })}
           </div>
-        </aside>
-
-        <div className="chat-main">
-          <header className="chat-main-head">
-            <div>
-              <div className="chat-heading-row">
-                <h3>{currentChannel?.title || "Загрузка чата..."}</h3>
-                <span className={`chat-status-pill${syncing ? " syncing" : ""}`} role="status">
-                  {syncing ? "Синхронизация…" : "Онлайн"}
-                </span>
-              </div>
-              <p>{currentChannel?.description || "Подготавливаем историю сообщений и участников."}</p>
-            </div>
-
-            <div className="chat-head-tools">
-              <label className="chat-search">
-                <span className="sr-only">Поиск по сообщениям</span>
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Поиск по имени или тексту"
-                />
-              </label>
-              <div className="chat-head-stats">
-                <span>{currentChannel?.member_count || 0} участников</span>
-                <span>{currentChannel?.message_count || 0} сообщений</span>
-              </div>
-            </div>
-          </header>
-
-          {error ? (
-            <div className="chat-alert chat-alert-error" role="alert">
-              {error}
-            </div>
-          ) : null}
-
-          <div className="chat-message-stream" ref={listRef}>
-            {loading ? (
-              <div className="chat-alert">Загружаем историю сообщений…</div>
-            ) : filteredMessages.length === 0 ? (
-              <div className="chat-empty-state">
-                <strong>
-                  {search.trim()
-                    ? "По вашему запросу сообщений не найдено."
-                    : currentChannel?.available
-                      ? "Пока здесь тихо."
-                      : "Чат секции пока недоступен."}
-                </strong>
-                <p>
-                  {search.trim()
-                    ? "Попробуйте изменить запрос или очистить строку поиска."
-                    : currentChannel?.available
-                      ? "Начните обсуждение первым сообщением."
-                      : "Выберите секцию в профиле, чтобы открыть закрытый канал участников."}
-                </p>
-              </div>
-            ) : (
-              filteredMessages.map((message, index) => {
-                const previousMessage = filteredMessages[index - 1];
-                const currentDate = formatMessageDate(message.created_at);
-                const previousDate = previousMessage ? formatMessageDate(previousMessage.created_at) : null;
-                const showDateDivider = currentDate !== previousDate;
-                const isEditing = editingMessageId === message.id;
-
-                return (
-                  <Fragment key={message.id}>
-                    {showDateDivider ? <div className="chat-date-divider">{currentDate}</div> : null}
-                    <article className={`chat-bubble${message.is_own ? " own" : ""}`}>
-                      <div className="chat-avatar" aria-hidden="true">
-                        {getInitials(message.user_name)}
-                      </div>
-                      <div className="chat-bubble-body">
-                        <div className="chat-bubble-meta">
-                          <div>
-                            <strong>{message.user_name}</strong>
-                            {message.user_meta ? <span>{message.user_meta}</span> : null}
-                          </div>
-                          <div className="chat-bubble-actions">
-                            <time title={formatMessageDateTime(message.created_at)}>
-                              {formatMessageTime(message.created_at)}
-                            </time>
-                            {message.edited_at ? <span className="chat-edited-tag">изменено</span> : null}
-                            {message.can_edit ? (
-                              <button type="button" className="chat-action-link" onClick={() => startEditing(message)}>
-                                Изменить
-                              </button>
-                            ) : null}
-                            {message.can_delete ? (
-                              <button type="button" className="chat-action-link danger" onClick={() => handleDelete(message)}>
-                                Удалить
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-
-                        {isEditing ? (
-                          <div className="chat-editor">
-                            <textarea
-                              value={editingContent}
-                              onChange={(event) => setEditingContent(event.target.value)}
-                              rows={3}
-                              maxLength={2000}
-                            />
-                            <div className="chat-editor-actions">
-                              <span>{editingContent.trim().length}/2000</span>
-                              <Button variant="ghost" type="button" onClick={cancelEditing}>
-                                Отмена
-                              </Button>
-                              <Button type="button" onClick={() => handleSaveEdit(message.id)}>
-                                Сохранить
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            {message.content ? <p className="chat-bubble-text">{message.content}</p> : null}
-                            {message.attachments?.length ? (
-                              <div className="chat-attachment-list">
-                                {message.attachments.map((attachment) => (
-                                  <div key={attachment.id} className="chat-attachment-item">
-                                    <div className="chat-attachment-meta">
-                                      <strong>{attachment.file_name}</strong>
-                                      <div className="chat-note">{formatFileSize(attachment.file_size)}</div>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="chat-action-link"
-                                      onClick={() => handleDownloadAttachment(attachment)}
-                                    >
-                                      Скачать
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
-                          </>
-                        )}
-                      </div>
-                    </article>
-                  </Fragment>
-                );
-              })
-            )}
-          </div>
-
-          <form className="chat-composer" onSubmit={handleSend}>
-            <div className="chat-composer-head">
-              <strong>{currentChannel?.title || "Сообщение"}</strong>
-              <span>Enter отправляет, Shift+Enter переносит строку</span>
-            </div>
-            <label className="chat-file-input">
-              <span>Вложения</span>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept={CHAT_ATTACHMENT_ACCEPT}
-                onChange={handleFileChange}
-                disabled={!canCompose}
-              />
-            </label>
-            {selectedFiles.length ? (
-              <div className="chat-selected-files">
-                {selectedFiles.map((file, index) => (
-                  <div key={`${file.name}-${index}`} className="chat-attachment-item">
-                    <div className="chat-attachment-meta">
-                      <strong>{file.name}</strong>
-                      <div className="chat-note">{formatFileSize(file.size)}</div>
-                    </div>
-                    <button
-                      type="button"
-                      className="chat-action-link danger"
-                      onClick={() => removeSelectedFile(index)}
-                    >
-                      Убрать
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            <textarea
-              value={content}
-              onChange={handleComposerChange}
-              onKeyDown={handleComposerKeyDown}
-              placeholder={getChannelInputPlaceholder(currentChannel)}
-              rows={3}
-              maxLength={2000}
-              disabled={!canCompose}
-            />
-            <div className="chat-composer-foot">
-              <span>
-                {content.trim().length}/2000
-                {selectedFiles.length ? ` · файлов: ${selectedFiles.length}` : ""}
-              </span>
-              <Button
-                type="submit"
-                disabled={!canCompose || (!content.trim() && selectedFiles.length === 0)}
-              >
-                {sending ? "Отправка…" : "Отправить"}
-              </Button>
-            </div>
-          </form>
-        </div>
+        )}
       </div>
-    </section>
+    </>
   );
 }

@@ -81,6 +81,7 @@ export default function App() {
         <Route path="profile" element={<Profile />} />
         <Route path="schedule" element={<Schedule />} />
         <Route path="documents" element={<Documents />} />
+        <Route path="chat" element={<Chat />} />
       </Route>
       <Route path="/" element={<Layout />}>
         <Route path="badge/:token" element={<BadgeCheckIn />} />
@@ -92,14 +93,6 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Feedback />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="chat"
-          element={
-            <ProtectedRoute>
-              <Chat />
             </ProtectedRoute>
           }
         />
