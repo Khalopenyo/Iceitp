@@ -1,0 +1,84 @@
+/* ===== Публичная проверка сертификата (SCR-PUB-11) ===== */
+.verify-page {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 40px 20px 56px;
+}
+.verify-page h1 {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+.verify-sub {
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 0 0 24px;
+}
+.verify-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+.verify-form .ui-field {
+  flex: 1 1 240px;
+  margin-bottom: 0;
+}
+
+.verify-result {
+  margin-top: 24px;
+}
+.verify-ok {
+  border: 1px solid var(--gr-500);
+  background: var(--gr-50);
+  border-radius: var(--r-lg);
+  padding: 20px;
+}
+.verify-ok-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--gr-700);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 16px;
+}
+.verify-ok-check {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-pill);
+  background: var(--gr-500);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+.verify-rows {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+.verify-row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 10px;
+  font-size: 14px;
+}
+.verify-row dt {
+  color: var(--text-3);
+}
+.verify-row dd {
+  margin: 0;
+  color: var(--text);
+  font-weight: 600;
+}
+@media (max-width: 480px) {
+  .verify-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}

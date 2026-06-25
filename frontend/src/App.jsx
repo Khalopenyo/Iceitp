@@ -15,6 +15,7 @@ import Documents from "./pages/Documents.jsx";
 import { isAuthenticated, getUser } from "./lib/auth.js";
 import NoAccess from "./pages/NoAccess.jsx";
 import NotFound from "./pages/NotFound.jsx";
+import VerifyCertificate from "./pages/VerifyCertificate.jsx";
 import Map from "./pages/Map.jsx";
 import PersonalData from "./pages/PersonalData.jsx";
 import ConsentAuthors from "./pages/ConsentAuthors.jsx";
@@ -132,6 +133,7 @@ export default function App() {
         <Route path="forbidden" element={<NoAccess />} />
         <Route path="personal-data" element={<PersonalData />} />
         <Route path="consent-authors" element={<ConsentAuthors />} />
+        <Route path="verify" element={<VerifyCertificate />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
