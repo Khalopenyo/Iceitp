@@ -1,0 +1,84 @@
+/* ===== Isolated auth flow shell (SCR-PUB-07/08/09/10) ===== */
+.auth-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  font-family: var(--font);
+}
+.auth-shell-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.auth-shell-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--text);
+  font-weight: 700;
+}
+.auth-shell-brand img {
+  height: 30px;
+  width: auto;
+}
+.auth-shell-back {
+  text-decoration: none;
+  color: var(--text-2);
+  font-size: 14px;
+}
+.auth-shell-back:hover {
+  color: var(--brand);
+}
+.auth-shell-main {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 20px;
+}
+
+/* Auth card (used by the rebuilt auth screens) */
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+}
+.auth-card h1 {
+  font-size: 24px;
+  margin: 0 0 6px;
+  color: var(--text);
+  font-weight: 700;
+}
+.auth-sub {
+  color: var(--text-2);
+  font-size: 14px;
+  margin: 0 0 20px;
+}
+.auth-status {
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  font-size: 14px;
+  margin-bottom: 14px;
+}
+.auth-status-success {
+  background: var(--gr-50);
+  color: var(--gr-700);
+  border: 1px solid var(--gr-500);
+}
+.auth-status-error {
+  background: var(--rd-50);
+  color: var(--rd-700);
+  border: 1px solid var(--rd-500);
+}
+.auth-links {
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.auth-links a {
+  color: var(--brand);
+}

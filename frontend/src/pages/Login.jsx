@@ -2,6 +2,7 @@ import { useState } from "react";
 import { apiPost } from "../lib/api.js";
 import { setUser } from "../lib/auth.js";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Card, Field, Input, Button } from "../components/ui/index.jsx";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -33,26 +34,42 @@ export default function Login() {
   };
 
   return (
-    <section className="panel narrow auth-login-panel">
-      <h2>Вход в систему</h2>
-      {statusMessage ? <p className="form-status success">{statusMessage}</p> : null}
-      {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
-      <form className="form-grid" onSubmit={submitPassword}>
-        <label>
-          Email
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </label>
-        <label>
-          Пароль
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        </label>
-        <p className="muted">
+    <Card className="auth-card">
+      <h1>Вход в систему</h1>
+      <p className="auth-sub">Войдите, чтобы открыть личный кабинет конференции.</p>
+      {statusMessage ? <div className="auth-status auth-status-success">{statusMessage}</div> : null}
+      {errorMessage ? <div className="auth-status auth-status-error">{errorMessage}</div> : null}
+      <form onSubmit={submitPassword}>
+        <Field label="Email" htmlFor="login-email">
+          <Input
+            id="login-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            required
+          />
+        </Field>
+        <Field label="Пароль" htmlFor="login-password">
+          <Input
+            id="login-password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            required
+          />
+        </Field>
+        <p className="auth-links">
           <Link to="/forgot-password">Забыли пароль?</Link>
         </p>
-        <button className="btn btn-primary" type="submit" disabled={loading}>
-          {loading ? "Проверка..." : "Войти"}
-        </button>
+        <Button type="submit" block disabled={loading}>
+          {loading ? "Проверка…" : "Войти"}
+        </Button>
       </form>
-    </section>
+      <p className="auth-links">
+        Нет аккаунта? <Link to="/register">Регистрация</Link>
+      </p>
+    </Card>
   );
 }
