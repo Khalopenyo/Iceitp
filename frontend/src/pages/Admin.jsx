@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiDelete, apiGet, apiPost, apiPut } from "../lib/api.js";
+import { apiDelete, apiGet, apiPut } from "../lib/api.js";
 import { triggerBlobDownload } from "../lib/download.js";
+import { Card, Field, Input, Select, Button, Badge } from "../components/ui/index.jsx";
+import "./admin.css";
 
 const emptyPage = {
   items: [],
@@ -32,6 +34,12 @@ const roleLabels = {
   admin: "Администратор",
 };
 
+const roleBadge = {
+  participant: "neutral",
+  org: "brand",
+  admin: "warn",
+};
+
 const userTypeLabels = {
   offline: "Оффлайн",
   online: "Онлайн",
@@ -51,26 +59,26 @@ function PaginationControls({ page, pageSize, total, onPageChange }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="row-actions">
-      <span className="muted">
+    <div className="adm-pagination">
+      <span>
         Страница {page} из {totalPages} · всего {total}
       </span>
-      <button
+      <Button
+        variant="ghost"
         type="button"
-        className="btn btn-ghost"
         onClick={() => onPageChange(Math.max(1, page - 1))}
         disabled={page <= 1}
       >
         Назад
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
         type="button"
-        className="btn btn-ghost"
         onClick={() => onPageChange(Math.min(totalPages, page + 1))}
         disabled={page >= totalPages}
       >
-        Вперед
-      </button>
+        Вперёд
+      </Button>
     </div>
   );
 }
@@ -93,11 +101,14 @@ export default function Admin() {
   const [badgeActionKey, setBadgeActionKey] = useState("");
   const [previewBadge, setPreviewBadge] = useState(null);
 
-  useEffect(() => () => {
-    if (previewBadge?.url) {
-      window.URL.revokeObjectURL(previewBadge.url);
-    }
-  }, [previewBadge]);
+  useEffect(
+    () => () => {
+      if (previewBadge?.url) {
+        window.URL.revokeObjectURL(previewBadge.url);
+      }
+    },
+    [previewBadge]
+  );
 
   const setAdminStatus = (message) => {
     setAdminErrorMessage("");
@@ -168,6 +179,20 @@ export default function Admin() {
     loadFeedback(1);
   }, [feedbackQuery, feedbackRatingFilter]);
 
+  useEffect(() => {
+    if (!previewBadge) {
+      return undefined;
+    }
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        closeBadgePreview();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewBadge]);
+
   const updateRole = async (id, role) => {
     try {
       await apiPut(`/admin/users/${id}/role`, { role });
@@ -181,7 +206,9 @@ export default function Admin() {
   const setBadgeIssued = async (id, badgeIssued) => {
     try {
       await apiPut(`/admin/users/${id}/badge`, { badge_issued: badgeIssued });
-      setAdminStatus(badgeIssued ? "Бейдж подготовлен и доступен участнику." : "Доступ к бейджу отключен.");
+      setAdminStatus(
+        badgeIssued ? "Бейдж подготовлен и доступен участнику." : "Доступ к бейджу отключён."
+      );
       loadUsers(usersPage.page);
     } catch (err) {
       setAdminError(err.message || "Не удалось изменить статус бейджа.");
@@ -235,219 +262,278 @@ export default function Admin() {
   };
 
   const deleteUser = async (id) => {
-    if (!confirm("Удалить пользователя и связанные данные?")) return;
+    if (!window.confirm("Удалить пользователя и связанные данные?")) return;
     try {
       await apiDelete(`/admin/users/${id}`);
-      setAdminStatus("Пользователь удален.");
+      setAdminStatus("Пользователь удалён.");
       loadUsers(Math.max(1, usersPage.page));
     } catch (error) {
       handleAdminRequestError(error, "Не удалось удалить пользователя.");
     }
   };
 
-
   return (
-    <section className="panel">
-      <h2>Администрирование</h2>
-      {adminStatusMessage ? <p className="form-status success">{adminStatusMessage}</p> : null}
-      {adminErrorMessage ? <p className="form-status error">{adminErrorMessage}</p> : null}
+    <section className="adm">
+      <div className="adm-head">
+        <h1>Администрирование</h1>
+        <p>Управление участниками, бейджами и обратной связью конференции.</p>
+      </div>
+      {adminStatusMessage ? (
+        <div className="ui-status ui-status-success" role="status">
+          {adminStatusMessage}
+        </div>
+      ) : null}
+      {adminErrorMessage ? (
+        <div className="ui-status ui-status-error" role="alert">
+          {adminErrorMessage}
+        </div>
+      ) : null}
 
-      <div className="dashboard-layout">
-        <aside className="dashboard-tabs">
-          <button className={`tab-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>
+      <div className="adm-layout">
+        <aside className="adm-tabs" aria-label="Разделы админки">
+          <button
+            type="button"
+            className={`adm-tab ${tab === "users" ? "active" : ""}`}
+            aria-pressed={tab === "users"}
+            onClick={() => setTab("users")}
+          >
             Пользователи
           </button>
-          <button className={`tab-btn ${tab === "feedback" ? "active" : ""}`} onClick={() => setTab("feedback")}>
+          <button
+            type="button"
+            className={`adm-tab ${tab === "feedback" ? "active" : ""}`}
+            aria-pressed={tab === "feedback"}
+            onClick={() => setTab("feedback")}
+          >
             Отзывы
           </button>
-          <button className="tab-btn" onClick={() => navigate("/admin/questions")}>
+          <button type="button" className="adm-tab" onClick={() => navigate("/admin/questions")}>
             Вопросы
           </button>
         </aside>
 
-        <div className="dashboard-content">
+        <div className="adm-content">
           {tab === "users" ? (
-            <div className="card">
-              <h3>Пользователи</h3>
-              <div className="form-grid">
-                <label>
-                  Поиск
-                  <input
+            <Card>
+              <h2 className="adm-card-title">Пользователи</h2>
+              <p className="adm-card-sub">Роли, бейджи и доступ участников конференции.</p>
+              <div className="adm-form-grid">
+                <Field label="Поиск" htmlFor="adm-user-search">
+                  <Input
+                    id="adm-user-search"
                     value={userQuery}
                     onChange={(e) => setUserQuery(e.target.value)}
                     placeholder="ФИО, email, организация, телефон"
                   />
-                </label>
-                <label>
-                  Роль
-                  <select value={userRoleFilter} onChange={(e) => setUserRoleFilter(e.target.value)}>
+                </Field>
+                <Field label="Роль" htmlFor="adm-user-role">
+                  <Select
+                    id="adm-user-role"
+                    value={userRoleFilter}
+                    onChange={(e) => setUserRoleFilter(e.target.value)}
+                  >
                     <option value="">Все</option>
                     <option value="participant">{roleLabels.participant}</option>
                     <option value="org">{roleLabels.org}</option>
                     <option value="admin">{roleLabels.admin}</option>
-                  </select>
-                </label>
-                <label>
-                  Формат участия
-                  <select value={userTypeFilter} onChange={(e) => setUserTypeFilter(e.target.value)}>
+                  </Select>
+                </Field>
+                <Field label="Формат участия" htmlFor="adm-user-type">
+                  <Select
+                    id="adm-user-type"
+                    value={userTypeFilter}
+                    onChange={(e) => setUserTypeFilter(e.target.value)}
+                  >
                     <option value="">Все</option>
                     <option value="offline">{userTypeLabels.offline}</option>
                     <option value="online">{userTypeLabels.online}</option>
-                  </select>
-                </label>
-                <label>
-                  Бейдж
-                  <select value={userBadgeFilter} onChange={(e) => setUserBadgeFilter(e.target.value)}>
+                  </Select>
+                </Field>
+                <Field label="Бейдж" htmlFor="adm-user-badge">
+                  <Select
+                    id="adm-user-badge"
+                    value={userBadgeFilter}
+                    onChange={(e) => setUserBadgeFilter(e.target.value)}
+                  >
                     <option value="">Все</option>
                     <option value="true">готов</option>
                     <option value="false">не готов</option>
-                  </select>
-                </label>
+                  </Select>
+                </Field>
               </div>
 
-              <div className="table">
+              <div className="adm-table">
                 {usersPage.items.map((user) => (
-                  <div key={user.id} className="row">
-                    <div>
+                  <div key={user.id} className="adm-row">
+                    <div className="adm-row-main">
                       <strong>{user.profile?.full_name || user.email}</strong>
-                      <div className="muted">
+                      <div className="adm-row-note">
                         {user.email} · {userTypeLabels[user.user_type] || "Участник"}
                       </div>
-                      {user.profile?.organization ? <div className="muted">{user.profile.organization}</div> : null}
+                      {user.profile?.organization ? (
+                        <div className="adm-row-note">{user.profile.organization}</div>
+                      ) : null}
                     </div>
-                    <div className="row-actions">
-                      <span className="pill">{roleLabels[user.role] || user.role}</span>
+                    <div className="adm-row-actions">
+                      <Badge variant={roleBadge[user.role] || "neutral"}>
+                        {roleLabels[user.role] || user.role}
+                      </Badge>
                       {user.user_type === "offline" ? (
-                        <span className="pill">{user.badge_issued ? "Бейдж готов" : "Бейдж не подготовлен"}</span>
+                        <Badge variant={user.badge_issued ? "success" : "neutral"}>
+                          {user.badge_issued ? "Бейдж готов" : "Бейдж не подготовлен"}
+                        </Badge>
                       ) : (
-                        <span className="pill">Без бейджа</span>
+                        <Badge variant="neutral">Без бейджа</Badge>
                       )}
-                      <button className="btn btn-ghost" onClick={() => updateRole(user.id, "org")}>
+                      <Button variant="ghost" onClick={() => updateRole(user.id, "org")}>
                         Оргкомитет
-                      </button>
-                      <button className="btn btn-ghost" onClick={() => updateRole(user.id, "admin")}>
+                      </Button>
+                      <Button variant="ghost" onClick={() => updateRole(user.id, "admin")}>
                         Админ
-                      </button>
+                      </Button>
                       {user.user_type === "offline" ? (
                         <>
-                          <button
-                            className="btn btn-ghost"
+                          <Button
+                            variant="ghost"
                             onClick={() => setBadgeIssued(user.id, !user.badge_issued)}
                           >
                             {user.badge_issued ? "Снять бейдж" : "Подготовить бейдж"}
-                          </button>
-                          <button
-                            className="btn btn-ghost"
+                          </Button>
+                          <Button
+                            variant="ghost"
                             onClick={() => openUserBadge(user.id, user.profile?.full_name || user.email)}
-                            disabled={badgeActionKey === `preview:${user.id}` || badgeActionKey === `download:${user.id}`}
+                            disabled={
+                              badgeActionKey === `preview:${user.id}` ||
+                              badgeActionKey === `download:${user.id}`
+                            }
                           >
-                            {badgeActionKey === `preview:${user.id}` ? "Открытие..." : "Открыть бейдж"}
-                          </button>
-                          <button
-                            className="btn btn-primary"
-                            onClick={() => downloadUserBadge(user.id, user.profile?.full_name || user.email)}
-                            disabled={badgeActionKey === `preview:${user.id}` || badgeActionKey === `download:${user.id}`}
+                            {badgeActionKey === `preview:${user.id}` ? "Открытие…" : "Открыть бейдж"}
+                          </Button>
+                          <Button
+                            onClick={() =>
+                              downloadUserBadge(user.id, user.profile?.full_name || user.email)
+                            }
+                            disabled={
+                              badgeActionKey === `preview:${user.id}` ||
+                              badgeActionKey === `download:${user.id}`
+                            }
                           >
-                            {badgeActionKey === `download:${user.id}` ? "Скачивание..." : "Скачать бейдж"}
-                          </button>
+                            {badgeActionKey === `download:${user.id}` ? "Скачивание…" : "Скачать бейдж"}
+                          </Button>
                         </>
                       ) : null}
-                      <button className="btn btn-danger" onClick={() => deleteUser(user.id)}>
+                      <Button variant="danger" onClick={() => deleteUser(user.id)}>
                         Удалить
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ))}
               </div>
-              {usersPage.items.length === 0 ? <p className="muted">Пользователи не найдены.</p> : null}
+              {usersPage.items.length === 0 ? (
+                <p className="adm-empty">Пользователи не найдены.</p>
+              ) : null}
               <PaginationControls
                 page={usersPage.page}
                 pageSize={usersPage.page_size}
                 total={usersPage.total}
                 onPageChange={loadUsers}
               />
-            </div>
+            </Card>
           ) : null}
 
           {tab === "feedback" ? (
-            <div className="card">
-              <h3>Отзывы участников</h3>
-              <p className="muted">Все отправленные отзывы и предложения по улучшению конференции.</p>
-              <div className="form-grid">
-                <label>
-                  Поиск
-                  <input
+            <Card>
+              <h2 className="adm-card-title">Отзывы участников</h2>
+              <p className="adm-card-sub">
+                Все отправленные отзывы и предложения по улучшению конференции.
+              </p>
+              <div className="adm-form-grid">
+                <Field label="Поиск" htmlFor="adm-fb-search">
+                  <Input
+                    id="adm-fb-search"
                     value={feedbackQuery}
                     onChange={(e) => setFeedbackQuery(e.target.value)}
                     placeholder="ФИО, email, текст отзыва"
                   />
-                </label>
-                <label>
-                  Оценка
-                  <select value={feedbackRatingFilter} onChange={(e) => setFeedbackRatingFilter(e.target.value)}>
+                </Field>
+                <Field label="Оценка" htmlFor="adm-fb-rating">
+                  <Select
+                    id="adm-fb-rating"
+                    value={feedbackRatingFilter}
+                    onChange={(e) => setFeedbackRatingFilter(e.target.value)}
+                  >
                     <option value="">Все</option>
                     <option value="5">5</option>
                     <option value="4">4</option>
                     <option value="3">3</option>
                     <option value="2">2</option>
                     <option value="1">1</option>
-                  </select>
-                </label>
+                  </Select>
+                </Field>
               </div>
 
-              <div className="table compact">
+              <div className="adm-table">
                 {feedbackPage.items.map((entry) => (
-                  <div key={entry.id} className="row">
-                    <div>
-                      <strong>{entry.user_name || entry.user_email || `Участник #${entry.user_id}`}</strong>
-                      <div className="muted">{entry.user_email || "Email не указан"}</div>
-                      <div className="muted">
-                        {entry.created_at ? new Date(entry.created_at).toLocaleString() : "Дата не указана"}
+                  <div key={entry.id} className="adm-row">
+                    <div className="adm-row-main">
+                      <strong>
+                        {entry.user_name || entry.user_email || `Участник #${entry.user_id}`}
+                      </strong>
+                      <div className="adm-row-note">{entry.user_email || "Email не указан"}</div>
+                      <div className="adm-row-note">
+                        {entry.created_at
+                          ? new Date(entry.created_at).toLocaleString("ru-RU")
+                          : "Дата не указана"}
                       </div>
                       <p>{entry.comment}</p>
                     </div>
-                    <div className="row-actions">
-                      <span className="pill">Оценка: {entry.rating}/5</span>
+                    <div className="adm-row-actions">
+                      <Badge variant="brand">Оценка: {entry.rating}/5</Badge>
                     </div>
                   </div>
                 ))}
               </div>
-              {feedbackPage.items.length === 0 ? <p className="muted">Отзывов пока нет.</p> : null}
+              {feedbackPage.items.length === 0 ? (
+                <p className="adm-empty">Отзывов пока нет.</p>
+              ) : null}
               <PaginationControls
                 page={feedbackPage.page}
                 pageSize={feedbackPage.page_size}
                 total={feedbackPage.total}
                 onPageChange={loadFeedback}
               />
-            </div>
+            </Card>
           ) : null}
-
         </div>
       </div>
 
       {previewBadge ? (
-        <div className="modal-backdrop" onClick={closeBadgePreview}>
-          <div className="modal document-preview-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
+        <div className="adm-modal-backdrop" onClick={closeBadgePreview}>
+          <div
+            className="adm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={previewBadge.title}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="adm-modal-head">
               <div>
-                <h3>{previewBadge.title}</h3>
-                <p className="muted">Просмотр PDF бейджа с ФИО и QR-кодом без скачивания</p>
+                <h2>{previewBadge.title}</h2>
+                <p>Просмотр PDF бейджа с ФИО и QR-кодом без скачивания.</p>
               </div>
-              <div className="form-actions">
-                <button
-                  className="btn btn-ghost"
+              <div className="adm-modal-actions">
+                <Button
+                  variant="ghost"
                   onClick={() => downloadUserBadge(previewBadge.userId, previewBadge.fullName)}
                 >
                   Скачать
-                </button>
-                <button className="btn btn-primary" onClick={closeBadgePreview}>
-                  Закрыть
-                </button>
+                </Button>
+                <Button onClick={closeBadgePreview}>Закрыть</Button>
               </div>
             </div>
-            <div className="modal-body">
+            <div className="adm-modal-body">
               <iframe
-                className="document-preview-frame"
+                className="adm-preview-frame"
                 src={buildPreviewSrc(previewBadge.url)}
                 title={previewBadge.title}
               />

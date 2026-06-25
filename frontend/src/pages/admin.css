@@ -193,6 +193,66 @@
   margin: 0;
 }
 
+/* Модалка превью (бейдж PDF) */
+.adm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.adm-modal {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-3);
+  width: 100%;
+  max-width: 760px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.adm-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.adm-modal-head h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+.adm-modal-head p {
+  color: var(--text-2);
+  font-size: 13px;
+  margin: 0;
+}
+.adm-modal-actions {
+  display: flex;
+  gap: 10px;
+  flex: none;
+}
+.adm-modal-body {
+  flex: 1;
+  overflow: auto;
+  padding: 16px 20px;
+  background: var(--surface-2);
+}
+.adm-preview-frame {
+  width: 100%;
+  height: 60vh;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: #fff;
+}
+
 @media (max-width: 760px) {
   .adm-layout {
     grid-template-columns: 1fr;
