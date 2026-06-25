@@ -3,6 +3,10 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout.jsx";
 import AuthLayout from "./components/AuthLayout.jsx";
 import LKLayout from "./components/LKLayout.jsx";
+import OrgConsoleLayout from "./components/OrgConsoleLayout.jsx";
+import Overview from "./pages/console/Overview.jsx";
+import Branding from "./pages/console/Branding.jsx";
+import ConsoleSoon from "./pages/console/ConsoleSoon.jsx";
 import Welcome from "./pages/Welcome.jsx";
 import Register from "./pages/Register.jsx";
 import Login from "./pages/Login.jsx";
@@ -69,6 +73,24 @@ export default function App() {
         <Route path="register" element={<Register />} />
         <Route path="forgot-password" element={<ForgotPassword />} />
         <Route path="reset-password" element={<ResetPassword />} />
+      </Route>
+      <Route
+        path="console"
+        element={
+          <AdminRoute>
+            <OrgConsoleLayout />
+          </AdminRoute>
+        }
+      >
+        <Route index element={<Overview />} />
+        <Route path="branding" element={<Branding />} />
+        <Route path="program" element={<ConsoleSoon eyebrow="Конструктор программы" title="Секции, залы и расписание" />} />
+        <Route path="participants" element={<ConsoleSoon eyebrow="Участники" title="Заявки участников" />} />
+        <Route path="checkin" element={<ConsoleSoon eyebrow="Регистрация на месте" title="Сканирование бейджей" />} />
+        <Route path="moderation" element={<ConsoleSoon eyebrow="Модерация" title="Вопросы спикерам" />} />
+        <Route path="docs" element={<ConsoleSoon eyebrow="Документы" title="Генерация материалов" />} />
+        <Route path="team" element={<ConsoleSoon eyebrow="Команда" title="Кто работает над конференцией" />} />
+        <Route path="billing" element={<ConsoleSoon eyebrow="Подписка" title="Тариф и использование" />} />
       </Route>
       <Route
         element={
