@@ -11,6 +11,7 @@ import { fetchContentBlocks } from "../lib/content.js";
 import { fetchLanding } from "../lib/landing.js";
 import { Container, Button, Badge } from "../components/ui/index.jsx";
 import { buttonClassName } from "../components/ui/buttonClass.js";
+import StatusPlaceholder from "../components/StatusPlaceholder.jsx";
 import "./landing.css";
 
 function useCountdown(target) {
@@ -97,6 +98,16 @@ export default function Welcome() {
     setConsentError("");
     navigate(`/register?mode=${mode}`);
   };
+
+  // Заглушки состояний (SCR-PUB-15). Перехватываем лендинг до показа витрины.
+  if (conferenceLoaded && !conference) {
+    return <StatusPlaceholder variant="not-published" />;
+  }
+  if (conference?.status === "finished") {
+    return (
+      <StatusPlaceholder variant="finished" title={conferenceTitle} dateLabel={conferenceDateLabel} />
+    );
+  }
 
   return (
     <div className="pub-landing">

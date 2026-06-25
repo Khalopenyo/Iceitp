@@ -10,6 +10,7 @@ import {
   getConferenceTitle,
 } from "../lib/conference.js";
 import { fetchBranding } from "../lib/org.js";
+import StatusPlaceholder from "./StatusPlaceholder.jsx";
 
 // Нейтральное имя платформы для тенант-фолбэков (как в AuthLayout) — без привязки
 // к конкретному вузу/подразделению.
@@ -198,6 +199,30 @@ export default function Layout() {
     conferenceStatusLabel,
     conferenceSupportEmail,
   };
+
+  // Тенант приостановлен (SCR-PUB-15-suspended) — блокируем всю публичную зону
+  // нейтральной заглушкой с минимальным брендом.
+  if (branding?.status === "suspended") {
+    return (
+      <div className="app">
+        <header className="header">
+          <Link className="brand" to="/">
+            {branding?.logo_url ? (
+              <div className="logo" aria-label={`Логотип ${brandName}`}>
+                <img src={branding.logo_url} alt={`Логотип ${brandName}`} />
+              </div>
+            ) : null}
+            <div className="brand-copy">
+              <div className="title">{brandName}</div>
+            </div>
+          </Link>
+        </header>
+        <main className="main">
+          <StatusPlaceholder variant="suspended" supportEmail={conferenceSupportEmail} />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="app">

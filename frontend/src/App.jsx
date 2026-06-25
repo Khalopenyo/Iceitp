@@ -24,8 +24,7 @@ import Speakers from "./pages/Speakers.jsx";
 import Venue from "./pages/Venue.jsx";
 import Live from "./pages/Live.jsx";
 import Map from "./pages/Map.jsx";
-import PersonalData from "./pages/PersonalData.jsx";
-import ConsentAuthors from "./pages/ConsentAuthors.jsx";
+import Legal from "./pages/Legal.jsx";
 import BadgeCheckIn from "./pages/BadgeCheckIn.jsx";
 import QuestionPrompt from "./pages/QuestionPrompt.jsx";
 import AdminQuestions from "./pages/AdminQuestions.jsx";
@@ -138,8 +137,9 @@ export default function App() {
           }
         />
         <Route path="forbidden" element={<NoAccess />} />
-        <Route path="personal-data" element={<PersonalData />} />
-        <Route path="consent-authors" element={<ConsentAuthors />} />
+        <Route path="legal" element={<Legal />} />
+        <Route path="personal-data" element={<Legal initialDoc="privacy" />} />
+        <Route path="consent-authors" element={<Legal initialDoc="consent" />} />
         <Route path="verify" element={<VerifyCertificate />} />
         <Route path="program" element={<Program />} />
         <Route path="sections" element={<Sections />} />
