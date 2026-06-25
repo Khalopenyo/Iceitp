@@ -25,6 +25,7 @@ export default function Welcome() {
   const navigate = useNavigate();
   const outletContext = useOutletContext() || {};
   const conference = outletContext.conference || null;
+  const conferenceLoaded = Boolean(outletContext.conferenceLoaded);
   const isAuthorized = isAuthenticated();
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [consentError, setConsentError] = useState("");
@@ -55,13 +56,22 @@ export default function Welcome() {
       <section className="pub-hero">
         <Container className="pub-hero-inner">
           <p className="pub-kicker">Научно-практическая конференция</p>
-          <h1 className="pub-hero-title">{conferenceTitle}</h1>
-          <p className="pub-hero-meta">
-            {conferenceDateLabel ? <strong>{conferenceDateLabel}</strong> : null}
-            <span>Онлайн и офлайн участие</span>
-            {conferenceStatusLabel ? <Badge variant="brand">{conferenceStatusLabel}</Badge> : null}
-          </p>
-          {conferenceDescription ? <p className="pub-hero-desc">{conferenceDescription}</p> : null}
+          {conferenceLoaded ? (
+            <>
+              <h1 className="pub-hero-title">{conferenceTitle}</h1>
+              <p className="pub-hero-meta">
+                {conferenceDateLabel ? <strong>{conferenceDateLabel}</strong> : null}
+                <span>Онлайн и офлайн участие</span>
+                {conferenceStatusLabel ? <Badge variant="brand">{conferenceStatusLabel}</Badge> : null}
+              </p>
+              {conferenceDescription ? <p className="pub-hero-desc">{conferenceDescription}</p> : null}
+            </>
+          ) : (
+            <div className="pub-hero-skeleton" aria-hidden="true">
+              <span className="pub-skel pub-skel-title" />
+              <span className="pub-skel pub-skel-meta" />
+            </div>
+          )}
           <div className="pub-hero-actions">
             {isAuthorized ? (
               <Link className={buttonClassName("primary")} to="/dashboard">

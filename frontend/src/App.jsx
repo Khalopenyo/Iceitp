@@ -39,7 +39,7 @@ function AdminRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
   if (!user || !["admin", "org"].includes(user.role)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/forbidden" replace />;
   }
   return children;
 }

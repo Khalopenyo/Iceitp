@@ -21,6 +21,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const [user, setUserState] = useState(getUser());
   const [conference, setConference] = useState(null);
+  const [conferenceLoaded, setConferenceLoaded] = useState(false);
   const [branding, setBranding] = useState(null);
   const [contentBlocks, setContentBlocks] = useState([]);
   const [navOpen, setNavOpen] = useState(false);
@@ -76,11 +77,13 @@ export default function Layout() {
         .then((data) => {
           if (active) {
             setConference(data);
+            setConferenceLoaded(true);
           }
         })
         .catch(() => {
           if (active) {
             setConference(null);
+            setConferenceLoaded(true);
           }
         });
     };
@@ -193,6 +196,7 @@ export default function Layout() {
     "Платформа организации научной конференции";
   const outletContext = {
     conference,
+    conferenceLoaded,
     conferenceTitle,
     conferenceDateLabel,
     conferenceStatusLabel,

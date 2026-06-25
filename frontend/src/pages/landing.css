@@ -142,3 +142,44 @@
   font-size: 14px;
   margin-top: 8px;
 }
+
+/* Скелетон заголовка hero, пока грузится /conference (без мелькания фолбэка) */
+.pub-hero-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 6px 0 4px;
+}
+.pub-skel {
+  display: block;
+  border-radius: var(--r-sm);
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    var(--border) 37%,
+    var(--surface-2) 63%
+  );
+  background-size: 400% 100%;
+  animation: pub-skel-shimmer 1.4s ease infinite;
+}
+.pub-skel-title {
+  height: 40px;
+  width: min(560px, 90%);
+}
+.pub-skel-meta {
+  height: 20px;
+  width: min(320px, 70%);
+}
+@keyframes pub-skel-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pub-skel {
+    animation: none;
+  }
+}
