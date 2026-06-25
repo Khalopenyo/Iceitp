@@ -37,8 +37,16 @@ export default function Login() {
     <Card className="auth-card">
       <h1>Вход в систему</h1>
       <p className="auth-sub">Войдите, чтобы открыть личный кабинет конференции.</p>
-      {statusMessage ? <div className="auth-status auth-status-success">{statusMessage}</div> : null}
-      {errorMessage ? <div className="auth-status auth-status-error">{errorMessage}</div> : null}
+      {statusMessage ? (
+        <div className="auth-status auth-status-success" role="status">
+          {statusMessage}
+        </div>
+      ) : null}
+      {errorMessage ? (
+        <div className="auth-status auth-status-error" role="alert">
+          {errorMessage}
+        </div>
+      ) : null}
       <form onSubmit={submitPassword}>
         <Field label="Email" htmlFor="login-email">
           <Input

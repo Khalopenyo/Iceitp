@@ -45,7 +45,9 @@ export default function ResetPassword() {
     return (
       <Card className="auth-card">
         <h1>Неверная ссылка</h1>
-        <div className="auth-status auth-status-error">Токен восстановления не найден. Запросите новую ссылку.</div>
+        <div className="auth-status auth-status-error" role="alert">
+          Токен восстановления не найден. Запросите новую ссылку.
+        </div>
         <div className="auth-actions">
           <Link className={buttonClassName("primary")} to="/forgot-password">
             Запросить новую ссылку
@@ -83,7 +85,11 @@ export default function ResetPassword() {
             required
           />
         </Field>
-        {error ? <div className="auth-status auth-status-error">{error}</div> : null}
+        {error ? (
+          <div className="auth-status auth-status-error" role="alert">
+            {error}
+          </div>
+        ) : null}
         <Button type="submit" block disabled={loading}>
           {loading ? "Сохранение…" : "Сохранить пароль"}
         </Button>

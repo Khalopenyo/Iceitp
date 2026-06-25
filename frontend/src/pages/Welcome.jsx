@@ -147,7 +147,11 @@ export default function Welcome() {
                 <Link to="/personal-data">официальный документ</Link>.
               </span>
             </label>
-            {consentError ? <p className="pub-form-error">{consentError}</p> : null}
+            {consentError ? (
+              <p className="pub-form-error" role="alert">
+                {consentError}
+              </p>
+            ) : null}
           </Container>
         </section>
       ) : null}

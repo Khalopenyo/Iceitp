@@ -312,9 +312,15 @@ export default function Register() {
       </div>
 
       <form onSubmit={handleSubmit}>
-        {errorMessage ? <div className="auth-status auth-status-error">{errorMessage}</div> : null}
+        {errorMessage ? (
+          <div className="auth-status auth-status-error" role="alert">
+            {errorMessage}
+          </div>
+        ) : null}
         {statusMessage ? (
-          <div className="auth-status auth-status-success">{statusMessage}</div>
+          <div className="auth-status auth-status-success" role="status">
+            {statusMessage}
+          </div>
         ) : null}
 
         {step === 1 && (

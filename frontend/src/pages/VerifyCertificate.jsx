@@ -83,10 +83,14 @@ export default function VerifyCertificate() {
         </Button>
       </form>
 
-      {error ? <div className="auth-status auth-status-error verify-result">{error}</div> : null}
+      {error ? (
+        <div className="auth-status auth-status-error verify-result" role="alert">
+          {error}
+        </div>
+      ) : null}
 
       {result ? (
-        <div className="verify-result">
+        <div className="verify-result" role="status" aria-live="polite">
           <div className="verify-ok">
             <div className="verify-ok-head">
               <span className="verify-ok-check" aria-hidden="true">

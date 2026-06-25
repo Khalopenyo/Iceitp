@@ -34,7 +34,9 @@ export default function ForgotPassword() {
 
       {submitted ? (
         <>
-          <div className="auth-status auth-status-success">{genericSuccessMessage}</div>
+          <div className="auth-status auth-status-success" role="status">
+            {genericSuccessMessage}
+          </div>
           <div className="auth-actions">
             <Link className={buttonClassName("primary")} to="/login">
               Вернуться ко входу
@@ -63,7 +65,11 @@ export default function ForgotPassword() {
               required
             />
           </Field>
-          {error ? <div className="auth-status auth-status-error">{error}</div> : null}
+          {error ? (
+            <div className="auth-status auth-status-error" role="alert">
+              {error}
+            </div>
+          ) : null}
           <Button type="submit" block disabled={loading}>
             {loading ? "Отправка…" : "Получить ссылку"}
           </Button>
