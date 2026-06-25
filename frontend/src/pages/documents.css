@@ -1,0 +1,133 @@
+/* ===== Документы конференции (LK) на дизайн-токенах ===== */
+.docs {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 28px 20px 56px;
+}
+.docs-head h1 {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+.docs-head p {
+  color: var(--text-2);
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
+.docs-status {
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+.docs-status-info {
+  background: var(--brand-weak);
+  color: var(--brand-700);
+  border: 1px solid var(--border);
+}
+.docs-status-success {
+  background: var(--gr-50);
+  color: var(--gr-700);
+  border: 1px solid var(--gr-500);
+}
+.docs-status-error {
+  background: var(--rd-50);
+  color: var(--rd-700);
+  border: 1px solid var(--rd-500);
+}
+
+.docs-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 18px 0 24px;
+}
+.docs-summary-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 18px;
+  box-shadow: var(--sh-1);
+}
+.docs-summary-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-3);
+  font-weight: 600;
+}
+.docs-summary-card strong {
+  display: block;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 6px 0 2px;
+}
+.docs-summary-card p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+
+.docs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.doc-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 18px;
+  box-shadow: var(--sh-1);
+}
+.doc-card-success {
+  border-left-color: var(--gr-500);
+}
+.doc-card-warning {
+  border-left-color: var(--am-500);
+}
+.doc-card-neutral {
+  border-left-color: var(--border);
+}
+.doc-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.doc-card-head h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+.doc-card-head p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.doc-card-message {
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.5;
+  margin: 4px 0 14px;
+}
+.doc-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: auto;
+}
+.doc-card-note {
+  color: var(--text-3);
+  font-size: 12.5px;
+  margin: 10px 0 0;
+}

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { apiGet, buildApiUrl } from "../lib/api.js";
 import { openUrlInNewTab, triggerBlobDownload } from "../lib/download.js";
+import { Button, Badge } from "../components/ui/index.jsx";
+import "./documents.css";
 
 const materialCards = [
   {
@@ -49,12 +51,12 @@ async function downloadPdf(path, filename) {
 
 const documentStatusMeta = (material) => {
   if (material?.available) {
-    return { label: "Доступно", tone: "success" };
+    return { label: "Доступно", tone: "success", badge: "success" };
   }
   if (material?.status === "not_applicable") {
-    return { label: "Не требуется", tone: "neutral" };
+    return { label: "Не требуется", tone: "neutral", badge: "neutral" };
   }
-  return { label: "Ожидает открытия", tone: "warning" };
+  return { label: "Ожидает открытия", tone: "warning", badge: "warn" };
 };
 
 export default function Documents() {
@@ -66,7 +68,10 @@ export default function Documents() {
   const [errorMessage, setErrorMessage] = useState("");
   const availableCount = materialCards.filter((card) => materials?.[card.key]?.available).length;
   const waitingCount = materialCards.filter(
-    (card) => materials?.[card.key] && !materials?.[card.key]?.available && materials?.[card.key]?.status !== "not_applicable"
+    (card) =>
+      materials?.[card.key] &&
+      !materials?.[card.key]?.available &&
+      materials?.[card.key]?.status !== "not_applicable"
   ).length;
 
   useEffect(() => {
@@ -134,39 +139,58 @@ export default function Documents() {
   };
 
   return (
-    <section className="panel">
-      <h2>Документы конференции</h2>
-      <p className="muted">
-        Здесь отображаются только актуальные материалы по вашему статусу участия и состоянию конференции.
-      </p>
+    <section className="docs">
+      <div className="docs-head">
+        <h1>Документы конференции</h1>
+        <p>
+          Здесь отображаются только актуальные материалы по вашему статусу участия и состоянию
+          конференции.
+        </p>
+      </div>
 
-      {loading ? <p className="form-status info">Загрузка статусов документов...</p> : null}
-      {pageError ? <p className="form-status error">{pageError}</p> : null}
-      {statusMessage ? <p className="form-status success">{statusMessage}</p> : null}
-      {errorMessage ? <p className="form-status error">{errorMessage}</p> : null}
+      {loading ? (
+        <div className="docs-status docs-status-info" role="status">
+          Загрузка статусов документов…
+        </div>
+      ) : null}
+      {pageError ? (
+        <div className="docs-status docs-status-error" role="alert">
+          {pageError}
+        </div>
+      ) : null}
+      {statusMessage ? (
+        <div className="docs-status docs-status-success" role="status">
+          {statusMessage}
+        </div>
+      ) : null}
+      {errorMessage ? (
+        <div className="docs-status docs-status-error" role="alert">
+          {errorMessage}
+        </div>
+      ) : null}
 
       {!loading && materials ? (
-        <div className="documents-summary">
-          <article className="documents-summary-card">
-            <span className="dashboard-summary-label">Уже доступно</span>
+        <div className="docs-summary">
+          <article className="docs-summary-card">
+            <span className="docs-summary-label">Уже доступно</span>
             <strong>{availableCount}</strong>
-            <p className="muted">Документы можно открыть или скачать сразу.</p>
+            <p>Документы можно открыть или скачать сразу.</p>
           </article>
-          <article className="documents-summary-card">
-            <span className="dashboard-summary-label">Ожидают публикации</span>
+          <article className="docs-summary-card">
+            <span className="docs-summary-label">Ожидают публикации</span>
             <strong>{waitingCount}</strong>
-            <p className="muted">Откроются автоматически после выполнения условий конференции.</p>
+            <p>Откроются автоматически после выполнения условий конференции.</p>
           </article>
         </div>
       ) : null}
 
-      <div className="doc-grid">
+      <div className="docs-grid">
         {materialCards.map((card) => {
           const material = materials?.[card.key];
           const isAvailable = Boolean(material?.available);
           const downloadBusy = busyKey === `${card.key}:download`;
           const previewBusy = busyKey === `${card.key}:preview`;
-          const buttonLabel = downloadBusy ? "Подготовка..." : card.actionLabel;
+          const buttonLabel = downloadBusy ? "Подготовка…" : card.actionLabel;
           const statusMeta = documentStatusMeta(material);
           const canPreviewPdf = card.mode === "download";
 
@@ -177,34 +201,36 @@ export default function Documents() {
                   <h3>{card.title}</h3>
                   <p>{card.description}</p>
                 </div>
-                <span className={`status-chip status-chip-${statusMeta.tone}`}>{statusMeta.label}</span>
+                <Badge variant={statusMeta.badge}>{statusMeta.label}</Badge>
               </div>
               <p className="doc-card-message">
                 {material?.message || "Статус документа будет доступен после загрузки страницы."}
               </p>
-              <div className="form-actions">
+              <div className="doc-card-actions">
                 {canPreviewPdf ? (
-                  <button
-                    className="btn btn-ghost"
+                  <Button
+                    variant="ghost"
                     onClick={() => handleAction(card, "preview")}
                     disabled={loading || !isAvailable || previewBusy || downloadBusy}
                   >
-                    {previewBusy ? "Открытие..." : "Открыть"}
-                  </button>
+                    {previewBusy ? "Открытие…" : "Открыть"}
+                  </Button>
                 ) : null}
-                <button
-                  className={isAvailable ? "btn btn-primary" : "btn btn-ghost"}
+                <Button
+                  variant={isAvailable ? "primary" : "ghost"}
                   onClick={() => handleAction(card, "download")}
                   disabled={loading || !isAvailable || downloadBusy || previewBusy}
                 >
                   {buttonLabel}
-                </button>
+                </Button>
               </div>
               {material?.status === "not_applicable" ? (
-                <p className="muted">Материал не применяется к вашему формату участия.</p>
+                <p className="doc-card-note">Материал не применяется к вашему формату участия.</p>
               ) : null}
               {material && !material.available && material.status !== "not_applicable" ? (
-                <p className="muted">Документ станет доступен автоматически, когда будут выполнены условия публикации.</p>
+                <p className="doc-card-note">
+                  Документ станет доступен автоматически, когда будут выполнены условия публикации.
+                </p>
               ) : null}
             </div>
           );
