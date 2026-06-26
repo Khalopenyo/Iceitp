@@ -20,6 +20,12 @@ import ConsoleCheckin from "./pages/console/ConsoleCheckin.jsx";
 import ConsoleTeam from "./pages/console/ConsoleTeam.jsx";
 import EventShell from "./components/EventShell.jsx";
 import EventLanding from "./pages/event/EventLanding.jsx";
+import EventProgram from "./pages/event/EventProgram.jsx";
+import EventSections from "./pages/event/EventSections.jsx";
+import EventSectionDetail from "./pages/event/EventSectionDetail.jsx";
+import EventSpeakers from "./pages/event/EventSpeakers.jsx";
+import EventVenue from "./pages/event/EventVenue.jsx";
+import EventLive from "./pages/event/EventLive.jsx";
 import Register from "./pages/Register.jsx";
 import Login from "./pages/Login.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
@@ -35,13 +41,7 @@ import { isAuthenticated, getUser } from "./lib/auth.js";
 import NoAccess from "./pages/NoAccess.jsx";
 import NotFound from "./pages/NotFound.jsx";
 import VerifyCertificate from "./pages/VerifyCertificate.jsx";
-import Program from "./pages/Program.jsx";
-import Sections from "./pages/Sections.jsx";
 import About from "./pages/About.jsx";
-import SectionDetail from "./pages/SectionDetail.jsx";
-import Speakers from "./pages/Speakers.jsx";
-import Venue from "./pages/Venue.jsx";
-import Live from "./pages/Live.jsx";
 import Map from "./pages/Map.jsx";
 import Legal from "./pages/Legal.jsx";
 import BadgeCheckIn from "./pages/BadgeCheckIn.jsx";
@@ -181,11 +181,18 @@ export default function App() {
         <Route path="documents" element={<Documents />} />
         <Route path="chat" element={<Chat />} />
       </Route>
-      {/* Главная вуза — новый единый shell-с-сайдбаром (редизайн), бренд per-tenant. */}
+      {/* Публичный сайт вуза — единый shell-с-сайдбаром (редизайн), бренд per-tenant.
+          Все витринные экраны под одним каркасом, чтобы переходы не «прыгали» на старый Layout. */}
       <Route path="/" element={<EventShell />}>
         <Route index element={<EventLanding />} />
+        <Route path="program" element={<EventProgram />} />
+        <Route path="sections" element={<EventSections />} />
+        <Route path="sections/:id" element={<EventSectionDetail />} />
+        <Route path="speakers" element={<EventSpeakers />} />
+        <Route path="venue" element={<EventVenue />} />
+        <Route path="live" element={<EventLive />} />
       </Route>
-      {/* Остальные публичные/служебные страницы — пока на прежнем Layout (пилот). */}
+      {/* Служебные/второстепенные страницы — пока на прежнем Layout. */}
       <Route element={<Layout />}>
         <Route path="badge/:token" element={<BadgeCheckIn />} />
         <Route path="questions/:token" element={<QuestionPrompt />} />
@@ -235,13 +242,7 @@ export default function App() {
         <Route path="personal-data" element={<Legal initialDoc="privacy" />} />
         <Route path="consent-authors" element={<Legal initialDoc="consent" />} />
         <Route path="verify" element={<VerifyCertificate />} />
-        <Route path="program" element={<Program />} />
-        <Route path="sections" element={<Sections />} />
-        <Route path="sections/:id" element={<SectionDetail />} />
         <Route path="about" element={<About />} />
-        <Route path="speakers" element={<Speakers />} />
-        <Route path="venue" element={<Venue />} />
-        <Route path="live" element={<Live />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
