@@ -16,6 +16,15 @@ import StatusPlaceholder from "./StatusPlaceholder.jsx";
 // к конкретному вузу/подразделению.
 const PLATFORM_NAME = "КонференцХаб";
 
+// Утилитарные публичные маршруты, доступные независимо от статуса публикации
+// конференции (QR-чек-ин, вопросы со сцены, проверка сертификата, правовые
+// документы, форбидден). Контентные маршруты (лендинг/программа/секции/спикеры/
+// площадка/трансляции) гейтятся по статусу — см. ниже.
+const PUB_UTILITY_PREFIXES = [
+  "/badge", "/questions", "/verify", "/legal", "/personal-data",
+  "/consent-authors", "/forbidden", "/admin", "/feedback", "/map",
+];
+
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -23,14 +32,19 @@ export default function Layout() {
   const [conference, setConference] = useState(null);
   const [conferenceLoaded, setConferenceLoaded] = useState(false);
   const [branding, setBranding] = useState(null);
+  const [brandingLoaded, setBrandingLoaded] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
-    // Per-tenant header branding (logo/name). Async setState (not synchronous in
-    // the effect body), so it does not trip the set-state-in-effect rule.
-    fetchBranding().then((value) => {
-      if (value) setBranding(value);
-    });
+    // Per-tenant header branding (logo/name + tenant status). Async setState (not
+    // synchronous in the effect body), so it does not trip the set-state-in-effect
+    // rule. brandingLoaded marks completion on BOTH success and failure so the
+    // status gate can wait for it (and a failed /org never leaves it pending).
+    fetchBranding()
+      .then((value) => {
+        if (value) setBranding(value);
+      })
+      .finally(() => setBrandingLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -200,32 +214,82 @@ export default function Layout() {
     conferenceSupportEmail,
   };
 
-  // Тенант приостановлен (SCR-PUB-15-suspended) — блокируем всю публичную зону
-  // нейтральной заглушкой с минимальным брендом.
-  if (branding?.status === "suspended") {
-    return (
-      <div className="app">
-        <header className="header">
-          <Link className="brand" to="/">
-            {branding?.logo_url ? (
-              <div className="logo" aria-label={`Логотип ${brandName}`}>
-                <img src={branding.logo_url} alt={`Логотип ${brandName}`} />
-              </div>
-            ) : null}
-            <div className="brand-copy">
-              <div className="title">{brandName}</div>
+  // ── Гейт публичной зоны по статусу (SCR-PUB-15) ──
+  // Публикация в консоли (draft→live) реально управляет видимостью сайта:
+  //   suspended (тенант) → ВСЯ зона заблокирована (включая утилитарные маршруты);
+  //   нет конференции / черновик → «скоро откроется» (черновик команда видит как превью);
+  //   finished → страница с материалами.
+  // Утилитарные маршруты (PUB_UTILITY_PREFIXES) доступны при любом СТАТУСЕ ПУБЛИКАЦИИ,
+  // но не у приостановленного тенанта. Гейтим только после загрузки И конференции,
+  // И брендинга — иначе мелькнёт реальный контент до того, как применится статус.
+  const isUtilityRoute = PUB_UTILITY_PREFIXES.some(
+    (p) => location.pathname === p || location.pathname.startsWith(`${p}/`)
+  );
+  const isTenantStaff = Boolean(user && ["org", "admin", "staff"].includes(user.role));
+  const draftHiddenFromPublic = conference?.status === "draft" && !isTenantStaff;
+  const pubLoaded = conferenceLoaded && brandingLoaded;
+
+  // Оболочка с минимальным брендом для заглушек/загрузки публичной зоны.
+  const pubShell = (children) => (
+    <div className="app">
+      <header className="header">
+        <Link className="brand" to="/">
+          {branding?.logo_url ? (
+            <div className="logo" aria-label={`Логотип ${brandName}`}>
+              <img src={branding.logo_url} alt={`Логотип ${brandName}`} />
             </div>
-          </Link>
-        </header>
-        <main className="main">
-          <StatusPlaceholder variant="suspended" supportEmail={conferenceSupportEmail} />
-        </main>
-      </div>
-    );
+          ) : null}
+          <div className="brand-copy">
+            <div className="title">{brandName}</div>
+          </div>
+        </Link>
+      </header>
+      <main className="main">{children}</main>
+    </div>
+  );
+
+  // 1. Приостановленный тенант — вся зона тёмная (раньше allowlist'а утилитарных).
+  if (pubLoaded && branding?.status === "suspended") {
+    return pubShell(<StatusPlaceholder variant="suspended" supportEmail={conferenceSupportEmail} />);
+  }
+  // 2. Контентные маршруты: пока грузимся — нейтральный экран (без мигания контентом),
+  //    затем заглушка по статусу публикации; live / превью-черновик → обычный сайт.
+  if (!isUtilityRoute) {
+    if (!pubLoaded) {
+      return pubShell(<div role="status" aria-busy="true" aria-label="Загрузка" style={{ minHeight: "40vh" }} />);
+    }
+    if (!conference || draftHiddenFromPublic) {
+      return pubShell(
+        <StatusPlaceholder
+          variant="not-published"
+          title={conference ? conferenceTitle : undefined}
+          dateLabel={conference ? conferenceDateLabel : undefined}
+        />
+      );
+    }
+    if (conference.status === "finished") {
+      return pubShell(
+        <StatusPlaceholder variant="finished" title={conferenceTitle} dateLabel={conferenceDateLabel} supportEmail={conferenceSupportEmail} />
+      );
+    }
   }
 
   return (
     <div className="app">
+      {conference?.status === "draft" && isTenantStaff ? (
+        <div
+          role="status"
+          style={{
+            background: "#fef3c7", color: "#92400e", textAlign: "center",
+            padding: "8px 16px", fontSize: 13.5, fontWeight: 500,
+          }}
+        >
+          Черновик — сайт виден только команде. Опубликуйте его в консоли, чтобы открыть регистрацию.{" "}
+          <Link to="/console" style={{ color: "#7c2d12", fontWeight: 600, textDecoration: "underline" }}>
+            Перейти в консоль →
+          </Link>
+        </div>
+      ) : null}
       <header className="header">
         <Link
           className="brand"

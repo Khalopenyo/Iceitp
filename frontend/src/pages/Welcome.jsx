@@ -11,7 +11,6 @@ import { fetchContentBlocks } from "../lib/content.js";
 import { fetchLanding } from "../lib/landing.js";
 import { Container, Button, Badge } from "../components/ui/index.jsx";
 import { buttonClassName } from "../components/ui/buttonClass.js";
-import StatusPlaceholder from "../components/StatusPlaceholder.jsx";
 import "./landing.css";
 
 function useCountdown(target) {
@@ -88,7 +87,9 @@ export default function Welcome() {
   const stats = landing?.stats || null;
   const sections = landing?.sections || [];
   const programPreview = landing?.program_preview || [];
-  const registrationOpen = conference?.status === "draft" || conference?.status === "live";
+  // Регистрация открыта только на опубликованном сайте. Черновик команда видит как
+  // превью (Layout пропускает их), но регистрация ещё закрыта.
+  const registrationOpen = conference?.status === "live";
 
   const startRegistration = (mode) => {
     if (!consentAccepted) {
@@ -99,16 +100,9 @@ export default function Welcome() {
     navigate(`/register?mode=${mode}`);
   };
 
-  // Заглушки состояний (SCR-PUB-15). Перехватываем лендинг до показа витрины.
-  if (conferenceLoaded && !conference) {
-    return <StatusPlaceholder variant="not-published" />;
-  }
-  if (conference?.status === "finished") {
-    return (
-      <StatusPlaceholder variant="finished" title={conferenceTitle} dateLabel={conferenceDateLabel} />
-    );
-  }
-
+  // Состояния публикации (SCR-PUB-15: нет конференции / черновик / finished /
+  // suspended) централизованно перехватывает Layout по статусу — здесь лендинг
+  // рендерится только когда сайт опубликован (или это превью черновика командой).
   return (
     <div className="pub-landing">
       <section className="pub-hero">
@@ -137,7 +131,9 @@ export default function Welcome() {
               </Link>
             ) : (
               <>
-                <Button onClick={() => startRegistration("offline")}>Зарегистрироваться</Button>
+                <Button onClick={() => startRegistration("offline")} disabled={!registrationOpen}>
+                  {registrationOpen ? "Зарегистрироваться" : "Регистрация закрыта"}
+                </Button>
                 <Link className={buttonClassName("ghost")} to="/program">
                   Программа
                 </Link>
@@ -334,8 +330,8 @@ export default function Welcome() {
               перейдите к регистрационной форме.
             </p>
             <div className="pub-hero-actions">
-              <Button onClick={() => startRegistration("offline")}>Офлайн-участник</Button>
-              <Button variant="ghost" onClick={() => startRegistration("online")}>
+              <Button onClick={() => startRegistration("offline")} disabled={!registrationOpen}>Офлайн-участник</Button>
+              <Button variant="ghost" onClick={() => startRegistration("online")} disabled={!registrationOpen}>
                 Онлайн-участник
               </Button>
             </div>
