@@ -212,6 +212,9 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	admin.PUT("/speakers/:id", personHandler.Update)
 	admin.DELETE("/speakers/:id", personHandler.Delete)
 	admin.POST("/checkin/verify", checkInHandler.VerifyBadge)
+	// Регистрация на месте без камеры: отметка участника из ростера + лента/прогресс.
+	admin.POST("/checkin/manual", checkInHandler.ManualCheckIn)
+	admin.GET("/checkin/recent", checkInHandler.RecentCheckIns)
 
 	return r
 }

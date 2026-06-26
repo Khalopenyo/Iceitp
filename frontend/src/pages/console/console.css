@@ -942,3 +942,175 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== Регистрация на месте (check-in без камеры) ===== */
+.con-checkin-grid {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 20px;
+}
+.con-input-static {
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface);
+  font-family: var(--con-font);
+  outline: none;
+  width: 100%;
+}
+.con-input-static:focus {
+  border-color: var(--accent);
+}
+.con-checkin-search {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.con-checkin-search .con-input-static {
+  flex: 1;
+}
+.con-checkin-results {
+  display: flex;
+  flex-direction: column;
+  min-height: 120px;
+}
+.con-checkin-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.con-checkin-av {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent-wash);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  flex: none;
+}
+.con-checkin-tx {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.con-checkin-tx b {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.con-checkin-tx span {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.con-checkin-row .con-btn {
+  flex: none;
+  height: 36px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+.con-checkin-progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.con-checkin-count {
+  font-family: var(--con-head);
+  font-weight: 600;
+  font-size: 24px;
+  color: var(--ink);
+}
+.con-checkin-count span {
+  font-size: 15px;
+  color: var(--faint);
+}
+.con-checkin-note {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.con-checkin-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.con-checkin-bar span {
+  display: block;
+  height: 100%;
+  background: var(--ok);
+}
+.con-checkin-token {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.con-checkin-token .con-input-static {
+  flex: 1;
+  font-family: var(--con-mono);
+  font-size: 13px;
+}
+.con-checkin-recent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+}
+.con-checkin-tick {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--ok-wash);
+  color: var(--ok);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.con-checkin-tick svg {
+  width: 15px;
+  height: 15px;
+}
+.con-checkin-time {
+  font-family: var(--con-mono);
+  font-size: 11.5px;
+  color: var(--faint);
+  flex: none;
+}
+@media (max-width: 760px) {
+  .con-checkin-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Визуально скрытая live-область для скринридеров */
+.con-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

@@ -6,7 +6,6 @@ import LKLayout from "./components/LKLayout.jsx";
 import OrgConsoleLayout from "./components/OrgConsoleLayout.jsx";
 import Overview from "./pages/console/Overview.jsx";
 import Branding from "./pages/console/Branding.jsx";
-import ConsoleSoon from "./pages/console/ConsoleSoon.jsx";
 import Onboarding from "./pages/console/Onboarding.jsx";
 import Signup from "./pages/console/Signup.jsx";
 import ConsoleProgram from "./pages/console/ConsoleProgram.jsx";
@@ -14,6 +13,7 @@ import ConsoleParticipants from "./pages/console/ConsoleParticipants.jsx";
 import ConsoleModeration from "./pages/console/ConsoleModeration.jsx";
 import ConsoleDocs from "./pages/console/ConsoleDocs.jsx";
 import ConsoleBilling from "./pages/console/ConsoleBilling.jsx";
+import ConsoleCheckin from "./pages/console/ConsoleCheckin.jsx";
 import ConsoleTeam from "./pages/console/ConsoleTeam.jsx";
 import Welcome from "./pages/Welcome.jsx";
 import Register from "./pages/Register.jsx";
@@ -130,7 +130,7 @@ export default function App() {
         <Route path="branding" element={<OwnerRoute><Branding /></OwnerRoute>} />
         <Route path="program" element={<ConsoleProgram />} />
         <Route path="participants" element={<ConsoleParticipants />} />
-        <Route path="checkin" element={<ConsoleSoon eyebrow="Регистрация на месте" title="Сканирование бейджей" />} />
+        <Route path="checkin" element={<ConsoleCheckin />} />
         <Route path="moderation" element={<ConsoleModeration />} />
         <Route path="docs" element={<ConsoleDocs />} />
         <Route path="team" element={<ConsoleTeam />} />
