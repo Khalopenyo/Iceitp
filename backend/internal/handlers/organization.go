@@ -23,6 +23,7 @@ type orgBranding struct {
 	LogoURL      string `json:"logo_url"`
 	PrimaryColor string `json:"primary_color"`
 	Status       string `json:"status"`
+	Plan         string `json:"plan"`
 }
 
 var hexColorRe = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
@@ -34,7 +35,39 @@ func brandingOf(org models.Organization) orgBranding {
 		LogoURL:      org.LogoURL,
 		PrimaryColor: org.PrimaryColor,
 		Status:       string(org.Status),
+		Plan:         string(org.Plan),
 	}
+}
+
+// SelectPlan — мок-оформление подписки: организатор выбирает платный тариф
+// (без реального платёжного провайдера). Тариф снимает гейт на публикацию сайта.
+func (h *OrganizationHandler) SelectPlan(c *gin.Context) {
+	var payload struct {
+		Plan string `json:"plan"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	plan := models.OrganizationPlan(strings.TrimSpace(payload.Plan))
+	switch plan {
+	case models.OrganizationPlanFree, models.OrganizationPlanKafedra, models.OrganizationPlanInstitut, models.OrganizationPlanUniversitet:
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unknown plan"})
+		return
+	}
+
+	if err := tenant.DB(c, h.DB).Model(&models.Organization{}).Where("id = ?", tenant.OrgID(c)).Update("plan", plan).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update plan"})
+		return
+	}
+
+	var org models.Organization
+	if err := tenant.DB(c, h.DB).First(&org, tenant.OrgID(c)).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load organization"})
+		return
+	}
+	c.JSON(http.StatusOK, brandingOf(org))
 }
 
 // GetOrg returns the resolved tenant's branding. Public — the frontend needs it to

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import { apiGet, apiPut } from "../../lib/api.js";
 import "./console.css";
 
@@ -16,6 +16,7 @@ function daysUntil(value) {
 }
 
 export default function Overview() {
+  const navigate = useNavigate();
   const { org, conference, setConference } = useOutletContext();
   const [landing, setLanding] = useState(null);
   const [recent, setRecent] = useState([]);
@@ -67,6 +68,11 @@ export default function Overview() {
   const formatLabel = FORMAT_LABEL[conference?.format] || "";
 
   const publish = async () => {
+    // Оплата — последний шаг перед выкатом: без платного тарифа ведём на биллинг.
+    if (!org?.plan || org.plan === "free") {
+      navigate("/console/billing?gate=1");
+      return;
+    }
     setPublishing(true);
     setToast(null);
     try {

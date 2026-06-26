@@ -17,10 +17,18 @@ const (
 type OrganizationPlan string
 
 const (
-	OrganizationPlanFree OrganizationPlan = "free"
-	OrganizationPlanBase OrganizationPlan = "base"
-	OrganizationPlanPro  OrganizationPlan = "pro"
+	// free — неоплаченный тенант (выкат сайта на поддомен закрыт до выбора тарифа);
+	// далее три платных тарифа «Кворум».
+	OrganizationPlanFree        OrganizationPlan = "free"
+	OrganizationPlanKafedra     OrganizationPlan = "kafedra"
+	OrganizationPlanInstitut    OrganizationPlan = "institut"
+	OrganizationPlanUniversitet OrganizationPlan = "universitet"
 )
+
+// IsPaid — тенант оплатил тариф (можно публиковать сайт).
+func (p OrganizationPlan) IsPaid() bool {
+	return p == OrganizationPlanKafedra || p == OrganizationPlanInstitut || p == OrganizationPlanUniversitet
+}
 
 // Organization is the tenant root (вуз). Conferences and per-event data scope to
 // it via organization_id / conference_id; branding, domain and billing live here.

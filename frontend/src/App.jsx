@@ -12,6 +12,7 @@ import ConsoleProgram from "./pages/console/ConsoleProgram.jsx";
 import ConsoleParticipants from "./pages/console/ConsoleParticipants.jsx";
 import ConsoleModeration from "./pages/console/ConsoleModeration.jsx";
 import ConsoleDocs from "./pages/console/ConsoleDocs.jsx";
+import ConsoleBilling from "./pages/console/ConsoleBilling.jsx";
 import Welcome from "./pages/Welcome.jsx";
 import Register from "./pages/Register.jsx";
 import Login from "./pages/Login.jsx";
@@ -103,7 +104,7 @@ export default function App() {
         <Route path="moderation" element={<ConsoleModeration />} />
         <Route path="docs" element={<ConsoleDocs />} />
         <Route path="team" element={<ConsoleSoon eyebrow="Команда" title="Кто работает над конференцией" />} />
-        <Route path="billing" element={<ConsoleSoon eyebrow="Подписка" title="Тариф и использование" />} />
+        <Route path="billing" element={<ConsoleBilling />} />
       </Route>
       <Route
         element={
