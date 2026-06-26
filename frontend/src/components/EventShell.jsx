@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { apiGet } from "../lib/api.js";
 import { AUTH_CHANGED_EVENT, getUser } from "../lib/auth.js";
 import { fetchBranding } from "../lib/org.js";
@@ -9,6 +9,12 @@ import StatusPlaceholder from "./StatusPlaceholder.jsx";
 import "../pages/event/event.css";
 
 const PLATFORM_NAME = "КонференцХаб";
+
+// Личные (авторизованные) маршруты участника внутри EventShell. Только статус finished их
+// не гейтит (участник должен видеть кабинет/сертификат после конференции). draft и suspended
+// гейтят всё — иначе чужой/вошедший увидел бы НЕопубликованную витрину. Здесь только реально
+// смонтированные под EventShell личные маршруты (по мере переноса ЛК добавлять сюда).
+const AUTHED_PREFIXES = ["/dashboard"];
 
 // Навигация публичного сайта вуза. Контентные пункты видят все; кабинет/чат/
 // документы — только вошедшие участники.
@@ -40,6 +46,7 @@ function orgMark(name) {
 // сайдбар в бренде вуза (направление academic/digital из org.theme) + контент.
 // Применяет per-tenant токены и гейтит витрину по статусу публикации.
 export default function EventShell() {
+  const { pathname: path } = useLocation();
   const [user, setUserState] = useState(getUser());
   const [org, setOrg] = useState(null);
   const [brandingLoaded, setBrandingLoaded] = useState(false);
@@ -70,12 +77,18 @@ export default function EventShell() {
   const isParticipant = Boolean(user);
   const pubLoaded = confLoaded && brandingLoaded;
 
-  // Гейт витрины по статусу (как в Layout): suspended → блок; черновик → «скоро»
-  // (команда видит превью); finished → материалы; live → сайт.
+  // Гейт по статусу публикации:
+  //  • suspended → блок ВСЕМ (включая кабинет);
+  //  • draft → «скоро» всем, кроме команды-превью (черновик НЕ виден ни анониму, ни вошедшему,
+  //    в т.ч. на личных маршрутах — иначе кросс-тенант увидел бы неопубликованную витрину);
+  //  • finished → публичная витрина показывает «материалы», но ЛИЧНЫЕ маршруты открыты
+  //    (участник должен видеть свой кабинет/сертификат после конференции);
+  //  • live → сайт.
+  const isAuthedRoute = AUTHED_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
   let gate = null;
   if (org?.status === "suspended") gate = "suspended";
   else if (!conference || (conference.status === "draft" && !isTenantStaff)) gate = "not-published";
-  else if (conference.status === "finished") gate = "finished";
+  else if (conference.status === "finished" && !isAuthedRoute) gate = "finished";
 
   const sidebar = (
     <nav className="event-sidebar" aria-label="Навигация по сайту вуза">

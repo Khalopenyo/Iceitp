@@ -77,11 +77,17 @@ export function eventThemeVars(theme, accentColor) {
   // Затемняем слишком светлый бренд-цвет, чтобы акцентный текст/кнопки оставались
   // читаемыми на белой поверхности (иначе near-white бренд «исчезает»).
   const accent = usableAccent(raw);
+  // Текст НА акцентной заливке (карточки кабинета): выбираем белый/тёмный по факт. контрасту,
+  // чтобы у любого бренд-цвета (в т.ч. светлого) текст оставался читаемым (WCAG), а не всегда #fff.
+  const onAccent = readableOn(accent);
+  const onAccentMuted = onAccent === "#ffffff" ? "rgba(255,255,255,.86)" : "rgba(35,32,28,.74)";
   const vars = {
     ...BASE[dir],
     "--ev-accent": accent,
     "--ev-accent-dk": darken(accent, 0.28),
     "--ev-accent-wash": wash(accent),
+    "--ev-on-accent": onAccent,
+    "--ev-on-accent-muted": onAccentMuted,
   };
   if (dir === "digital") {
     // Сайдбар залит брендом вуза; цвет текста — по фактическому контрасту.

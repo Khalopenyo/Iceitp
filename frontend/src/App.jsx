@@ -20,6 +20,7 @@ import ConsoleCheckin from "./pages/console/ConsoleCheckin.jsx";
 import ConsoleTeam from "./pages/console/ConsoleTeam.jsx";
 import EventShell from "./components/EventShell.jsx";
 import EventLanding from "./pages/event/EventLanding.jsx";
+import EventDashboard from "./pages/event/EventDashboard.jsx";
 import EventProgram from "./pages/event/EventProgram.jsx";
 import EventSections from "./pages/event/EventSections.jsx";
 import EventSectionDetail from "./pages/event/EventSectionDetail.jsx";
@@ -30,7 +31,6 @@ import Register from "./pages/Register.jsx";
 import Login from "./pages/Login.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
-import Dashboard from "./pages/Dashboard.jsx";
 import Profile from "./pages/Profile.jsx";
 import Schedule from "./pages/Schedule.jsx";
 import Admin from "./pages/Admin.jsx";
@@ -175,7 +175,6 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route path="dashboard" element={<Dashboard />} />
         <Route path="profile" element={<Profile />} />
         <Route path="schedule" element={<Schedule />} />
         <Route path="documents" element={<Documents />} />
@@ -185,6 +184,7 @@ export default function App() {
           Все витринные экраны под одним каркасом, чтобы переходы не «прыгали» на старый Layout. */}
       <Route path="/" element={<EventShell />}>
         <Route index element={<EventLanding />} />
+        <Route path="dashboard" element={<ProtectedRoute><EventDashboard /></ProtectedRoute>} />
         <Route path="program" element={<EventProgram />} />
         <Route path="sections" element={<EventSections />} />
         <Route path="sections/:id" element={<EventSectionDetail />} />

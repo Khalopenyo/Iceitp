@@ -981,6 +981,150 @@
   border: 1px solid var(--ev-line);
 }
 
+/* ── Кабинет участника (dashboard) ── */
+.ev-dash-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.ev-dash-accent {
+  background: var(--ev-accent);
+  color: var(--ev-on-accent, #fff);
+  border-radius: var(--ev-radius-lg);
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+}
+.ev-dash-accent .ev-dash-lab {
+  margin: 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ev-on-accent-muted, rgba(255, 255, 255, 0.86));
+}
+.ev-dash-accent .ev-dash-ttl {
+  font-family: var(--ev-font-head);
+  font-weight: var(--ev-head-weight);
+  font-size: 22px;
+  line-height: 1.2;
+  margin: 10px 0 16px;
+}
+.ev-dash-kv {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  margin-bottom: 18px;
+}
+.ev-dash-kv .k {
+  font-size: 11px;
+  color: var(--ev-on-accent-muted, rgba(255, 255, 255, 0.86));
+}
+.ev-dash-kv .v {
+  font-size: 16px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.ev-dash-accent .ev-btn-onacc {
+  margin-top: auto;
+  align-self: flex-start;
+  background: var(--ev-on-accent, #fff);
+  color: var(--ev-accent);
+  border: none;
+  padding: 10px 18px;
+  border-radius: var(--ev-radius);
+  font-weight: 600;
+  font-size: 13.5px;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+}
+.ev-dash-card-lab {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ev-faint);
+  margin: 0 0 14px;
+}
+.ev-dash-doc-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ev-ink);
+  margin-bottom: 16px;
+}
+.ev-dash-stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--ev-muted);
+  padding: 6px 0;
+}
+.ev-dash-stat .val {
+  color: var(--ev-ink);
+  font-weight: 600;
+}
+.ev-dash-stat .val.ok {
+  color: #1f7a44;
+}
+.ev-dash-prog-row {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ev-line);
+}
+.ev-dash-prog-row:last-child {
+  border-bottom: none;
+}
+.ev-dash-prog-time {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 13px;
+  color: var(--ev-accent);
+  font-weight: 500;
+}
+.ev-dash-prog-title {
+  font-size: 14.5px;
+  color: var(--ev-ink);
+  font-weight: 500;
+}
+.ev-dash-prog-place {
+  font-size: 12.5px;
+  color: var(--ev-muted);
+}
+.ev-quick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 12px;
+  background: var(--ev-surface);
+  border: 1px solid var(--ev-line);
+  border-radius: var(--ev-radius-lg);
+  color: var(--ev-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.ev-quick:hover {
+  border-color: var(--ev-accent);
+  color: var(--ev-accent);
+}
+.ev-quick svg {
+  width: 22px;
+  height: 22px;
+}
+
 /* Малые кнопки/ссылки общего вида */
 .ev-btn-sm {
   display: inline-block;
@@ -1024,6 +1168,19 @@
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
+    min-width: 0;
+  }
+  /* На мобиле сайдбар становится строкой — не даём длинному имени вуза (nowrap)
+     распирать grid-колонку и ломать ширину страницы. */
+  .event-main {
+    min-width: 0;
+  }
+  .event-logo {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+  .event-logo-tx b {
+    white-space: normal;
   }
   .event-nav {
     flex-direction: row;
@@ -1058,5 +1215,16 @@
   .ev-tl-row {
     grid-template-columns: 96px 1fr;
     gap: 14px;
+  }
+  .ev-dash-grid {
+    grid-template-columns: 1fr;
+  }
+  .ev-dash-prog-row {
+    grid-template-columns: 64px 1fr;
+    gap: 6px 14px;
+  }
+  .ev-dash-prog-place {
+    grid-column: 2;
+    justify-self: start;
   }
 }
