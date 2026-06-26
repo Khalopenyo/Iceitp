@@ -16,6 +16,7 @@ export default function Branding() {
   const [name, setName] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [color, setColor] = useState("#4f46e5");
+  const [theme, setTheme] = useState("academic");
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -24,6 +25,7 @@ export default function Branding() {
     setName(org.display_name || "");
     setLogoUrl(org.logo_url || "");
     setColor(org.primary_color || "#4f46e5");
+    setTheme(org.theme || "academic");
   }, [org]);
 
   const slug = org?.slug || "вуз";
@@ -37,6 +39,7 @@ export default function Branding() {
         display_name: name.trim(),
         logo_url: logoUrl.trim(),
         primary_color: color,
+        theme,
       });
       setOrg(updated);
       applyBranding(updated);
@@ -128,6 +131,27 @@ export default function Branding() {
             <p className="con-sub" style={{ fontSize: 12, margin: "8px 0 0" }}>
               Поддомен закрепляется при подключении тарифа.
             </p>
+          </div>
+
+          <div className="con-card">
+            <div className="con-field-label">Стиль сайта</div>
+            <div className="con-theme-row" role="group" aria-label="Направление оформления">
+              {[
+                { v: "academic", t: "Академик", d: "Сериф-заголовки, светлый сайдбар" },
+                { v: "digital", t: "Цифровой", d: "Брендовый сайдбар, крупный гротеск" },
+              ].map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  className={`con-theme-opt ${theme === opt.v ? "active" : ""}`}
+                  onClick={() => setTheme(opt.v)}
+                  aria-pressed={theme === opt.v}
+                >
+                  <b>{opt.t}</b>
+                  <span>{opt.d}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

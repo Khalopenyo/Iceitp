@@ -22,18 +22,27 @@ type orgBranding struct {
 	DisplayName  string `json:"display_name"`
 	LogoURL      string `json:"logo_url"`
 	PrimaryColor string `json:"primary_color"`
+	Theme        string `json:"theme"`
 	Status       string `json:"status"`
 	Plan         string `json:"plan"`
 }
 
 var hexColorRe = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 
+// validOrgThemes — направления оформления публичного сайта (см. EventShell).
+var validOrgThemes = map[string]bool{"academic": true, "digital": true}
+
 func brandingOf(org models.Organization) orgBranding {
+	theme := org.Theme
+	if !validOrgThemes[theme] {
+		theme = "academic"
+	}
 	return orgBranding{
 		Slug:         org.Slug,
 		DisplayName:  org.DisplayName,
 		LogoURL:      org.LogoURL,
 		PrimaryColor: org.PrimaryColor,
+		Theme:        theme,
 		Status:       string(org.Status),
 		Plan:         string(org.Plan),
 	}
@@ -89,6 +98,7 @@ func (h *OrganizationHandler) UpdateOrg(c *gin.Context) {
 		DisplayName  *string `json:"display_name"`
 		LogoURL      *string `json:"logo_url"`
 		PrimaryColor *string `json:"primary_color"`
+		Theme        *string `json:"theme"`
 	}
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
@@ -105,7 +115,14 @@ func (h *OrganizationHandler) UpdateOrg(c *gin.Context) {
 		updates["display_name"] = name
 	}
 	if payload.LogoURL != nil {
-		updates["logo_url"] = strings.TrimSpace(*payload.LogoURL)
+		logo := strings.TrimSpace(*payload.LogoURL)
+		// Логотип рендерится как <img src> на публичном сайте — допускаем только
+		// https-URL или относительный путь (не http/data/js-схемы), с лимитом длины.
+		if logo != "" && (len(logo) > 500 || !(strings.HasPrefix(logo, "https://") || strings.HasPrefix(logo, "/"))) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "logo_url must be an https:// URL or a relative path"})
+			return
+		}
+		updates["logo_url"] = logo
 	}
 	if payload.PrimaryColor != nil {
 		color := strings.TrimSpace(*payload.PrimaryColor)
@@ -114,6 +131,14 @@ func (h *OrganizationHandler) UpdateOrg(c *gin.Context) {
 			return
 		}
 		updates["primary_color"] = color
+	}
+	if payload.Theme != nil {
+		theme := strings.TrimSpace(*payload.Theme)
+		if !validOrgThemes[theme] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "theme must be 'academic' or 'digital'"})
+			return
+		}
+		updates["theme"] = theme
 	}
 	if len(updates) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no fields to update"})

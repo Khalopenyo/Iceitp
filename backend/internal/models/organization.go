@@ -41,6 +41,9 @@ type Organization struct {
 	Plan         OrganizationPlan   `gorm:"type:varchar(20);not null;default:'free'" json:"plan"`
 	LogoURL      string             `json:"logo_url"`
 	PrimaryColor string             `json:"primary_color"`
+	// Theme — направление оформления публичного сайта вуза: "academic" (Source Serif,
+	// светлый сайдбар) или "digital" (Plex Sans, брендовый сайдбар). См. EventShell.
+	Theme        string             `gorm:"type:varchar(20);not null;default:'academic'" json:"theme"`
 	CustomDomain string             `gorm:"index" json:"custom_domain"`
 	CreatedAt    time.Time          `json:"created_at"`
 	UpdatedAt    time.Time          `json:"updated_at"`

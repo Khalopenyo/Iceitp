@@ -298,6 +298,15 @@ var migrations = []migration{
 			return nil
 		},
 	},
+	{
+		Version: "202606270021",
+		Name:    "add_organization_theme",
+		Up: func(db *gorm.DB) error {
+			// Additive: organizations.theme (направление оформления публичного сайта:
+			// academic|digital). Существующие тенанты остаются на academic (дефолт).
+			return db.AutoMigrate(&models.Organization{})
+		},
+	},
 }
 
 // tenantConferenceIDNotNull flips the per-event conference_id columns (and

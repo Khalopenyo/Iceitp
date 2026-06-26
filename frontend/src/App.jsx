@@ -18,7 +18,8 @@ import ConsoleDocs from "./pages/console/ConsoleDocs.jsx";
 import ConsoleBilling from "./pages/console/ConsoleBilling.jsx";
 import ConsoleCheckin from "./pages/console/ConsoleCheckin.jsx";
 import ConsoleTeam from "./pages/console/ConsoleTeam.jsx";
-import Welcome from "./pages/Welcome.jsx";
+import EventShell from "./components/EventShell.jsx";
+import EventLanding from "./pages/event/EventLanding.jsx";
 import Register from "./pages/Register.jsx";
 import Login from "./pages/Login.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
@@ -180,11 +181,15 @@ export default function App() {
         <Route path="documents" element={<Documents />} />
         <Route path="chat" element={<Chat />} />
       </Route>
-      <Route path="/" element={<Layout />}>
+      {/* Главная вуза — новый единый shell-с-сайдбаром (редизайн), бренд per-tenant. */}
+      <Route path="/" element={<EventShell />}>
+        <Route index element={<EventLanding />} />
+      </Route>
+      {/* Остальные публичные/служебные страницы — пока на прежнем Layout (пилот). */}
+      <Route element={<Layout />}>
         <Route path="badge/:token" element={<BadgeCheckIn />} />
         <Route path="questions/:token" element={<QuestionPrompt />} />
         <Route path="questions/:token/approved" element={<ApprovedQuestions />} />
-        <Route index element={<Welcome />} />
         <Route
           path="feedback"
           element={

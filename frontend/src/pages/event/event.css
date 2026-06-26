@@ -1,0 +1,446 @@
+/* ===== Публичный сайт вуза на поддомене — единый shell (зона Event) ===== */
+/* Редизайн по «Прототип редизайна»: сайдбар-shell, бренд вуза через --ev-* токены. */
+@import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
+.event-root {
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  color: var(--ev-ink);
+  background: var(--ev-bg);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+}
+
+.event-shell {
+  display: grid;
+  grid-template-columns: 256px 1fr;
+  min-height: 100dvh;
+}
+
+/* Сайдбар */
+.event-sidebar {
+  background: var(--ev-chrome-bg);
+  color: var(--ev-chrome-ink);
+  border-right: 1px solid var(--ev-chrome-line);
+  display: flex;
+  flex-direction: column;
+  padding: 22px 16px;
+  gap: 6px;
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+}
+.event-logo {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 4px 8px 18px;
+  border-bottom: 1px solid var(--ev-chrome-line);
+  margin-bottom: 8px;
+}
+.event-logo img {
+  height: 38px;
+  filter: var(--ev-logo-filter);
+}
+.event-logo-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: var(--ev-accent);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-family: var(--ev-font-head);
+  font-weight: 700;
+  font-size: 16px;
+  flex: none;
+}
+.event-logo-tx {
+  line-height: 1.2;
+  min-width: 0;
+}
+.event-logo-tx b {
+  display: block;
+  font-family: var(--ev-font-head);
+  font-weight: var(--ev-head-weight);
+  font-size: 15px;
+  color: var(--ev-chrome-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.event-logo-tx span {
+  display: block;
+  font-size: 10.5px;
+  color: var(--ev-chrome-muted);
+  font-family: var(--ev-mono, "IBM Plex Mono", monospace);
+  letter-spacing: 0.04em;
+}
+.event-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.event-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border-radius: var(--ev-radius);
+  border: none;
+  width: 100%;
+  cursor: pointer;
+  font-size: 13.5px;
+  font-family: inherit;
+  font-weight: 500;
+  background: transparent;
+  color: var(--ev-chrome-muted);
+  text-decoration: none;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+.event-nav-item:hover {
+  color: var(--ev-chrome-ink);
+  background: var(--ev-chrome-active-bg);
+}
+.event-nav-item.active {
+  background: var(--ev-chrome-active-bg);
+  color: var(--ev-chrome-active-ink);
+  font-weight: 600;
+}
+.event-nav-item svg {
+  width: 19px;
+  height: 19px;
+  flex: none;
+}
+.event-foot {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--ev-chrome-line);
+}
+.event-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.event-user-av {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--ev-accent);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  font-size: 13px;
+  flex: none;
+}
+.event-user-tx {
+  line-height: 1.25;
+  min-width: 0;
+}
+.event-user-tx b {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ev-chrome-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.event-user-tx span {
+  display: block;
+  font-size: 11px;
+  color: var(--ev-chrome-muted);
+}
+.event-foot-btn {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 11px;
+  border-radius: var(--ev-radius);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+.event-foot-btn.primary {
+  background: var(--ev-accent);
+  color: #fff;
+  border: none;
+}
+.event-foot-btn.ghost {
+  background: transparent;
+  color: var(--ev-chrome-ink);
+  border: 1px solid var(--ev-chrome-line);
+  margin-top: 8px;
+}
+
+.event-main {
+  overflow-y: auto;
+  height: 100dvh;
+}
+
+/* Баннер черновика (для команды тенанта) */
+.event-draft-banner {
+  background: #fef3c7;
+  color: #92400e;
+  text-align: center;
+  padding: 8px 16px;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.event-draft-banner a {
+  color: #7c2d12;
+  font-weight: 600;
+}
+
+/* ── Лендинг ── */
+.ev-eyebrow {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ev-accent);
+}
+.ev-h1 {
+  font-family: var(--ev-font-head);
+  font-weight: var(--ev-head-weight);
+  letter-spacing: var(--ev-head-spacing);
+  font-size: 42px;
+  line-height: 1.08;
+  margin: 18px 0 0;
+  max-width: 660px;
+  color: var(--ev-ink);
+}
+.ev-hero {
+  position: relative;
+  padding: 54px 56px 48px;
+  background: var(--ev-surface);
+  border-bottom: 1px solid var(--ev-line);
+  overflow: hidden;
+}
+.ev-hero::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--ev-accent);
+}
+.ev-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+.ev-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  background: var(--ev-surface-2);
+  border: 1px solid var(--ev-line);
+  border-radius: var(--ev-radius);
+  font-size: 13px;
+  color: var(--ev-ink);
+  font-weight: 500;
+}
+.ev-chip.accent {
+  background: var(--ev-accent-wash);
+  border-color: var(--ev-accent);
+  color: var(--ev-accent);
+  font-weight: 600;
+}
+.ev-lead {
+  margin: 22px 0 0;
+  max-width: 580px;
+  font-size: 15.5px;
+  line-height: 1.65;
+  color: var(--ev-muted);
+}
+.ev-cta {
+  display: flex;
+  gap: 12px;
+  margin-top: 26px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ev-btn {
+  background: var(--ev-accent);
+  color: #fff;
+  border: none;
+  padding: 13px 24px;
+  border-radius: var(--ev-radius);
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  display: inline-block;
+}
+.ev-btn:hover {
+  background: var(--ev-accent-dk);
+}
+.ev-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.ev-btn-ghost {
+  background: transparent;
+  color: var(--ev-ink);
+  border: 1px solid var(--ev-line);
+  padding: 13px 22px;
+  border-radius: var(--ev-radius);
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  display: inline-block;
+}
+.ev-btn-ghost:hover {
+  border-color: var(--ev-ink);
+}
+.ev-section {
+  padding: 40px 56px;
+}
+.ev-section-eyebrow {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ev-faint);
+  margin-bottom: 18px;
+}
+.ev-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.ev-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.ev-card {
+  background: var(--ev-surface);
+  border: 1px solid var(--ev-line);
+  border-radius: var(--ev-radius-lg);
+  padding: 24px;
+}
+.ev-card-h {
+  font-family: var(--ev-font-head);
+  font-weight: var(--ev-head-weight);
+  font-size: 19px;
+  color: var(--ev-ink);
+  margin-bottom: 8px;
+}
+.ev-card-p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ev-muted);
+}
+.ev-stat-val {
+  font-family: var(--ev-font-head);
+  font-weight: var(--ev-head-weight);
+  font-size: 34px;
+  color: var(--ev-ink);
+  line-height: 1;
+}
+.ev-stat-label {
+  font-size: 12.5px;
+  color: var(--ev-muted);
+  margin-top: 8px;
+}
+.ev-sec-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: var(--ev-surface);
+  border: 1px solid var(--ev-line);
+  border-radius: var(--ev-radius);
+  margin-bottom: 10px;
+  text-decoration: none;
+}
+.ev-sec-row:hover {
+  border-color: var(--ev-accent);
+}
+.ev-sec-code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ev-accent);
+  flex: none;
+  width: 34px;
+}
+.ev-sec-title {
+  flex: 1;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--ev-ink);
+  line-height: 1.4;
+}
+.ev-sec-meta {
+  font-size: 13px;
+  color: var(--ev-muted);
+  flex: none;
+}
+.ev-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 24px;
+  padding: 18px 20px;
+  background: var(--ev-surface);
+  border: 1px solid var(--ev-line);
+  border-radius: var(--ev-radius-lg);
+  cursor: pointer;
+}
+.ev-consent input {
+  margin-top: 2px;
+}
+.ev-consent span {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ev-muted);
+}
+
+@media (max-width: 860px) {
+  .event-shell {
+    grid-template-columns: 1fr;
+  }
+  .event-sidebar {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .event-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    flex: 1;
+  }
+  .event-foot {
+    margin: 0;
+    border: none;
+    padding: 0;
+  }
+  .ev-hero {
+    padding: 36px 22px 30px;
+  }
+  .ev-h1 {
+    font-size: 32px;
+  }
+  .ev-section {
+    padding: 28px 22px;
+  }
+  .ev-grid-3,
+  .ev-grid-4 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
