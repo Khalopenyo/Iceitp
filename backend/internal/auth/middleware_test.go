@@ -26,9 +26,10 @@ func TestMiddlewareBindsTokenOrgToResolvedTenant(t *testing.T) {
 		t.Fatalf("GenerateToken: %v", err)
 	}
 
+	// A real tenant subdomain (HostMatched) resolved org `resolvedOrg`.
 	do := func(resolvedOrg uint) int {
 		r := gin.New()
-		r.Use(func(c *gin.Context) { tenant.SetScope(c, tenant.Scope{OrgID: resolvedOrg}); c.Next() })
+		r.Use(func(c *gin.Context) { tenant.SetScope(c, tenant.Scope{OrgID: resolvedOrg, HostMatched: true}); c.Next() })
 		r.Use(Middleware(secret))
 		r.GET("/x", func(c *gin.Context) { c.Status(http.StatusOK) })
 
@@ -43,7 +44,37 @@ func TestMiddlewareBindsTokenOrgToResolvedTenant(t *testing.T) {
 		t.Errorf("same-org request -> %d, want 200", code)
 	}
 	if code := do(9); code != http.StatusForbidden {
-		t.Errorf("cross-org request -> %d, want 403 (token for org 7 must not act under org 9)", code)
+		t.Errorf("cross-org subdomain -> %d, want 403 (token for org 7 must not act under org 9)", code)
+	}
+}
+
+// TestMiddlewareAllowsTokenOnBareDomain proves the control-plane path: on the bare
+// app / marketing domain the Host resolves to the DefaultOrgID fallback
+// (HostMatched=false), so an organizer whose token names a different org is NOT
+// rejected — IdentityScope adopts their own org downstream. Only a *real* tenant
+// subdomain that names a different org triggers the 403.
+func TestMiddlewareAllowsTokenOnBareDomain(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const secret = "test-secret"
+
+	token, err := GenerateToken(1, models.RoleOrg, 7, secret, time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateToken: %v", err)
+	}
+
+	r := gin.New()
+	// DefaultOrgID fallback, not a subdomain match.
+	r.Use(func(c *gin.Context) { tenant.SetScope(c, tenant.Scope{OrgID: tenant.DefaultOrgID, HostMatched: false}); c.Next() })
+	r.Use(Middleware(secret))
+	r.GET("/x", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("org token on bare domain -> %d, want 200 (control plane scopes by identity)", w.Code)
 	}
 }
 

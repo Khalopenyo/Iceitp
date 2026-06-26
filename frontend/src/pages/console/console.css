@@ -726,6 +726,95 @@
 .con-field input:focus {
   border-color: var(--accent);
 }
+.con-field-hint {
+  font-size: 12px;
+  color: var(--faint);
+  font-weight: 400;
+}
+.con-field-hint b {
+  color: var(--ink);
+  font-family: var(--con-mono);
+  font-weight: 600;
+  font-size: 11.5px;
+}
+/* Поле пароля с переключателем «показать/скрыть» */
+.con-input-wrap {
+  position: relative;
+  display: block;
+}
+.con-input-wrap input {
+  width: 100%;
+  padding-right: 84px;
+}
+.con-input-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-family: var(--con-font);
+}
+.con-input-toggle:hover {
+  background: var(--accent-wash);
+}
+/* Поддомен: один контрол «ввод + .kvorum.ru» */
+.con-slug-row {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.con-slug-row:focus-within {
+  border-color: var(--accent);
+}
+.con-slug-input.con-slug-input {
+  flex: 1;
+  min-width: 0;
+  height: 46px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--con-mono);
+  font-size: 14px;
+  letter-spacing: 0.01em;
+}
+.con-slug-input:focus {
+  border: none;
+}
+.con-slug-suffix {
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  background: var(--surface-2);
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  font-family: var(--con-mono);
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+.con-onboard-foot {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  margin: 4px 0 0;
+}
+.con-onboard-foot a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.con-onboard-foot a:hover {
+  text-decoration: underline;
+}
 .con-field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

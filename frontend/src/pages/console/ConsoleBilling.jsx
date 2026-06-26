@@ -17,7 +17,7 @@ export default function ConsoleBilling() {
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
-    apiGet("/landing").then((d) => setStats(d?.stats || {})).catch(() => setStats({}));
+    apiGet("/admin/landing").then((d) => setStats(d?.stats || {})).catch(() => setStats({}));
   }, []);
 
   const plan = org?.plan || "free";

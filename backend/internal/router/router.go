@@ -101,6 +101,9 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	// enforces tenant isolation. No-op (and zero overhead) when the flag is off.
 	// Must run after the scope resolver above.
 	api.Use(tenant.RLSMiddleware(appDB, cfg.RLSEnforced))
+	// Self-service organizer (вуз) sign-up — provisions a new tenant + its owner.
+	orgSignupLimiter := ratelimit.New(10, 30*time.Minute)
+	api.POST("/org/signup", orgSignupLimiter.Middleware("org_signup"), authHandler.SignupOrganizer)
 	api.POST("/auth/register", registrationLimiter.Middleware("auth_register"), authHandler.RequestRegistrationCode)
 	api.POST("/auth/register/request-code", registrationLimiter.Middleware("auth_register_request_code"), authHandler.RequestRegistrationCode)
 	api.POST("/auth/register/verify", verificationLimiter.Middleware("auth_register_verify"), authHandler.VerifyRegistrationCode)
@@ -124,6 +127,10 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	api.POST("/questions/public", questionLimiter.Middleware("public_questions"), questionHandler.CreatePublicQuestion)
 	protected := api.Group("")
 	protected.Use(auth.Middleware(cfg.JWTSecret))
+	// Scope authenticated requests by the principal's org (identity), not the Host:
+	// on the bare app domain the Host resolves to no tenant, and the signed-in user's
+	// own data must follow who they are. No-op on a real subdomain where Host == JWT.
+	protected.Use(tenant.IdentityScope(ownerDB))
 	protected.GET("/me", userHandler.Me)
 	protected.PUT("/me/profile", userHandler.UpdateProfile)
 	protected.GET("/schedule", scheduleHandler.UserSchedule)
@@ -147,6 +154,12 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	admin := api.Group("/admin")
 	admin.Use(auth.Middleware(cfg.JWTSecret))
 	admin.Use(auth.RequireRole("admin", "org"))
+	// The organizer console is served from the bare app domain; scope it to the
+	// authenticated organizer's own org (identity), re-resolving that org's
+	// conference — never the Host-resolved tenant. Then reject suspended/deleted
+	// tenants so a still-valid token cannot mutate data after a platform suspend.
+	admin.Use(tenant.IdentityScope(ownerDB))
+	admin.Use(tenant.RequireActiveOrg(ownerDB))
 	admin.GET("/users", userHandler.ListUsers)
 	admin.PUT("/users/:id/role", userHandler.UpdateUserRole)
 	admin.PUT("/users/:id/badge", userHandler.SetBadgeIssued)
@@ -173,6 +186,11 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	admin.GET("/conference", conferenceHandler.GetConference)
 	admin.POST("/conference", conferenceHandler.CreateConference)
 	admin.PUT("/conference", conferenceHandler.UpdateConference)
+	// Identity-scoped reads for the console: the public /org and /landing resolve by
+	// Host (the bare app domain → DefaultOrgID), so the console must read its own
+	// tenant's branding and stats through the admin (IdentityScope) group instead.
+	admin.GET("/org", orgHandler.GetOrg)
+	admin.GET("/landing", conferenceHandler.GetLanding)
 	admin.PUT("/org", orgHandler.UpdateOrg)
 	admin.PUT("/billing", orgHandler.SelectPlan)
 	admin.GET("/content", contentHandler.ListAdmin)

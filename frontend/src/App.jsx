@@ -8,6 +8,7 @@ import Overview from "./pages/console/Overview.jsx";
 import Branding from "./pages/console/Branding.jsx";
 import ConsoleSoon from "./pages/console/ConsoleSoon.jsx";
 import Onboarding from "./pages/console/Onboarding.jsx";
+import Signup from "./pages/console/Signup.jsx";
 import ConsoleProgram from "./pages/console/ConsoleProgram.jsx";
 import ConsoleParticipants from "./pages/console/ConsoleParticipants.jsx";
 import ConsoleModeration from "./pages/console/ConsoleModeration.jsx";
@@ -80,6 +81,7 @@ export default function App() {
         <Route path="forgot-password" element={<ForgotPassword />} />
         <Route path="reset-password" element={<ResetPassword />} />
       </Route>
+      <Route path="console/signup" element={<Signup />} />
       <Route
         path="console/onboarding"
         element={

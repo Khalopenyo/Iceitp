@@ -1,6 +1,7 @@
 package tenant
 
 import (
+	"net/http"
 	"strings"
 
 	"conferenceplatforma/internal/models"
@@ -27,22 +28,85 @@ func Middleware(db *gorm.DB) gin.HandlerFunc {
 		if c.Request != nil {
 			host = c.Request.Host
 		}
-		orgID := resolveOrgID(db, host)
-		SetScope(c, Scope{OrgID: orgID, ConfID: resolveConfID(db, orgID)})
+		orgID, matched := resolveOrgID(db, host)
+		SetScope(c, Scope{OrgID: orgID, ConfID: resolveConfID(db, orgID), HostMatched: matched})
 		c.Next()
 	}
 }
 
-// resolveOrgID maps the leading subdomain label of host to an organization slug,
-// falling back to DefaultOrgID when nothing matches.
-func resolveOrgID(db *gorm.DB, host string) uint {
+// IdentityScope rescopes an authenticated request to the organization named by the
+// principal's JWT (stored as "jwt_org_id" by auth.Middleware), re-resolving that
+// org's active conference. The organizer console — and a signed-in user's own
+// pages — must follow WHO is authenticated, not the Host: the console is served
+// from the bare app / marketing domain, where the Host resolves to no specific
+// tenant (DefaultOrgID fallback). auth.Middleware has already rejected a token
+// presented on a *different* tenant's real subdomain, so by the time we get here
+// the principal is operating on their own org (or on the bare domain) — adopt it.
+// No-op for unauthenticated requests and pre-migration tokens (no org claim).
+func IdentityScope(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if v, ok := c.Get("jwt_org_id"); ok {
+			if orgID, _ := v.(uint); orgID != 0 {
+				confID := resolveConfID(db, orgID)
+				// Preserve HostMatched: the cross-tenant 403 in auth.Middleware keys on
+				// it, and a later re-check must still see the real Host-resolved value.
+				prev, _ := FromContext(c)
+				SetScope(c, Scope{OrgID: orgID, ConfID: confID, HostMatched: prev.HostMatched})
+				// Re-pin the RLS session to the adopted identity. RLSMiddleware ran
+				// earlier with the Host-resolved org, so without this the request tx
+				// would stay bound to the wrong tenant and RLS would filter every query
+				// by the Host org instead of the principal's org. No-op when RLS is off.
+				if err := RepinRLS(c, orgID, confID); err != nil {
+					c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to set tenant scope"})
+					return
+				}
+			}
+		}
+		c.Next()
+	}
+}
+
+// RequireActiveOrg rejects an authenticated request whose organization is missing
+// or not active (suspended / archived). Applied to the console (/admin) group so a
+// suspended or deleted tenant cannot keep mutating data with a still-valid token
+// (JWTs live for their full TTL with no revocation). Must run after IdentityScope
+// so it gates the principal's adopted org. No-op for requests with no org claim.
+func RequireActiveOrg(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		v, ok := c.Get("jwt_org_id")
+		if !ok {
+			c.Next()
+			return
+		}
+		orgID, _ := v.(uint)
+		if orgID == 0 {
+			c.Next()
+			return
+		}
+		var org models.Organization
+		if err := db.Select("id", "status").First(&org, orgID).Error; err != nil {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "organization not found"})
+			return
+		}
+		if org.Status != models.OrganizationStatusActive {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "organization is not active"})
+			return
+		}
+		c.Next()
+	}
+}
+
+// resolveOrgID maps the leading subdomain label of host to an organization slug.
+// The bool is true only on an explicit slug match; it is false (with DefaultOrgID)
+// when the host has no subdomain or no organization owns that label.
+func resolveOrgID(db *gorm.DB, host string) (uint, bool) {
 	if label := leadingLabel(host); label != "" {
 		var org models.Organization
 		if err := db.Where("slug = ?", label).First(&org).Error; err == nil {
-			return org.ID
+			return org.ID, true
 		}
 	}
-	return DefaultOrgID
+	return DefaultOrgID, false
 }
 
 // resolveConfID returns the organization's active conference. For the default org

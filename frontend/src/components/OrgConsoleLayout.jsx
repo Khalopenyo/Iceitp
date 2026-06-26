@@ -33,8 +33,8 @@ export default function OrgConsoleLayout() {
   const [confLoaded, setConfLoaded] = useState(false);
 
   useEffect(() => {
-    apiGet("/org").then(setOrg).catch(() => setOrg(null));
-    apiGet("/conference")
+    apiGet("/admin/org").then(setOrg).catch(() => setOrg(null));
+    apiGet("/admin/conference")
       .then(setConference)
       .catch(() => setConference(null))
       .finally(() => setConfLoaded(true));

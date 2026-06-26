@@ -24,8 +24,10 @@ export default function Overview() {
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
-    apiGet("/landing").then(setLanding).catch(() => setLanding(null));
-    apiGet("/admin/users")
+    apiGet("/admin/landing").then(setLanding).catch(() => setLanding(null));
+    // role=participant: список «Последних заявок» должен совпадать со счётчиком
+    // (организатор/со-админы не «заявки»).
+    apiGet("/admin/users?role=participant")
       .then((r) => {
         const list = Array.isArray(r) ? r : r?.items || [];
         setRecent(list.slice(0, 4));

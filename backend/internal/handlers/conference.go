@@ -214,9 +214,11 @@ func (h *ConferenceHandler) GetLanding(c *gin.Context) {
 
 	// profiles — parent-scoped таблица: своего organization_id у неё НЕТ, поэтому
 	// скоупим по родителю users.organization_id (а не tenant.ByOrg на самой profiles).
+	// Считаем ТОЛЬКО участников (role=participant): сам организатор (org/admin) тоже
+	// имеет профиль, но это не «заявка», иначе у новой конференции висит «1 заявка».
 	orgID := tenant.OrgID(c)
 	profileByOrg := func(q *gorm.DB) *gorm.DB {
-		return q.Where("user_id IN (SELECT id FROM users WHERE organization_id = ?)", orgID)
+		return q.Where("user_id IN (SELECT id FROM users WHERE organization_id = ? AND role = ?)", orgID, models.RoleParticipant)
 	}
 
 	// Число докладов по секциям: профили, сгруппированные по section_id (скоуп по org).

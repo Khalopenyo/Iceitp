@@ -20,6 +20,13 @@ const contextKey = "tenant.scope"
 type Scope struct {
 	OrgID  uint // organization (вуз) — tenant root
 	ConfID uint // conference within the organization (0 if not resolved)
+	// HostMatched is true only when OrgID was resolved from an explicit Host /
+	// subdomain → slug match (a real tenant's public site), not the DefaultOrgID
+	// fallback used for the bare app / marketing domain. The control plane (the
+	// authenticated organizer console) scopes by the principal's identity on the
+	// bare domain, while a token presented on a *different* tenant's real subdomain
+	// is still rejected. See auth.Middleware and tenant.IdentityScope.
+	HostMatched bool
 }
 
 // SetScope stores the resolved scope on the gin context.

@@ -22,7 +22,7 @@ export default function Onboarding() {
 
   useEffect(() => {
     // Если конференция уже настроена — онбординг не нужен, уводим в консоль.
-    apiGet("/conference")
+    apiGet("/admin/conference")
       .then((c) => {
         if (c?.onboarded) {
           navigate("/console", { replace: true });
@@ -31,7 +31,7 @@ export default function Onboarding() {
         if (c?.title && c.title !== "Новая конференция") setTitle(c.title);
       })
       .catch(() => {});
-    apiGet("/org").then((o) => setOrg(o?.display_name || "")).catch(() => {});
+    apiGet("/admin/org").then((o) => setOrg(o?.display_name || "")).catch(() => {});
   }, [navigate]);
 
   const submit = async (e) => {
@@ -50,7 +50,7 @@ export default function Onboarding() {
         ends_at: endsAt ? new Date(`${endsAt}T18:00:00`).toISOString() : null,
         format,
       });
-      const fresh = await apiGet("/org").catch(() => null);
+      const fresh = await apiGet("/admin/org").catch(() => null);
       if (fresh) applyBranding(fresh);
       navigate("/console", { replace: true });
     } catch (err) {

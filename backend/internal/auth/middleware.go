@@ -33,14 +33,18 @@ func Middleware(secret string) gin.HandlerFunc {
 		c.Set("user_id", claims.UserID)
 		c.Set("role", claims.Role)
 		c.Set("jwt_org_id", claims.OrganizationID)
-		// Bind the authenticated principal to the resolved tenant: a token minted
-		// for one organization must not operate under a different tenant's
-		// (Host-resolved) scope — otherwise an org-A admin could present their token
-		// to orgB.<domain> and act as org B. Enforced only when a tenant scope was
-		// actually resolved (production: the tenant middleware ran on /api).
-		// Pre-migration tokens with no org claim (OrganizationID == 0) are tolerated.
+		// Bind the authenticated principal to the resolved tenant: a token minted for
+		// one organization must not operate under a *different* tenant's real
+		// subdomain — otherwise an org-A admin could present their token to
+		// orgB.<domain> and act as org B. The 403 fires only when the scope was
+		// resolved from an explicit Host → slug match (HostMatched): on the bare app /
+		// marketing domain (DefaultOrgID fallback) the control plane scopes by
+		// identity instead — tenant.IdentityScope adopts the principal's own org
+		// downstream — so an organizer can manage their tenant from app.<domain> /
+		// localhost. Pre-migration tokens with no org claim (OrganizationID == 0)
+		// are tolerated.
 		if claims.OrganizationID != 0 {
-			if s, ok := tenant.FromContext(c); ok && s.OrgID != 0 && s.OrgID != claims.OrganizationID {
+			if s, ok := tenant.FromContext(c); ok && s.HostMatched && s.OrgID != 0 && s.OrgID != claims.OrganizationID {
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "token does not belong to this organization"})
 				return
 			}

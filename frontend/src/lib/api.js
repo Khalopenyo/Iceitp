@@ -25,6 +25,15 @@ function mapKnownApiMessage(path, status, rawMessage, details) {
   const normalized = raw.toLowerCase();
   const detailText = normalizeWhitespace(details);
 
+  // Organizer signup returns precise, user-facing Russian messages (поддомен занят /
+  // зарезервирован, e-mail уже существует, …). Surface those verbatim so the user
+  // learns which field is wrong. Gate on Cyrillic so internal English errors
+  // ("invalid payload", "failed to hash password") still fall through to the
+  // translated generic fallbacks below instead of showing raw English.
+  if (path === "/org/signup" && /[А-Яа-яЁё]/.test(raw)) {
+    return raw;
+  }
+
   const exactMap = {
     "invalid payload": "Проверьте заполнение формы и попробуйте еще раз.",
     "invalid credentials": "Неверный email или пароль.",

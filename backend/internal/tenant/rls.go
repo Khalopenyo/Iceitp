@@ -28,6 +28,30 @@ func DB(c *gin.Context, fallback *gorm.DB) *gorm.DB {
 	return fallback
 }
 
+// RepinRLS re-applies the Postgres SET LOCAL tenant variables (app.org_id /
+// app.conf_id) on the request-scoped RLS transaction, if one is installed, so the
+// database session matches a scope adopted AFTER RLSMiddleware ran. The control
+// plane resolves the real tenant from the authenticated principal (IdentityScope)
+// only after auth runs, which is later than RLSMiddleware; without this re-pin the
+// transaction would stay bound to the Host-resolved org and RLS would filter every
+// query by the wrong tenant. A strict no-op when enforcement is off (no tx on the
+// context). Returns an error if the re-pin fails so the caller can fail closed.
+func RepinRLS(c *gin.Context, orgID, confID uint) error {
+	v, ok := c.Get(dbContextKey)
+	if !ok {
+		return nil
+	}
+	tx, ok := v.(*gorm.DB)
+	if !ok || tx == nil {
+		return nil
+	}
+	return tx.Exec(
+		"SELECT set_config('app.org_id', ?, true), set_config('app.conf_id', ?, true)",
+		strconv.FormatUint(uint64(orgID), 10),
+		strconv.FormatUint(uint64(confID), 10),
+	).Error
+}
+
 // RLSMiddleware wraps each request in a transaction that sets the app.org_id /
 // app.conf_id Postgres session variables (SET LOCAL, via set_config(..., true)),
 // so the fail-closed Row-Level-Security policies (migration 202606200009) filter

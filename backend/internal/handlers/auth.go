@@ -14,7 +14,9 @@ import (
 	"log"
 	"math"
 	"net/http"
+	netmail "net/mail"
 	neturl "net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -73,6 +75,17 @@ type RegisterRequest struct {
 	ConsentPersonalData bool            `json:"consent_personal_data"`
 	ConsentPublication  bool            `json:"consent_publication"`
 	ConsentVersion      string          `json:"consent_version"`
+}
+
+// OrganizerSignupRequest is the self-service organizer (вуз) sign-up payload: it
+// provisions a brand-new tenant (Organization) and its owner, unlike the
+// participant RegisterRequest which joins the Host-resolved tenant.
+type OrganizerSignupRequest struct {
+	FullName       string `json:"full_name"`
+	Email          string `json:"email"`
+	Password       string `json:"password"`
+	UniversityName string `json:"university_name"`
+	Slug           string `json:"slug"` // желаемый поддомен (вуз.kvorum.ru)
 }
 
 type LoginRequest struct {
@@ -149,6 +162,161 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 	h.logConsent(c, user.ID, normalized.ConsentVersion)
+	if err := h.issueSession(c, user); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to establish session"})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{
+		"user":               user,
+		"expires_in_seconds": int(h.accessTokenTTL().Seconds()),
+	})
+}
+
+// orgSlugRe allows a lowercase DNS label: latin letters/digits separated by single
+// hyphens, no leading/trailing hyphen. Length is checked separately for a clearer
+// error than a regex mismatch.
+var orgSlugRe = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+// reservedSlugs are subdomain labels we host ourselves or keep free, so a tenant
+// cannot claim them and hijack a system host (including mail / autodiscovery hosts
+// that mail clients probe on the apex domain).
+var reservedSlugs = map[string]bool{
+	"www": true, "api": true, "app": true, "admin": true, "console": true,
+	"kvorum": true, "lk": true, "mail": true, "email": true, "smtp": true,
+	"ftp": true, "ns": true, "ns1": true, "ns2": true, "cdn": true, "static": true,
+	"assets": true, "blog": true, "help": true, "support": true, "status": true,
+	"dashboard": true, "billing": true, "auth": true, "login": true, "test": true,
+	"staging": true, "dev": true, "demo": true,
+	// mail / infra / autodiscovery hosts mail clients and tooling probe.
+	"mx": true, "imap": true, "pop": true, "pop3": true, "webmail": true,
+	"autodiscover": true, "autoconfig": true, "cpanel": true, "whm": true,
+	"vpn": true, "git": true, "docs": true, "portal": true, "metrics": true,
+	"grafana": true, "kibana": true, "webhooks": true, "pay": true, "payments": true,
+}
+
+// allDigits reports whether s is non-empty and contains only ASCII digits.
+func allDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// normalizeOrgSlug lowercases, trims, and validates a requested subdomain label.
+func normalizeOrgSlug(raw string) (string, error) {
+	s := strings.ToLower(strings.TrimSpace(raw))
+	switch {
+	case s == "":
+		return "", errors.New("укажите поддомен")
+	case len(s) < 3 || len(s) > 30:
+		return "", errors.New("поддомен должен быть от 3 до 30 символов")
+	case !orgSlugRe.MatchString(s):
+		return "", errors.New("поддомен: только латиница, цифры и дефис (не в начале или конце)")
+	case allDigits(s):
+		// All-numeric labels are valid DNS but confusing (look like ids) — disallow.
+		return "", errors.New("поддомен не может состоять только из цифр")
+	case reservedSlugs[s]:
+		return "", errors.New("этот поддомен зарезервирован")
+	default:
+		return s, nil
+	}
+}
+
+// SignupOrganizer is the self-service front door of the SaaS: a prospective
+// organizer (вуз) registers, which provisions a brand-new Organization (tenant
+// root, free plan, active) and makes the registrant its owner (role=org). They
+// land in the console onboarding to build their first conference; payment gates
+// the public deploy later. Unlike participant Register, this IGNORES the
+// Host-resolved tenant — it creates a NEW org and stamps the user with it, so the
+// principal's JWT carries the new org and the console scopes to it by identity.
+func (h *AuthHandler) SignupOrganizer(c *gin.Context) {
+	var req OrganizerSignupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	req.FullName = strings.TrimSpace(req.FullName)
+	req.Email = normalizeEmail(req.Email)
+	req.UniversityName = strings.TrimSpace(req.UniversityName)
+	slug, err := normalizeOrgSlug(req.Slug)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.FullName == "" || req.Email == "" || req.UniversityName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "заполните все обязательные поля"})
+		return
+	}
+	// Email is the owner's only login and the sole password-recovery channel — a
+	// typo'd address would orphan an active tenant. Reject grossly malformed input.
+	if _, err := netmail.ParseAddress(req.Email); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "укажите корректный e-mail"})
+		return
+	}
+	password, err := validatePassword(req.Password)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// Email is one human / one login across ALL tenants; slug is the subdomain.
+	// Both are globally unique — check before insert for a friendly message, and
+	// rely on the unique indexes inside the transaction to settle any race.
+	if _, err := h.findUserByEmail(h.DB, req.Email); err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "пользователь с таким e-mail уже существует"})
+		return
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate user"})
+		return
+	}
+	var existing models.Organization
+	if err := h.DB.Where("slug = ?", slug).First(&existing).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "этот поддомен уже занят"})
+		return
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate subdomain"})
+		return
+	}
+	passwordHash, err := hashPassword(password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
+		return
+	}
+	// Provision the tenant and its owner atomically: an org with no admin (or an
+	// admin with no org) would be unreachable, and a unique-index race on email/slug
+	// must roll the whole thing back rather than leave an orphan org.
+	var user models.User
+	err = h.DB.Transaction(func(tx *gorm.DB) error {
+		org := models.Organization{
+			Slug:        slug,
+			DisplayName: req.UniversityName,
+			Status:      models.OrganizationStatusActive,
+			Plan:        models.OrganizationPlanFree,
+		}
+		if err := tx.Create(&org).Error; err != nil {
+			return err
+		}
+		user = models.User{
+			Email:          req.Email,
+			PasswordHash:   passwordHash,
+			Role:           models.RoleOrg,
+			UserType:       models.UserTypeOnline,
+			OrganizationID: &org.ID,
+			Profile: models.Profile{
+				FullName:     req.FullName,
+				Organization: req.UniversityName,
+			},
+		}
+		return tx.Create(&user).Error
+	})
+	if err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "организация или пользователь уже существуют"})
+		return
+	}
 	if err := h.issueSession(c, user); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to establish session"})
 		return

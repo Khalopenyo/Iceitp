@@ -28,7 +28,9 @@ export default function Login() {
       if (data.user) {
         setUser(data.user);
       }
-      navigate(safeNext || "/dashboard");
+      // Организатор/админ идёт в консоль, участник — в личный кабинет.
+      const isOrganizer = ["admin", "org"].includes(data.user?.role);
+      navigate(safeNext || (isOrganizer ? "/console" : "/dashboard"));
     } catch (err) {
       setErrorMessage(err.message || "Неверный логин или пароль. Проверьте данные и попробуйте снова.");
     } finally {
@@ -91,6 +93,9 @@ export default function Login() {
       </button>
       <p className="auth-links auth-links-center">
         Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
+      </p>
+      <p className="auth-links auth-links-center auth-links-muted">
+        Организуете конференцию? <Link to="/console/signup">Создать рабочее пространство</Link>
       </p>
     </Card>
   );

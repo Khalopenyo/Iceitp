@@ -11,7 +11,7 @@ export default function ConsoleDocs() {
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
-    apiGet("/landing").then((d) => setStats(d?.stats || {})).catch(() => setStats({}));
+    apiGet("/admin/landing").then((d) => setStats(d?.stats || {})).catch(() => setStats({}));
   }, []);
 
   const finished = conference?.status === "finished";
