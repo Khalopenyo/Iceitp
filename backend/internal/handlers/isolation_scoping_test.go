@@ -338,6 +338,34 @@ func TestConferenceLessOrgReadsFailClosed(t *testing.T) {
 	}
 }
 
+// TestGetConferenceNoSideEffectOnFreshOrg proves the read-only GET /conference is
+// side-effect free: a freshly provisioned org with no conference gets a 404 and NO
+// stub row is created (the bug was that the anonymous read auto-created one).
+func TestGetConferenceNoSideEffectOnFreshOrg(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, _ := setupTwoTenants(t, "iso_conf_noside")
+	// A real organization with no conference yet (a normal pre-onboarding state).
+	mustCreateH(t, db, &models.Organization{Slug: "gamma", DisplayName: "Gamma"})
+
+	r := gin.New()
+	r.Use(tenant.Middleware(db))
+	r.GET("/conference", (&ConferenceHandler{DB: db}).GetConference)
+
+	var before int64
+	db.Model(&models.Conference{}).Count(&before)
+
+	w := tenantReq(t, r, http.MethodGet, "gamma.platform.ru", "/conference", nil)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("fresh-org GET /conference -> %d, want 404 (%s)", w.Code, w.Body.String())
+	}
+
+	var after int64
+	db.Model(&models.Conference{}).Count(&after)
+	if after != before {
+		t.Errorf("GET /conference created a row: count %d -> %d (read endpoint must not mutate)", before, after)
+	}
+}
+
 // TestConferenceLessOrgReplaceMarkers409 proves a conference-less org gets a 409
 // from ReplaceMarkers instead of triggering the legacy global delete that would
 // wipe other tenants' markers.

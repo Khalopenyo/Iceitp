@@ -37,9 +37,16 @@ type updateConferencePayload struct {
 }
 
 func (h *ConferenceHandler) GetConference(c *gin.Context) {
-	conf, err := h.getOrCreateConference(c)
+	conf, err := h.getConferenceOrNil(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load conference"})
+		return
+	}
+	if conf == nil {
+		// Read-эндпоинт не создаёт строку: пока организатор не прошёл онбординг,
+		// конференции нет. Фронт это переживает (Layout/OrgConsoleLayout ловят
+		// ошибку и трактуют как conference=null → заглушка/редирект на онбординг).
+		c.JSON(http.StatusNotFound, gin.H{"error": "conference not found"})
 		return
 	}
 	c.JSON(http.StatusOK, conf)
@@ -180,9 +187,20 @@ type landingStats struct {
 // запросом: конференция, агрегаты (секции/доклады/участники/города), карточки
 // секций с числом докладов и превью программы. Всё тенант-скоуплено.
 func (h *ConferenceHandler) GetLanding(c *gin.Context) {
-	conf, err := h.getOrCreateConference(c)
+	conf, err := h.getConferenceOrNil(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load conference"})
+		return
+	}
+	if conf == nil {
+		// Публичный анонимный read: у тенанта ещё нет конференции — отдаём пустую
+		// витрину без сайд-эффекта записи (fetchLanding на фронте это переживает).
+		c.JSON(http.StatusOK, gin.H{
+			"conference":      nil,
+			"stats":           landingStats{},
+			"sections":        []landingSectionView{},
+			"program_preview": []landingSectionView{},
+		})
 		return
 	}
 
@@ -250,25 +268,44 @@ func (h *ConferenceHandler) GetLanding(c *gin.Context) {
 	})
 }
 
-func (h *ConferenceHandler) getOrCreateConference(c *gin.Context) (*models.Conference, error) {
+// getConferenceOrNil читает конференцию тенанта БЕЗ сайд-эффектов: возвращает
+// (nil, nil), если её ещё нет. Используется на read-путях (GetConference,
+// GetLanding) — анонимный GET не должен мутировать БД. Создание заглушки —
+// только на явном write-пути (см. getOrCreateConference).
+func (h *ConferenceHandler) getConferenceOrNil(c *gin.Context) (*models.Conference, error) {
 	var conf models.Conference
 	if err := tenant.DB(c, h.DB).Scopes(tenant.ByOrg(c)).Order("id asc").First(&conf).Error; err != nil {
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, err
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
 		}
-		// Нейтральная заглушка: без хардкод-конференции и личного email. Реальные
-		// данные задаёт организатор в онбординге (CreateConference → onboarded=true).
-		conf = models.Conference{
-			Title:     "Новая конференция",
-			Status:    models.ConferenceStatusDraft,
-			Onboarded: false,
-			Format:    "hybrid",
-		}
-		org := tenant.OrgID(c)
-		conf.OrganizationID = &org
-		if err := tenant.DB(c, h.DB).Create(&conf).Error; err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 	return &conf, nil
+}
+
+// getOrCreateConference — write-путь: возвращает конференцию тенанта, создавая
+// нейтральную заглушку, если её ещё нет. Зовётся только из CreateConference
+// (онбординг) и UpdateConference, где мутация состояния ожидаема.
+func (h *ConferenceHandler) getOrCreateConference(c *gin.Context) (*models.Conference, error) {
+	conf, err := h.getConferenceOrNil(c)
+	if err != nil {
+		return nil, err
+	}
+	if conf != nil {
+		return conf, nil
+	}
+	// Нейтральная заглушка: без хардкод-конференции и личного email. Реальные
+	// данные задаёт организатор в онбординге (CreateConference → onboarded=true).
+	stub := models.Conference{
+		Title:     "Новая конференция",
+		Status:    models.ConferenceStatusDraft,
+		Onboarded: false,
+		Format:    "hybrid",
+	}
+	org := tenant.OrgID(c)
+	stub.OrganizationID = &org
+	if err := tenant.DB(c, h.DB).Create(&stub).Error; err != nil {
+		return nil, err
+	}
+	return &stub, nil
 }
