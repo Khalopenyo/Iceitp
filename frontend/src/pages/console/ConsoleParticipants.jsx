@@ -21,7 +21,8 @@ export default function ConsoleParticipants() {
   const [filter, setFilter] = useState("all");
 
   useEffect(() => {
-    apiGet("/admin/users?page_size=100")
+    // role=participant: организатор и команда (org/admin/staff) — не «заявки участников».
+    apiGet("/admin/users?role=participant&page_size=100")
       .then((r) => {
         const list = Array.isArray(r) ? r : r?.items || [];
         setUsers(list);
