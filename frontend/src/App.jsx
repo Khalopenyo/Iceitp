@@ -14,6 +14,7 @@ import ConsoleParticipants from "./pages/console/ConsoleParticipants.jsx";
 import ConsoleModeration from "./pages/console/ConsoleModeration.jsx";
 import ConsoleDocs from "./pages/console/ConsoleDocs.jsx";
 import ConsoleBilling from "./pages/console/ConsoleBilling.jsx";
+import ConsoleTeam from "./pages/console/ConsoleTeam.jsx";
 import Welcome from "./pages/Welcome.jsx";
 import Register from "./pages/Register.jsx";
 import Login from "./pages/Login.jsx";
@@ -64,6 +65,33 @@ function AdminRoute({ children }) {
   return children;
 }
 
+// ConsoleRoute guards the organizer console: the owner (org/admin) AND invited
+// staff reach it; owner-only operations are gated server-side and hidden in the UI.
+function ConsoleRoute({ children }) {
+  const user = getUser();
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!["admin", "org", "staff"].includes(user.role)) {
+    return <Navigate to="/forbidden" replace />;
+  }
+  return children;
+}
+
+// OwnerRoute guards owner-only console pages (branding, billing): invited staff are
+// bounced back to the console overview. The server enforces these too (403); this
+// keeps staff from landing on an owner-only screen whose save always fails.
+function OwnerRoute({ children }) {
+  const user = getUser();
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!["admin", "org"].includes(user.role)) {
+    return <Navigate to="/console" replace />;
+  }
+  return children;
+}
+
 export default function App() {
   useEffect(() => {
     // Apply the resolved tenant's branding (primary color) over the academic-blue
@@ -93,20 +121,20 @@ export default function App() {
       <Route
         path="console"
         element={
-          <AdminRoute>
+          <ConsoleRoute>
             <OrgConsoleLayout />
-          </AdminRoute>
+          </ConsoleRoute>
         }
       >
         <Route index element={<Overview />} />
-        <Route path="branding" element={<Branding />} />
+        <Route path="branding" element={<OwnerRoute><Branding /></OwnerRoute>} />
         <Route path="program" element={<ConsoleProgram />} />
         <Route path="participants" element={<ConsoleParticipants />} />
         <Route path="checkin" element={<ConsoleSoon eyebrow="Регистрация на месте" title="Сканирование бейджей" />} />
         <Route path="moderation" element={<ConsoleModeration />} />
         <Route path="docs" element={<ConsoleDocs />} />
-        <Route path="team" element={<ConsoleSoon eyebrow="Команда" title="Кто работает над конференцией" />} />
-        <Route path="billing" element={<ConsoleBilling />} />
+        <Route path="team" element={<ConsoleTeam />} />
+        <Route path="billing" element={<OwnerRoute><ConsoleBilling /></OwnerRoute>} />
       </Route>
       <Route
         element={

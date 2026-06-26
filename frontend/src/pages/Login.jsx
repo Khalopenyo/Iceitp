@@ -28,8 +28,8 @@ export default function Login() {
       if (data.user) {
         setUser(data.user);
       }
-      // Организатор/админ идёт в консоль, участник — в личный кабинет.
-      const isOrganizer = ["admin", "org"].includes(data.user?.role);
+      // Организатор/админ/команда идут в консоль, участник — в личный кабинет.
+      const isOrganizer = ["admin", "org", "staff"].includes(data.user?.role);
       navigate(safeNext || (isOrganizer ? "/console" : "/dashboard"));
     } catch (err) {
       setErrorMessage(err.message || "Неверный логин или пароль. Проверьте данные и попробуйте снова.");

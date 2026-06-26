@@ -9,7 +9,8 @@ type UserType string
 const (
 	RoleParticipant Role = "participant"
 	RoleAdmin       Role = "admin"
-	RoleOrg         Role = "org"
+	RoleOrg         Role = "org"   // владелец рабочего пространства (тенанта)
+	RoleStaff       Role = "staff" // приглашённый член команды; функц. роль — в Membership
 )
 
 const (

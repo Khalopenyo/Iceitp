@@ -801,6 +801,28 @@
   font-size: 13.5px;
   white-space: nowrap;
 }
+/* Иконка-кнопка (убрать из команды) */
+.con-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--faint);
+  cursor: pointer;
+  flex: none;
+}
+.con-icon-btn:hover {
+  color: #b91c1c;
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+.con-icon-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
 .con-onboard-foot {
   text-align: center;
   font-size: 13px;

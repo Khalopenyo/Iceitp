@@ -76,6 +76,7 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	checkInHandler := &handlers.CheckInHandler{DB: db, JWTSecret: cfg.JWTSecret}
 	submissionHandler := &handlers.SubmissionHandler{DB: db, Store: store}
 	orgHandler := &handlers.OrganizationHandler{DB: db}
+	teamHandler := &handlers.TeamHandler{DB: db, OwnerDB: ownerDB, AppBaseURL: cfg.AppBaseURL}
 	contentHandler := &handlers.ContentHandler{DB: db}
 	personHandler := &handlers.PersonHandler{DB: db}
 
@@ -153,7 +154,10 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 
 	admin := api.Group("/admin")
 	admin.Use(auth.Middleware(cfg.JWTSecret))
-	admin.Use(auth.RequireRole("admin", "org"))
+	// Owner + invited staff reach the console; owner-only operations (money,
+	// identity, team, user management, conference lifecycle) add ownerOnly below.
+	admin.Use(auth.RequireRole("admin", "org", "staff"))
+	ownerOnly := auth.RequireRole("admin", "org")
 	// The organizer console is served from the bare app domain; scope it to the
 	// authenticated organizer's own org (identity), re-resolving that org's
 	// conference — never the Host-resolved tenant. Then reject suspended/deleted
@@ -161,10 +165,10 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	admin.Use(tenant.IdentityScope(ownerDB))
 	admin.Use(tenant.RequireActiveOrg(ownerDB))
 	admin.GET("/users", userHandler.ListUsers)
-	admin.PUT("/users/:id/role", userHandler.UpdateUserRole)
+	admin.PUT("/users/:id/role", ownerOnly, userHandler.UpdateUserRole)
 	admin.PUT("/users/:id/badge", userHandler.SetBadgeIssued)
 	admin.GET("/users/:id/badge", docHandler.AdminBadgePDF)
-	admin.DELETE("/users/:id", userHandler.DeleteUser)
+	admin.DELETE("/users/:id", ownerOnly, userHandler.DeleteUser)
 	admin.GET("/sections", sectionHandler.ListSectionsAdmin)
 	admin.POST("/sections", sectionHandler.CreateSection)
 	admin.PUT("/sections/:id", sectionHandler.UpdateSection)
@@ -173,7 +177,7 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	admin.DELETE("/rooms/:id", roomHandler.DeleteRoom)
 	admin.PUT("/map/markers", mapMarkerHandler.ReplaceMarkers)
 	admin.PUT("/map/routes", mapRouteHandler.UpsertRoute)
-	admin.POST("/seed-demo", scheduleHandler.SeedDemo)
+	admin.POST("/seed-demo", ownerOnly, scheduleHandler.SeedDemo)
 	admin.GET("/schedule", scheduleHandler.AdminSchedule)
 	admin.GET("/program", programHandler.ListProgram)
 	admin.PUT("/program/:userID", programHandler.UpsertProgramAssignment)
@@ -184,15 +188,21 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	admin.PATCH("/questions/:id", questionHandler.UpdateQuestionStatus)
 	admin.DELETE("/questions/:id", questionHandler.DeleteQuestion)
 	admin.GET("/conference", conferenceHandler.GetConference)
-	admin.POST("/conference", conferenceHandler.CreateConference)
-	admin.PUT("/conference", conferenceHandler.UpdateConference)
+	admin.POST("/conference", ownerOnly, conferenceHandler.CreateConference)
+	admin.PUT("/conference", ownerOnly, conferenceHandler.UpdateConference)
 	// Identity-scoped reads for the console: the public /org and /landing resolve by
 	// Host (the bare app domain → DefaultOrgID), so the console must read its own
 	// tenant's branding and stats through the admin (IdentityScope) group instead.
 	admin.GET("/org", orgHandler.GetOrg)
 	admin.GET("/landing", conferenceHandler.GetLanding)
-	admin.PUT("/org", orgHandler.UpdateOrg)
-	admin.PUT("/billing", orgHandler.SelectPlan)
+	admin.PUT("/org", ownerOnly, orgHandler.UpdateOrg)
+	admin.PUT("/billing", ownerOnly, orgHandler.SelectPlan)
+	// Команда оргкомитета: список видит вся команда, приглашения/роли/удаление —
+	// только владелец.
+	admin.GET("/team", teamHandler.List)
+	admin.POST("/team", ownerOnly, teamHandler.Invite)
+	admin.PUT("/team/:id", ownerOnly, teamHandler.UpdateRole)
+	admin.DELETE("/team/:id", ownerOnly, teamHandler.Remove)
 	admin.GET("/content", contentHandler.ListAdmin)
 	admin.POST("/content", contentHandler.Create)
 	admin.PUT("/content/:id", contentHandler.Update)

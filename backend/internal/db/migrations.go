@@ -272,6 +272,32 @@ var migrations = []migration{
 			return db.Model(&models.Conference{}).Where("1 = 1").Update("onboarded", true).Error
 		},
 	},
+	{
+		Version: "202606260020",
+		Name:    "add_memberships",
+		Up: func(db *gorm.DB) error {
+			if err := db.AutoMigrate(&models.Membership{}); err != nil {
+				return err
+			}
+			if db.Dialector.Name() != "postgres" {
+				return nil
+			}
+			// Org-scoped table (команда оргкомитета) → fail-closed RLS по app.org_id,
+			// как у других organization_id-таблиц.
+			for _, s := range []string{
+				"ALTER TABLE memberships ENABLE ROW LEVEL SECURITY",
+				"DROP POLICY IF EXISTS tenant_isolation ON memberships",
+				"CREATE POLICY tenant_isolation ON memberships " +
+					"USING (organization_id = NULLIF(current_setting('app.org_id', true), '')::bigint) " +
+					"WITH CHECK (organization_id = NULLIF(current_setting('app.org_id', true), '')::bigint)",
+			} {
+				if err := db.Exec(s).Error; err != nil {
+					return fmt.Errorf("rls memberships: %w", err)
+				}
+			}
+			return nil
+		},
+	},
 }
 
 // tenantConferenceIDNotNull flips the per-event conference_id columns (and

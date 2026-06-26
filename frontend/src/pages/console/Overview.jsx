@@ -17,7 +17,7 @@ function daysUntil(value) {
 
 export default function Overview() {
   const navigate = useNavigate();
-  const { org, conference, setConference } = useOutletContext();
+  const { org, conference, setConference, isOwner } = useOutletContext();
   const [landing, setLanding] = useState(null);
   const [recent, setRecent] = useState([]);
   const [publishing, setPublishing] = useState(false);
@@ -103,10 +103,12 @@ export default function Overview() {
               "Создайте конференцию, чтобы начать."}
           </p>
         </div>
-        <button className="con-btn" onClick={publish} disabled={publishing || published}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16V4M8 8l4-4 4 4M5 20h14" /></svg>
-          {published ? "Сайт опубликован" : publishing ? "Публикуем…" : "Опубликовать сайт"}
-        </button>
+        {isOwner ? (
+          <button className="con-btn" onClick={publish} disabled={publishing || published}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16V4M8 8l4-4 4 4M5 20h14" /></svg>
+            {published ? "Сайт опубликован" : publishing ? "Публикуем…" : "Опубликовать сайт"}
+          </button>
+        ) : null}
       </div>
 
       <div className="con-stats">
