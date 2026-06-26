@@ -8,6 +8,9 @@ import Overview from "./pages/console/Overview.jsx";
 import Branding from "./pages/console/Branding.jsx";
 import Onboarding from "./pages/console/Onboarding.jsx";
 import Signup from "./pages/console/Signup.jsx";
+import OpsLayout from "./components/OpsLayout.jsx";
+import OpsDashboard from "./pages/ops/OpsDashboard.jsx";
+import OpsTenants from "./pages/ops/OpsTenants.jsx";
 import ConsoleProgram from "./pages/console/ConsoleProgram.jsx";
 import ConsoleParticipants from "./pages/console/ConsoleParticipants.jsx";
 import ConsoleModeration from "./pages/console/ConsoleModeration.jsx";
@@ -51,6 +54,10 @@ function ProtectedRoute({ children }) {
   if (!isAuthenticated()) {
     return <Navigate to="/login" replace />;
   }
+  // Оператор платформы — не участник; уводим в его консоль, а не в участника ЛК.
+  if (getUser()?.role === "operator") {
+    return <Navigate to="/ops" replace />;
+  }
   return children;
 }
 
@@ -88,6 +95,19 @@ function OwnerRoute({ children }) {
   }
   if (!["admin", "org"].includes(user.role)) {
     return <Navigate to="/console" replace />;
+  }
+  return children;
+}
+
+// OpsRoute guards the platform operator console (cross-tenant). Only RoleOperator;
+// the backend /ops/* routes enforce the same.
+function OpsRoute({ children }) {
+  const user = getUser();
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  if (user.role !== "operator") {
+    return <Navigate to="/forbidden" replace />;
   }
   return children;
 }
@@ -135,6 +155,17 @@ export default function App() {
         <Route path="docs" element={<ConsoleDocs />} />
         <Route path="team" element={<ConsoleTeam />} />
         <Route path="billing" element={<OwnerRoute><ConsoleBilling /></OwnerRoute>} />
+      </Route>
+      <Route
+        path="ops"
+        element={
+          <OpsRoute>
+            <OpsLayout />
+          </OpsRoute>
+        }
+      >
+        <Route index element={<OpsDashboard />} />
+        <Route path="tenants" element={<OpsTenants />} />
       </Route>
       <Route
         element={

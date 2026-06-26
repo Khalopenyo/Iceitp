@@ -28,9 +28,11 @@ export default function Login() {
       if (data.user) {
         setUser(data.user);
       }
-      // Организатор/админ/команда идут в консоль, участник — в личный кабинет.
-      const isOrganizer = ["admin", "org", "staff"].includes(data.user?.role);
-      navigate(safeNext || (isOrganizer ? "/console" : "/dashboard"));
+      // Оператор → операторская консоль; организатор/админ/команда → консоль вуза;
+      // участник → личный кабинет.
+      const role = data.user?.role;
+      const home = role === "operator" ? "/ops" : ["admin", "org", "staff"].includes(role) ? "/console" : "/dashboard";
+      navigate(safeNext || home);
     } catch (err) {
       setErrorMessage(err.message || "Неверный логин или пароль. Проверьте данные и попробуйте снова.");
     } finally {

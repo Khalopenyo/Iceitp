@@ -77,6 +77,8 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	submissionHandler := &handlers.SubmissionHandler{DB: db, Store: store}
 	orgHandler := &handlers.OrganizationHandler{DB: db}
 	teamHandler := &handlers.TeamHandler{DB: db, OwnerDB: ownerDB, AppBaseURL: cfg.AppBaseURL}
+	// OPS — кросс-тенантная зона: owner-пул (bypass RLS), без tenant-скоупа.
+	opsHandler := &handlers.OpsHandler{DB: ownerDB}
 	contentHandler := &handlers.ContentHandler{DB: db}
 	personHandler := &handlers.PersonHandler{DB: db}
 
@@ -215,6 +217,18 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	// Регистрация на месте без камеры: отметка участника из ростера + лента/прогресс.
 	admin.POST("/checkin/manual", checkInHandler.ManualCheckIn)
 	admin.GET("/checkin/recent", checkInHandler.RecentCheckIns)
+
+	// ── Операторская консоль платформы (OPS, зона super-admin) ──
+	// КРОСС-ТЕНАНТНАЯ: НЕ применяем IdentityScope/RequireActiveOrg (оператор видит
+	// все вузы); работаем на owner-пуле (bypass RLS). Доступ — только RoleOperator;
+	// auth.Middleware привязывает к платформенному домену (на тенант-поддомене 403).
+	ops := api.Group("/ops")
+	ops.Use(auth.Middleware(cfg.JWTSecret))
+	ops.Use(auth.RequireRole("operator"))
+	ops.GET("/stats", opsHandler.Stats)
+	ops.GET("/tenants", opsHandler.ListTenants)
+	ops.PUT("/tenants/:id/status", opsHandler.SetTenantStatus)
+	ops.PUT("/tenants/:id/plan", opsHandler.SetTenantPlan)
 
 	return r
 }

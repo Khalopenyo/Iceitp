@@ -142,6 +142,17 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 	})
 }
 
+// assignableUserRoles are the only roles a tenant admin/owner may assign via the
+// console. The platform-operator (cross-tenant super-admin) role is DELIBERATELY
+// excluded — otherwise a tenant owner could self-mint an operator and seize control
+// of every tenant. RoleOrg is also excluded (ownership is set at signup, not via
+// the role switcher). Operators are provisioned out-of-band only.
+var assignableUserRoles = map[models.Role]bool{
+	models.RoleParticipant: true,
+	models.RoleAdmin:       true,
+	models.RoleStaff:       true,
+}
+
 func (h *UserHandler) UpdateUserRole(c *gin.Context) {
 	id := c.Param("id")
 	var payload struct {
@@ -149,6 +160,10 @@ func (h *UserHandler) UpdateUserRole(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&payload); err != nil || payload.Role == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	if !assignableUserRoles[payload.Role] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "недопустимая роль"})
 		return
 	}
 	res := tenant.DB(c, h.DB).Model(&models.User{}).Scopes(tenant.ByOrg(c)).Where("id = ?", id).Update("role", payload.Role)

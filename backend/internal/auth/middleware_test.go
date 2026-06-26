@@ -78,6 +78,35 @@ func TestMiddlewareAllowsTokenOnBareDomain(t *testing.T) {
 	}
 }
 
+// TestMiddlewareOperatorBypassesHostBinding proves the platform operator is NOT
+// subject to the cross-tenant Host-binding: an operator token presented on a real
+// tenant subdomain whose org differs from the token's org still passes (operators
+// are cross-tenant by definition; OPS would otherwise 403 on tenant subdomains).
+func TestMiddlewareOperatorBypassesHostBinding(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const secret = "test-secret"
+
+	token, err := GenerateToken(1, models.RoleOperator, 7, secret, time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateToken: %v", err)
+	}
+
+	r := gin.New()
+	// A real tenant subdomain resolved org 9 — different from the operator's org 7.
+	r.Use(func(c *gin.Context) { tenant.SetScope(c, tenant.Scope{OrgID: 9, HostMatched: true}); c.Next() })
+	r.Use(Middleware(secret))
+	r.GET("/x", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("operator on a foreign tenant subdomain -> %d, want 200 (cross-tenant by definition)", w.Code)
+	}
+}
+
 // TestMiddlewareToleratesTokenWithoutOrgClaim ensures pre-migration tokens (no
 // org claim) still authenticate, so the rollout does not invalidate live sessions.
 func TestMiddlewareToleratesTokenWithoutOrgClaim(t *testing.T) {

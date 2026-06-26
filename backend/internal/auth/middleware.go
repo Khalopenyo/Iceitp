@@ -43,7 +43,10 @@ func Middleware(secret string) gin.HandlerFunc {
 		// downstream — so an organizer can manage their tenant from app.<domain> /
 		// localhost. Pre-migration tokens with no org claim (OrganizationID == 0)
 		// are tolerated.
-		if claims.OrganizationID != 0 {
+		// The platform OPERATOR is cross-tenant by definition (zone OPS spans all
+		// вузы), so the Host-binding never applies to it — otherwise the operator
+		// console would 403 whenever the SPA tab sits on a tenant subdomain.
+		if claims.OrganizationID != 0 && claims.Role != models.RoleOperator {
 			if s, ok := tenant.FromContext(c); ok && s.HostMatched && s.OrgID != 0 && s.OrgID != claims.OrganizationID {
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "token does not belong to this organization"})
 				return
