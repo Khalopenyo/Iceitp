@@ -14,7 +14,7 @@ const PLATFORM_NAME = "КонференцХаб";
 // не гейтит (участник должен видеть кабинет/сертификат после конференции). draft и suspended
 // гейтят всё — иначе чужой/вошедший увидел бы НЕопубликованную витрину. Здесь только реально
 // смонтированные под EventShell личные маршруты (по мере переноса ЛК добавлять сюда).
-const AUTHED_PREFIXES = ["/dashboard", "/documents", "/chat", "/schedule", "/profile"];
+const AUTHED_PREFIXES = ["/dashboard", "/documents", "/chat", "/schedule", "/profile", "/feedback", "/map"];
 
 // Навигация публичного сайта вуза. Контентные пункты видят все; кабинет/чат/
 // документы — только вошедшие участники.
@@ -29,8 +29,10 @@ const PUBLIC_NAV = [
 const AUTH_NAV = [
   { to: "/dashboard", label: "Кабинет", icon: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" },
   { to: "/schedule", label: "Моё расписание", icon: "M4 5h16v15H4zM4 9h16M8 3v4M16 3v4M9 14l2 2 4-4" },
+  { to: "/map", label: "Карта 360°", icon: "M12 21s7-6.5 7-11a7 7 0 10-14 0c0 4.5 7 11 7 11zM12 10a2 2 0 100-4 2 2 0 000 4" },
   { to: "/documents", label: "Документы", icon: "M6 3h8l4 4v14H6zM14 3v4h4" },
   { to: "/chat", label: "Чат", icon: "M4 5h16v11H9l-5 4z" },
+  { to: "/feedback", label: "Обратная связь", icon: "M12 3l2.6 5.5 6 .8-4.4 4.2 1.1 6L12 16.8 6.7 19.5l1.1-6L3.4 9.3l6-.8z" },
 ];
 
 function initials(name) {

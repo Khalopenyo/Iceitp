@@ -1799,6 +1799,100 @@
   margin-bottom: 6px;
 }
 
+/* ── Обратная связь — оценка ── */
+.ev-rating {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.ev-rating-btn {
+  padding: 14px 8px;
+  border: 1px solid var(--ev-line);
+  border-radius: var(--ev-radius-lg);
+  background: var(--ev-surface);
+  cursor: pointer;
+  text-align: center;
+  font-family: inherit;
+}
+.ev-rating-btn strong {
+  display: block;
+  font-family: var(--ev-font-head);
+  font-weight: var(--ev-head-weight);
+  font-size: 20px;
+  color: var(--ev-ink);
+}
+.ev-rating-btn span {
+  font-size: 11px;
+  color: var(--ev-muted);
+}
+.ev-rating-btn:hover {
+  border-color: var(--ev-accent);
+}
+.ev-rating-btn.active {
+  border-color: var(--ev-accent);
+  background: var(--ev-accent-wash);
+}
+.ev-rating-btn.active strong {
+  color: var(--ev-accent);
+}
+
+/* ── Карта 360° ── */
+.ev-map-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.ev-map-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ev-map-loc {
+  padding: 12px 14px;
+  border: 1px solid var(--ev-line);
+  border-radius: var(--ev-radius);
+  background: var(--ev-surface);
+  color: var(--ev-ink);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+}
+.ev-map-loc:hover {
+  border-color: var(--ev-accent);
+}
+.ev-map-loc.active {
+  border-color: var(--ev-accent);
+  background: var(--ev-accent);
+  color: #fff;
+}
+.ev-map-viewer {
+  border: 1px solid var(--ev-line);
+  border-radius: var(--ev-radius-lg);
+  overflow: hidden;
+  background: var(--ev-surface);
+}
+.ev-map-toolbar {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--ev-line);
+  font-weight: 600;
+  color: var(--ev-ink);
+}
+.ev-map-shell {
+  height: 460px;
+  position: relative;
+}
+/* Сайзим только сам контейнер панорамы (а не абсолютный оверлей подсказок), и
+   гасим унаследованный min-height:560px из index.css, иначе панорама вылезала бы за shell. */
+.ev-map-shell .panorama-viewer {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
 /* Малые кнопки/ссылки общего вида */
 .ev-btn-sm {
   display: inline-block;

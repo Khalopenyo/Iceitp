@@ -33,18 +33,18 @@ import EventDocuments from "./pages/event/EventDocuments.jsx";
 import EventChat from "./pages/event/EventChat.jsx";
 import EventProfile from "./pages/event/EventProfile.jsx";
 import EventSchedule from "./pages/event/EventSchedule.jsx";
+import EventFeedback from "./pages/event/EventFeedback.jsx";
+import EventMap from "./pages/event/EventMap.jsx";
 import Register from "./pages/Register.jsx";
 import Login from "./pages/Login.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
 import Admin from "./pages/Admin.jsx";
-import Feedback from "./pages/Feedback.jsx";
 import { isAuthenticated, getUser } from "./lib/auth.js";
 import NoAccess from "./pages/NoAccess.jsx";
 import NotFound from "./pages/NotFound.jsx";
 import VerifyCertificate from "./pages/VerifyCertificate.jsx";
 import About from "./pages/About.jsx";
-import Map from "./pages/Map.jsx";
 import Legal from "./pages/Legal.jsx";
 import BadgeCheckIn from "./pages/BadgeCheckIn.jsx";
 import QuestionPrompt from "./pages/QuestionPrompt.jsx";
@@ -182,6 +182,8 @@ export default function App() {
         <Route path="chat" element={<ProtectedRoute><EventChat /></ProtectedRoute>} />
         <Route path="schedule" element={<ProtectedRoute><EventSchedule /></ProtectedRoute>} />
         <Route path="profile" element={<ProtectedRoute><EventProfile /></ProtectedRoute>} />
+        <Route path="feedback" element={<ProtectedRoute><EventFeedback /></ProtectedRoute>} />
+        <Route path="map" element={<ProtectedRoute><EventMap /></ProtectedRoute>} />
         <Route path="program" element={<EventProgram />} />
         <Route path="sections" element={<EventSections />} />
         <Route path="sections/:id" element={<EventSectionDetail />} />
@@ -194,22 +196,6 @@ export default function App() {
         <Route path="badge/:token" element={<BadgeCheckIn />} />
         <Route path="questions/:token" element={<QuestionPrompt />} />
         <Route path="questions/:token/approved" element={<ApprovedQuestions />} />
-        <Route
-          path="feedback"
-          element={
-            <ProtectedRoute>
-              <Feedback />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="map"
-          element={
-            <ProtectedRoute>
-              <Map />
-            </ProtectedRoute>
-          }
-        />
         <Route
           path="admin/questions/approved"
           element={
