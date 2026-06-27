@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout.jsx";
 import AuthLayout from "./components/AuthLayout.jsx";
-import LKLayout from "./components/LKLayout.jsx";
 import OrgConsoleLayout from "./components/OrgConsoleLayout.jsx";
 import Overview from "./pages/console/Overview.jsx";
 import Branding from "./pages/console/Branding.jsx";
@@ -32,12 +31,12 @@ import EventVenue from "./pages/event/EventVenue.jsx";
 import EventLive from "./pages/event/EventLive.jsx";
 import EventDocuments from "./pages/event/EventDocuments.jsx";
 import EventChat from "./pages/event/EventChat.jsx";
+import EventProfile from "./pages/event/EventProfile.jsx";
+import EventSchedule from "./pages/event/EventSchedule.jsx";
 import Register from "./pages/Register.jsx";
 import Login from "./pages/Login.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
-import Profile from "./pages/Profile.jsx";
-import Schedule from "./pages/Schedule.jsx";
 import Admin from "./pages/Admin.jsx";
 import Feedback from "./pages/Feedback.jsx";
 import { isAuthenticated, getUser } from "./lib/auth.js";
@@ -174,16 +173,6 @@ export default function App() {
         <Route index element={<OpsDashboard />} />
         <Route path="tenants" element={<OpsTenants />} />
       </Route>
-      <Route
-        element={
-          <ProtectedRoute>
-            <LKLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route path="profile" element={<Profile />} />
-        <Route path="schedule" element={<Schedule />} />
-      </Route>
       {/* Публичный сайт вуза — единый shell-с-сайдбаром (редизайн), бренд per-tenant.
           Все витринные экраны под одним каркасом, чтобы переходы не «прыгали» на старый Layout. */}
       <Route path="/" element={<EventShell />}>
@@ -191,6 +180,8 @@ export default function App() {
         <Route path="dashboard" element={<ProtectedRoute><EventDashboard /></ProtectedRoute>} />
         <Route path="documents" element={<ProtectedRoute><EventDocuments /></ProtectedRoute>} />
         <Route path="chat" element={<ProtectedRoute><EventChat /></ProtectedRoute>} />
+        <Route path="schedule" element={<ProtectedRoute><EventSchedule /></ProtectedRoute>} />
+        <Route path="profile" element={<ProtectedRoute><EventProfile /></ProtectedRoute>} />
         <Route path="program" element={<EventProgram />} />
         <Route path="sections" element={<EventSections />} />
         <Route path="sections/:id" element={<EventSectionDetail />} />

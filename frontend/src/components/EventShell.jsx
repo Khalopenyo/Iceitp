@@ -14,7 +14,7 @@ const PLATFORM_NAME = "КонференцХаб";
 // не гейтит (участник должен видеть кабинет/сертификат после конференции). draft и suspended
 // гейтят всё — иначе чужой/вошедший увидел бы НЕопубликованную витрину. Здесь только реально
 // смонтированные под EventShell личные маршруты (по мере переноса ЛК добавлять сюда).
-const AUTHED_PREFIXES = ["/dashboard", "/documents", "/chat"];
+const AUTHED_PREFIXES = ["/dashboard", "/documents", "/chat", "/schedule", "/profile"];
 
 // Навигация публичного сайта вуза. Контентные пункты видят все; кабинет/чат/
 // документы — только вошедшие участники.
@@ -28,6 +28,7 @@ const PUBLIC_NAV = [
 ];
 const AUTH_NAV = [
   { to: "/dashboard", label: "Кабинет", icon: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" },
+  { to: "/schedule", label: "Моё расписание", icon: "M4 5h16v15H4zM4 9h16M8 3v4M16 3v4M9 14l2 2 4-4" },
   { to: "/documents", label: "Документы", icon: "M6 3h8l4 4v14H6zM14 3v4h4" },
   { to: "/chat", label: "Чат", icon: "M4 5h16v11H9l-5 4z" },
 ];
@@ -120,13 +121,13 @@ export default function EventShell() {
 
           <div className="event-foot">
             {isParticipant ? (
-              <div className="event-user">
+              <Link to="/profile" className="event-user" style={{ textDecoration: "none" }}>
                 <span className="event-user-av">{initials(user?.profile?.full_name || user?.email)}</span>
                 <span className="event-user-tx">
                   <b>{user?.profile?.full_name || "Участник"}</b>
                   <span>{isTenantStaff ? "Оргкомитет" : "Участник"}</span>
                 </span>
-              </div>
+              </Link>
             ) : (
               <>
                 <Link to="/register" className="event-foot-btn primary">Регистрация</Link>

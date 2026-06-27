@@ -1588,6 +1588,217 @@
   cursor: pointer;
 }
 
+/* ── Поля форм участника (профиль/обратная связь) ── */
+.ev-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.ev-field > span {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ev-muted);
+}
+.ev-field input,
+.ev-field select,
+.ev-field textarea {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--ev-line);
+  border-radius: var(--ev-radius);
+  font-family: inherit;
+  font-size: 14.5px;
+  color: var(--ev-ink);
+  background: var(--ev-surface);
+}
+.ev-field textarea {
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.6;
+}
+.ev-field input:focus,
+.ev-field select:focus,
+.ev-field textarea:focus {
+  border-color: var(--ev-accent);
+  box-shadow: 0 0 0 3px var(--ev-accent-wash);
+}
+.ev-static {
+  padding: 11px 14px;
+  border: 1px solid var(--ev-line);
+  border-radius: var(--ev-radius);
+  background: var(--ev-surface-2);
+  font-size: 14.5px;
+  color: var(--ev-ink);
+}
+.ev-status {
+  padding: 10px 14px;
+  border-radius: var(--ev-radius);
+  font-size: 13.5px;
+  margin-bottom: 12px;
+}
+.ev-status.ok {
+  background: #e7f6ec;
+  color: #1f7a44;
+}
+.ev-status.err {
+  background: #fdecec;
+  color: #b42318;
+}
+
+/* ── Профиль участника ── */
+.ev-profile-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.ev-profile-av {
+  width: 64px;
+  height: 64px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ev-accent);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  font-weight: 600;
+}
+.ev-profile-id b {
+  display: block;
+  font-family: var(--ev-font-head);
+  font-weight: var(--ev-head-weight);
+  font-size: 19px;
+  color: var(--ev-ink);
+}
+.ev-profile-id span {
+  font-size: 13px;
+  color: var(--ev-muted);
+}
+.ev-consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--ev-surface);
+  border: 1px solid var(--ev-line);
+  border-radius: var(--ev-radius-lg);
+  margin-bottom: 10px;
+}
+.ev-consent-mark {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  font-weight: 700;
+}
+.ev-consent-mark.ok {
+  background: #e7f6ec;
+  color: #1f7a44;
+}
+.ev-consent-mark.no {
+  background: var(--ev-surface-2);
+  color: var(--ev-faint);
+}
+.ev-consent-row b {
+  display: block;
+  font-size: 14px;
+  color: var(--ev-ink);
+}
+.ev-consent-row .ev-consent-sub {
+  font-size: 12.5px;
+  color: var(--ev-muted);
+}
+.ev-consent-row a {
+  color: var(--ev-accent);
+  text-decoration: none;
+}
+
+/* ── Расписание участника ── */
+.ev-segm {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--ev-surface-2);
+  border: 1px solid var(--ev-line);
+  border-radius: 999px;
+  margin-bottom: 18px;
+}
+.ev-segm a,
+.ev-segm button {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--ev-muted);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: inherit;
+}
+.ev-segm .active {
+  background: var(--ev-surface);
+  color: var(--ev-accent);
+}
+.ev-sched-toolrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.ev-sched {
+  display: flex;
+  flex-direction: column;
+}
+.ev-sched-row {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  gap: 18px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--ev-line);
+}
+.ev-sched-row:last-child {
+  border-bottom: none;
+}
+.ev-sched-time {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 13.5px;
+  color: var(--ev-accent);
+  font-weight: 500;
+  padding-top: 2px;
+}
+.ev-sched-ev b {
+  font-size: 15px;
+  color: var(--ev-ink);
+}
+.ev-sched-meta {
+  font-size: 13px;
+  color: var(--ev-muted);
+  margin-top: 3px;
+}
+.ev-sched-row.mine .ev-sched-ev {
+  border-left: 3px solid var(--ev-accent);
+  padding-left: 14px;
+  margin-left: -2px;
+}
+.ev-sched-mine-tag {
+  display: inline-block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--ev-accent);
+  color: #fff;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
 /* Малые кнопки/ссылки общего вида */
 .ev-btn-sm {
   display: inline-block;
@@ -1698,5 +1909,12 @@
   }
   .ev-doc-preview {
     position: static;
+  }
+  .ev-sched-row {
+    grid-template-columns: 64px 1fr;
+    gap: 12px;
+  }
+  .ev-map-layout {
+    grid-template-columns: 1fr;
   }
 }
