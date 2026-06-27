@@ -17,6 +17,7 @@ export default function Branding() {
   const [logoUrl, setLogoUrl] = useState("");
   const [color, setColor] = useState("#4f46e5");
   const [theme, setTheme] = useState("academic");
+  const [customDomain, setCustomDomain] = useState("");
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -26,6 +27,7 @@ export default function Branding() {
     setLogoUrl(org.logo_url || "");
     setColor(org.primary_color || "#4f46e5");
     setTheme(org.theme || "academic");
+    setCustomDomain(org.custom_domain || "");
   }, [org]);
 
   const slug = org?.slug || "вуз";
@@ -40,6 +42,7 @@ export default function Branding() {
         logo_url: logoUrl.trim(),
         primary_color: color,
         theme,
+        custom_domain: customDomain.trim(),
       });
       setOrg(updated);
       applyBranding(updated);
@@ -130,6 +133,17 @@ export default function Branding() {
             </div>
             <p className="con-sub" style={{ fontSize: 12, margin: "8px 0 0" }}>
               Поддомен закрепляется при подключении тарифа.
+            </p>
+            <div className="con-field-label" style={{ marginTop: 16 }}>Свой домен (необязательно)</div>
+            <input
+              value={customDomain}
+              onChange={(e) => setCustomDomain(e.target.value)}
+              placeholder="conf.university.ru"
+              aria-label="Кастомный домен"
+              style={{ width: "100%", height: 38, borderRadius: 9, border: "1px solid var(--line)", background: "var(--surface)", padding: "0 12px", fontFamily: "var(--con-font)", fontSize: 14, color: "var(--ink)" }}
+            />
+            <p className="con-sub" style={{ fontSize: 12, margin: "8px 0 0" }}>
+              Укажите свой домен и направьте на платформу CNAME-записью. Подключение домена и TLS — на стороне платформы.
             </p>
           </div>
 

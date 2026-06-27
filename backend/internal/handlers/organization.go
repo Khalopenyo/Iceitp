@@ -25,9 +25,13 @@ type orgBranding struct {
 	Theme        string `json:"theme"`
 	Status       string `json:"status"`
 	Plan         string `json:"plan"`
+	CustomDomain string `json:"custom_domain"`
 }
 
 var hexColorRe = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+
+// Кастомный домен: валидный hostname (минимум один уровень + TLD), строчные буквы.
+var customDomainRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$`)
 
 // validOrgThemes — направления оформления публичного сайта (см. EventShell).
 var validOrgThemes = map[string]bool{"academic": true, "digital": true}
@@ -45,6 +49,7 @@ func brandingOf(org models.Organization) orgBranding {
 		Theme:        theme,
 		Status:       string(org.Status),
 		Plan:         string(org.Plan),
+		CustomDomain: org.CustomDomain,
 	}
 }
 
@@ -99,6 +104,7 @@ func (h *OrganizationHandler) UpdateOrg(c *gin.Context) {
 		LogoURL      *string `json:"logo_url"`
 		PrimaryColor *string `json:"primary_color"`
 		Theme        *string `json:"theme"`
+		CustomDomain *string `json:"custom_domain"`
 	}
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
@@ -139,6 +145,26 @@ func (h *OrganizationHandler) UpdateOrg(c *gin.Context) {
 			return
 		}
 		updates["theme"] = theme
+	}
+	if payload.CustomDomain != nil {
+		domain := strings.ToLower(strings.TrimSpace(*payload.CustomDomain))
+		if domain != "" {
+			// Пустое = очистить. Иначе валидный hostname...
+			if len(domain) > 253 || !customDomainRe.MatchString(domain) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "custom_domain must be a valid domain like conf.university.ru"})
+				return
+			}
+			// ...и не платформенная/системная зона: симметрично reservedSlugs у поддоменов,
+			// чтобы тенант не присвоил kvorum.ru / *.kvorum.ru / app.* / admin.* и т.п.
+			labels := strings.Split(domain, ".")
+			if domain == "kvorum.ru" || strings.HasSuffix(domain, ".kvorum.ru") || reservedSlugs[labels[0]] {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "this domain is reserved by the platform"})
+				return
+			}
+			// NB: глобальная уникальность custom_domain пока НЕ enforced (колонка не unique и
+			// домен ещё не используется в резолве хоста) — добавить при включении резолва по домену.
+		}
+		updates["custom_domain"] = domain
 	}
 	if len(updates) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no fields to update"})
