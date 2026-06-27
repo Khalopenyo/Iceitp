@@ -24,6 +24,7 @@ type updateConferencePayload struct {
 	StartsAt       *time.Time              `json:"starts_at"`
 	EndsAt         *time.Time              `json:"ends_at"`
 	Status         models.ConferenceStatus `json:"status"`
+	Format         *string                 `json:"format"`
 	ProceedingsURL *string                 `json:"proceedings_url"`
 	SupportEmail   *string                 `json:"support_email"`
 	SupportPhone   *string                 `json:"support_phone"`
@@ -88,6 +89,17 @@ func (h *ConferenceHandler) UpdateConference(c *gin.Context) {
 	setStr(&conf.StreamYouTube, payload.StreamYouTube)
 	setStr(&conf.StreamRutube, payload.StreamRutube)
 	setStr(&conf.ProceedingsURL, payload.ProceedingsURL)
+	if payload.Format != nil {
+		switch strings.TrimSpace(*payload.Format) {
+		case "offline", "online", "hybrid":
+			conf.Format = strings.TrimSpace(*payload.Format)
+		case "":
+			// пустое — не трогаем формат
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid conference format"})
+			return
+		}
+	}
 	if payload.Status != "" {
 		switch payload.Status {
 		case models.ConferenceStatusDraft, models.ConferenceStatusLive, models.ConferenceStatusFinished:

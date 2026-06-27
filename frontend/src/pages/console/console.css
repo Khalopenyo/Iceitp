@@ -726,6 +726,74 @@
 .con-field input:focus {
   border-color: var(--accent);
 }
+.con-field textarea,
+.con-field select {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font-size: 14.5px;
+  color: var(--ink);
+  font-family: var(--con-font);
+  outline: none;
+  background: var(--surface);
+}
+.con-field textarea {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.55;
+}
+.con-field select {
+  height: 46px;
+}
+.con-field textarea:focus,
+.con-field select:focus {
+  border-color: var(--accent);
+}
+/* Под-вкладки разделов (Настройки конференции: Основное/Площадка/Трансляции) */
+.con-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 2px;
+}
+.con-tab {
+  padding: 9px 16px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 13.5px;
+  font-family: var(--con-font);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -3px;
+}
+.con-tab:hover {
+  color: var(--ink);
+}
+.con-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+/* Строка персоны в разделе «Спикеры» — таргетируемый класс (вместо инлайна) + узкий фолбэк. */
+.con-person-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 150px 44px 44px;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 18px;
+}
+@media (max-width: 720px) {
+  .con-person-row {
+    grid-template-columns: 40px minmax(0, 1fr) 40px 40px;
+  }
+  /* Роль остаётся видимой/редактируемой в форме; на узком экране пилюлю прячем. */
+  .con-person-row .con-person-role {
+    display: none;
+  }
+}
 .con-field-hint {
   font-size: 12px;
   color: var(--faint);

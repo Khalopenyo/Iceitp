@@ -12,6 +12,8 @@ import OpsLayout from "./components/OpsLayout.jsx";
 import OpsDashboard from "./pages/ops/OpsDashboard.jsx";
 import OpsTenants from "./pages/ops/OpsTenants.jsx";
 import ConsoleProgram from "./pages/console/ConsoleProgram.jsx";
+import ConsoleSettings from "./pages/console/ConsoleSettings.jsx";
+import ConsoleSpeakers from "./pages/console/ConsoleSpeakers.jsx";
 import ConsoleParticipants from "./pages/console/ConsoleParticipants.jsx";
 import ConsoleModeration from "./pages/console/ConsoleModeration.jsx";
 import ConsoleDocs from "./pages/console/ConsoleDocs.jsx";
@@ -148,8 +150,10 @@ export default function App() {
         }
       >
         <Route index element={<Overview />} />
+        <Route path="settings" element={<OwnerRoute><ConsoleSettings /></OwnerRoute>} />
         <Route path="branding" element={<OwnerRoute><Branding /></OwnerRoute>} />
         <Route path="program" element={<ConsoleProgram />} />
+        <Route path="speakers" element={<ConsoleSpeakers />} />
         <Route path="participants" element={<ConsoleParticipants />} />
         <Route path="checkin" element={<ConsoleCheckin />} />
         <Route path="moderation" element={<ConsoleModeration />} />
