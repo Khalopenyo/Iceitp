@@ -796,11 +796,21 @@
 .con-block-row {
   grid-template-columns: 40px minmax(0, 1fr) 150px 96px 40px 40px;
 }
+/* Строка раздела «Доклады» — внутри con-card (без своего padding): имя/секция/слот/кнопка. */
+.con-talk-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px 150px 110px;
+  gap: 14px;
+  align-items: center;
+}
 @media (max-width: 720px) {
   .con-person-row,
   .con-prog-row,
   .con-block-row {
     grid-template-columns: 40px minmax(0, 1fr) 40px 40px;
+  }
+  .con-talk-row {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
   /* Второстепенные колонки (роль/зал/время/тип/видимость) прячем — данные есть в форме. */
   .con-person-role {

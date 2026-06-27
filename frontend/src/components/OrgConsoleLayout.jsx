@@ -8,6 +8,7 @@ const NAV = [
   { to: "/console", end: true, label: "Обзор", icon: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" },
   { to: "/console/settings", label: "Настройки конференции", ownerOnly: true, icon: "M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" },
   { to: "/console/program", label: "Программа", icon: "M4 5h16v15H4zM4 9h16M8 3v4M16 3v4" },
+  { to: "/console/talks", label: "Доклады", icon: "M4 6h16M4 12h10M4 18h7M19 14v6M16 17h6" },
   { to: "/console/speakers", label: "Спикеры", icon: "M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8" },
   { to: "/console/content", label: "Блоки главной", icon: "M3 4h18v5H3zM3 13h18v7H3z" },
   { to: "/console/branding", label: "Брендинг", ownerOnly: true, icon: "M12 3s6 6.5 6 11a6 6 0 01-12 0c0-4.5 6-11 6-11z" },
