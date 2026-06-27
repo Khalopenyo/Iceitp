@@ -67,8 +67,8 @@
   height: 17px;
 }
 .ops-attn-danger {
-  background: #fde8e8;
-  color: #b42318;
+  background: var(--danger-wash);
+  color: var(--danger);
 }
 .ops-attn-warn {
   background: var(--warn-wash);
@@ -111,7 +111,7 @@
   background: var(--ok);
 }
 .ops-bar-danger {
-  background: #d92d20;
+  background: var(--danger);
 }
 .ops-bar-muted {
   background: var(--faint);
@@ -215,8 +215,8 @@
   color: var(--ok);
 }
 .ops-status-suspended {
-  background: #fde8e8;
-  color: #b42318;
+  background: var(--danger-wash);
+  color: var(--danger);
 }
 .ops-status-archived {
   background: var(--surface-2);
@@ -258,13 +258,13 @@
   cursor: not-allowed;
 }
 .ops-act-danger {
-  color: #b42318;
-  border-color: #f3c0bb;
+  color: var(--danger);
+  border-color: var(--danger-line);
 }
 .ops-act-danger:hover {
-  background: #fde8e8;
-  border-color: #d92d20;
-  color: #b42318;
+  background: var(--danger-wash);
+  border-color: var(--danger);
+  color: var(--danger);
 }
 .ops-act-ok {
   color: var(--ok);
@@ -307,10 +307,10 @@
   margin-top: 18px;
 }
 .ops-btn-danger {
-  background: #d92d20;
+  background: var(--danger);
 }
 .ops-btn-danger:hover {
-  background: #b42318;
+  background: var(--danger-dk);
 }
 
 @media (max-width: 900px) {

@@ -16,6 +16,10 @@
   --ok-wash: #e9f6ee;
   --warn: #b45309;
   --warn-wash: #fdf3e6;
+  --danger: #b42318;
+  --danger-dk: #911b11;
+  --danger-wash: #fde8e8;
+  --danger-line: #f3c0bb;
   --con-head: "Source Serif 4", Georgia, serif;
   --con-font: "Inter", system-ui, sans-serif;
   --con-mono: "IBM Plex Mono", ui-monospace, monospace;
