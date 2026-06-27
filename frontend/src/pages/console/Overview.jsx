@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { apiGet, apiPut } from "../../lib/api.js";
+import { publicSiteUrl } from "../../lib/org.js";
 import "./console.css";
 
 function initials(name) {
@@ -37,6 +38,7 @@ export default function Overview() {
 
   const stats = landing?.stats || {};
   const published = conference?.status === "live";
+  const siteUrl = publicSiteUrl(org);
 
   const checklist = useMemo(
     () => [
@@ -103,12 +105,20 @@ export default function Overview() {
               "Создайте конференцию, чтобы начать."}
           </p>
         </div>
-        {isOwner ? (
-          <button className="con-btn" onClick={publish} disabled={publishing || published}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16V4M8 8l4-4 4 4M5 20h14" /></svg>
-            {published ? "Сайт опубликован" : publishing ? "Публикуем…" : "Опубликовать сайт"}
-          </button>
-        ) : null}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          {siteUrl ? (
+            <a className="con-btn con-btn-ghost" href={siteUrl} target="_blank" rel="noreferrer">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" /></svg>
+              {published ? "Открыть сайт" : "Открыть превью"}
+            </a>
+          ) : null}
+          {isOwner ? (
+            <button className="con-btn" onClick={publish} disabled={publishing || published}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16V4M8 8l4-4 4 4M5 20h14" /></svg>
+              {published ? "Сайт опубликован" : publishing ? "Публикуем…" : "Опубликовать сайт"}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="con-stats">

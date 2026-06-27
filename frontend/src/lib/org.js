@@ -11,6 +11,24 @@ export async function fetchBranding() {
   }
 }
 
+// publicSiteUrl — абсолютная ссылка на публичный сайт вуза (для кнопки «Открыть сайт»
+// в консоли). Кастомный домен в приоритете; иначе {slug}.{база}, где база выводится из
+// текущего хоста: работает и локально (slug.localhost:port), и в проде (slug.kvorum.ru).
+export function publicSiteUrl(org) {
+  if (!org) return null;
+  if (org.custom_domain) return `https://${org.custom_domain}`;
+  if (!org.slug || typeof window === "undefined") return null;
+  const { protocol, host, hostname } = window.location;
+  let base = host;
+  if (hostname === "localhost" || hostname.endsWith(".localhost")) {
+    base = hostname.endsWith(".localhost") ? host.split(".").slice(1).join(".") : host;
+  } else {
+    const parts = host.split(".");
+    if (parts.length > 2) base = parts.slice(1).join(".");
+  }
+  return `${protocol}//${org.slug}.${base}`;
+}
+
 function clampByte(v) {
   return Math.max(0, Math.min(255, Math.round(v)));
 }
