@@ -30,6 +30,8 @@ import EventSectionDetail from "./pages/event/EventSectionDetail.jsx";
 import EventSpeakers from "./pages/event/EventSpeakers.jsx";
 import EventVenue from "./pages/event/EventVenue.jsx";
 import EventLive from "./pages/event/EventLive.jsx";
+import EventDocuments from "./pages/event/EventDocuments.jsx";
+import EventChat from "./pages/event/EventChat.jsx";
 import Register from "./pages/Register.jsx";
 import Login from "./pages/Login.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
@@ -38,8 +40,6 @@ import Profile from "./pages/Profile.jsx";
 import Schedule from "./pages/Schedule.jsx";
 import Admin from "./pages/Admin.jsx";
 import Feedback from "./pages/Feedback.jsx";
-import Chat from "./pages/Chat.jsx";
-import Documents from "./pages/Documents.jsx";
 import { isAuthenticated, getUser } from "./lib/auth.js";
 import NoAccess from "./pages/NoAccess.jsx";
 import NotFound from "./pages/NotFound.jsx";
@@ -183,14 +183,14 @@ export default function App() {
       >
         <Route path="profile" element={<Profile />} />
         <Route path="schedule" element={<Schedule />} />
-        <Route path="documents" element={<Documents />} />
-        <Route path="chat" element={<Chat />} />
       </Route>
       {/* Публичный сайт вуза — единый shell-с-сайдбаром (редизайн), бренд per-tenant.
           Все витринные экраны под одним каркасом, чтобы переходы не «прыгали» на старый Layout. */}
       <Route path="/" element={<EventShell />}>
         <Route index element={<EventLanding />} />
         <Route path="dashboard" element={<ProtectedRoute><EventDashboard /></ProtectedRoute>} />
+        <Route path="documents" element={<ProtectedRoute><EventDocuments /></ProtectedRoute>} />
+        <Route path="chat" element={<ProtectedRoute><EventChat /></ProtectedRoute>} />
         <Route path="program" element={<EventProgram />} />
         <Route path="sections" element={<EventSections />} />
         <Route path="sections/:id" element={<EventSectionDetail />} />
