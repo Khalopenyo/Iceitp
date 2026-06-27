@@ -81,6 +81,9 @@ export function eventThemeVars(theme, accentColor) {
   // чтобы у любого бренд-цвета (в т.ч. светлого) текст оставался читаемым (WCAG), а не всегда #fff.
   const onAccent = readableOn(accent);
   const onAccentMuted = onAccent === "#ffffff" ? "rgba(255,255,255,.86)" : "rgba(35,32,28,.74)";
+  // Видимое фокус-кольцо: полупрозрачный акцент (НЕ wash — он почти белый и невидим
+  // как самостоятельное кольцо на белой поверхности).
+  const [fr, fg, fb] = parse(accent);
   const vars = {
     ...BASE[dir],
     "--ev-accent": accent,
@@ -88,6 +91,7 @@ export function eventThemeVars(theme, accentColor) {
     "--ev-accent-wash": wash(accent),
     "--ev-on-accent": onAccent,
     "--ev-on-accent-muted": onAccentMuted,
+    "--ev-focus": `rgba(${fr}, ${fg}, ${fb}, 0.35)`,
   };
   if (dir === "digital") {
     // Сайдбар залит брендом вуза; цвет текста — по фактическому контрасту.
