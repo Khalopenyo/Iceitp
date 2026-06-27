@@ -114,13 +114,23 @@ func (h *SectionHandler) UpdateSection(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "title and room are required"})
 		return
 	}
-	res := tenant.DB(c, h.DB).Model(&models.Section{}).Scopes(tenant.ByConference(c)).Where("id = ?", id).Omit("ConferenceID").Updates(payload)
-	if res.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update section"})
+	// Грузим строку (conference-scoped → чужой id даёт 404), затем присваиваем
+	// редактируемые поля и Save. Struct-.Updates пропускал бы нулевые значения, из-за
+	// чего редактор не мог ОЧИСТИТЬ председателя/описание/время или выставить capacity=0.
+	var section models.Section
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).First(&section, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "section not found"})
 		return
 	}
-	if res.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "section not found"})
+	section.Title = payload.Title
+	section.Room = payload.Room
+	section.Chair = payload.Chair
+	section.Description = payload.Description
+	section.Capacity = payload.Capacity
+	section.StartAt = payload.StartAt
+	section.EndAt = payload.EndAt
+	if err := tenant.DB(c, h.DB).Save(&section).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update section"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})

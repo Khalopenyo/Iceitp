@@ -777,20 +777,33 @@
   color: var(--accent);
   border-bottom-color: var(--accent);
 }
-/* Строка персоны в разделе «Спикеры» — таргетируемый класс (вместо инлайна) + узкий фолбэк. */
-.con-person-row {
+/* Строки-списки консоли (спикеры/секции/блоки) — таргетируемые классы (вместо инлайн-грида,
+   иначе инлайн перебивал бы мобильный @media) + узкий фолбэк, сворачивающий до 4 колонок. */
+.con-person-row,
+.con-prog-row,
+.con-block-row {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 150px 44px 44px;
   gap: 14px;
   align-items: center;
   padding: 14px 18px;
 }
+.con-person-row {
+  grid-template-columns: 44px minmax(0, 1fr) 150px 44px 44px;
+}
+.con-prog-row {
+  grid-template-columns: 40px minmax(0, 1fr) 130px 110px 40px 40px;
+}
+.con-block-row {
+  grid-template-columns: 40px minmax(0, 1fr) 150px 96px 40px 40px;
+}
 @media (max-width: 720px) {
-  .con-person-row {
+  .con-person-row,
+  .con-prog-row,
+  .con-block-row {
     grid-template-columns: 40px minmax(0, 1fr) 40px 40px;
   }
-  /* Роль остаётся видимой/редактируемой в форме; на узком экране пилюлю прячем. */
-  .con-person-row .con-person-role {
+  /* Второстепенные колонки (роль/зал/время/тип/видимость) прячем — данные есть в форме. */
+  .con-person-role {
     display: none;
   }
 }

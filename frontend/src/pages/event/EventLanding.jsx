@@ -1,18 +1,23 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { apiGet } from "../../lib/api.js";
+import { fetchContentBlocks } from "../../lib/content.js";
 import { getConferenceTitle, formatConferenceDateRange } from "../../lib/conference.js";
 import "./event.css";
 
 const FORMAT_LABEL = { hybrid: "Очно и онлайн", offline: "Только очно", online: "Только онлайн" };
+// Надзаголовок для типа контент-блока (пусто — без надзаголовка).
+const BLOCK_EYEBROW = { about: "О конференции", schedule: "Программа", speakers: "Спикеры", venue: "Площадка", contacts: "Контакты" };
 
 export default function EventLanding() {
   const navigate = useNavigate();
   const { conference, org } = useOutletContext();
   const [landing, setLanding] = useState(null);
+  const [blocks, setBlocks] = useState([]);
 
   useEffect(() => {
     apiGet("/landing").then(setLanding).catch(() => setLanding(null));
+    fetchContentBlocks().then(setBlocks);
   }, []);
 
   const stats = landing?.stats || {};
@@ -85,6 +90,19 @@ export default function EventLanding() {
           </div>
         </div>
       </section>
+
+      {/* CMS-блоки лендинга (контент, который организатор задаёт в консоли) */}
+      {blocks.filter((b) => (b.title && b.title.trim()) || (b.body && b.body.trim())).map((b) => (
+        <section className="ev-section ev-block" style={{ paddingTop: 0 }} key={b.id}>
+          {BLOCK_EYEBROW[b.kind] ? <div className="ev-section-eyebrow">{BLOCK_EYEBROW[b.kind]}</div> : null}
+          {b.title ? <h2 className="ev-block-h">{b.title}</h2> : null}
+          {b.body ? (
+            <div className="ev-block-body">
+              {b.body.split(/\n+/).map((p, i) => (p.trim() ? <p key={i}>{p}</p> : null))}
+            </div>
+          ) : null}
+        </section>
+      ))}
 
       {/* Секции */}
       {sections.length ? (
