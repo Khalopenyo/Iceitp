@@ -8,7 +8,7 @@ const ROLES = [
   { v: "programcommittee", label: "Программный комитет" },
 ];
 const ROLE_LABEL = Object.fromEntries(ROLES.map((r) => [r.v, r.label]));
-const EMPTY = { full_name: "", role: "speaker", degree: "", organization: "", position: "", bio: "", sort_order: 0 };
+const EMPTY = { full_name: "", role: "speaker", degree: "", organization: "", position: "", bio: "", photo_url: "", sort_order: 0 };
 
 function initials(name) {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean).slice(0, 2);
@@ -44,6 +44,7 @@ export default function ConsoleSpeakers() {
       organization: p.organization || "",
       position: p.position || "",
       bio: p.bio || "",
+      photo_url: p.photo_url || "",
       sort_order: p.sort_order || 0,
     });
     setEditing(p.id);
@@ -69,6 +70,7 @@ export default function ConsoleSpeakers() {
       organization: form.organization.trim(),
       position: form.position.trim(),
       bio: form.bio.trim(),
+      photo_url: form.photo_url.trim(),
       sort_order: Number(form.sort_order) || 0,
     };
     try {
@@ -142,6 +144,10 @@ export default function ConsoleSpeakers() {
               <input type="number" value={form.sort_order} onChange={(e) => set("sort_order", e.target.value)} placeholder="0" />
             </label>
           </div>
+          <label className="con-field"><span>Фото (ссылка)</span>
+            <input value={form.photo_url} onChange={(e) => set("photo_url", e.target.value)} placeholder="https://…/photo.jpg" />
+            <span className="con-field-hint">https-ссылка на фото. Если пусто — показываются инициалы.</span>
+          </label>
           <label className="con-field"><span>Биография</span>
             <textarea value={form.bio} onChange={(e) => set("bio", e.target.value)} placeholder="Короткая справка о спикере (необязательно)." />
           </label>
@@ -156,7 +162,11 @@ export default function ConsoleSpeakers() {
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {persons.map((p) => (
             <div key={p.id} className="con-card con-person-row">
-              <span style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--accent)", color: "#fff", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 600 }}>{initials(p.full_name)}</span>
+              {p.photo_url ? (
+                <img src={p.photo_url} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
+              ) : (
+                <span style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--accent)", color: "#fff", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 600 }}>{initials(p.full_name)}</span>
+              )}
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 14.5, fontWeight: 600, color: "var(--ink)" }}>{p.full_name}</div>
                 <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

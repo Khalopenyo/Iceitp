@@ -74,9 +74,13 @@ export default function EventSpeakers() {
         <div className="ev-cards">
           {visible.map((person) => (
             <article key={person.id} className="ev-person">
-              <div className="ev-person-av" aria-hidden="true">
-                {getInitials(person.full_name)}
-              </div>
+              {person.photo_url ? (
+                <img className="ev-person-photo" src={person.photo_url} alt={person.full_name} loading="lazy" />
+              ) : (
+                <div className="ev-person-av" aria-hidden="true">
+                  {getInitials(person.full_name)}
+                </div>
+              )}
               <div className="ev-person-name">{person.full_name}</div>
               {person.degree ? <div className="ev-person-meta">{person.degree}</div> : null}
               {person.organization || person.position ? (

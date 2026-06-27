@@ -20,8 +20,22 @@ type personPayload struct {
 	Organization string `json:"organization"`
 	Position     string `json:"position"`
 	Bio          string `json:"bio"`
+	PhotoURL     string `json:"photo_url"`
 	Role         string `json:"role"`
 	SortOrder    int    `json:"sort_order"`
+}
+
+// validatePersonPhoto — фото рендерится как <img src> на публичном сайте: допускаем
+// только https-URL или относительный путь, с лимитом длины (как у логотипа вуза).
+func validatePersonPhoto(raw string) (string, bool) {
+	photo := strings.TrimSpace(raw)
+	if photo == "" {
+		return "", true
+	}
+	if len(photo) > 500 || !(strings.HasPrefix(photo, "https://") || strings.HasPrefix(photo, "/")) {
+		return "", false
+	}
+	return photo, true
 }
 
 func listPersons(c *gin.Context, db *gorm.DB) ([]models.Person, error) {
@@ -78,12 +92,18 @@ func (h *PersonHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role"})
 		return
 	}
+	photo, ok := validatePersonPhoto(payload.PhotoURL)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "photo_url must be an https:// URL or a relative path"})
+		return
+	}
 	person := models.Person{
 		FullName:     strings.TrimSpace(payload.FullName),
 		Degree:       strings.TrimSpace(payload.Degree),
 		Organization: strings.TrimSpace(payload.Organization),
 		Position:     strings.TrimSpace(payload.Position),
 		Bio:          strings.TrimSpace(payload.Bio),
+		PhotoURL:     photo,
 		Role:         role,
 		SortOrder:    payload.SortOrder,
 	}
@@ -113,11 +133,17 @@ func (h *PersonHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role"})
 		return
 	}
+	photo, ok := validatePersonPhoto(payload.PhotoURL)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "photo_url must be an https:// URL or a relative path"})
+		return
+	}
 	person.FullName = strings.TrimSpace(payload.FullName)
 	person.Degree = strings.TrimSpace(payload.Degree)
 	person.Organization = strings.TrimSpace(payload.Organization)
 	person.Position = strings.TrimSpace(payload.Position)
 	person.Bio = strings.TrimSpace(payload.Bio)
+	person.PhotoURL = photo
 	person.Role = role
 	person.SortOrder = payload.SortOrder
 	if err := tenant.DB(c, h.DB).Save(&person).Error; err != nil {

@@ -27,6 +27,7 @@ type Person struct {
 	Organization string    `json:"organization"`
 	Position     string    `json:"position"`
 	Bio          string    `json:"bio"`
+	PhotoURL     string    `json:"photo_url"`
 	Role         string    `gorm:"type:varchar(30);not null;default:'speaker'" json:"role"`
 	SortOrder    int       `gorm:"default:0" json:"sort_order"`
 	CreatedAt    time.Time `json:"created_at"`

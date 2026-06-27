@@ -669,6 +669,14 @@
   font-size: 18px;
   margin-bottom: 14px;
 }
+.ev-person-photo {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  margin-bottom: 14px;
+}
 .ev-person-name {
   font-family: var(--ev-font-head);
   font-weight: var(--ev-head-weight);

@@ -307,6 +307,14 @@ var migrations = []migration{
 			return db.AutoMigrate(&models.Organization{})
 		},
 	},
+	{
+		Version: "202606270022",
+		Name:    "add_person_photo",
+		Up: func(db *gorm.DB) error {
+			// Additive: persons.photo_url — фото спикера на публичном экране «Спикеры».
+			return db.AutoMigrate(&models.Person{})
+		},
+	},
 }
 
 // tenantConferenceIDNotNull flips the per-event conference_id columns (and
