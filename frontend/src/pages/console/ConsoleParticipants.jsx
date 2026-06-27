@@ -19,6 +19,7 @@ export default function ConsoleParticipants() {
   const [sections, setSections] = useState([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     // role=participant: организатор и команда (org/admin/staff) — не «заявки участников».
@@ -34,10 +35,28 @@ export default function ConsoleParticipants() {
 
   const sectionTitle = (id) => sections.find((s) => String(s.id) === String(id))?.title || "";
 
-  const rows = useMemo(() => {
+  // Предикат поиска/фильтра — общий для таблицы и для экспорта (на полном наборе).
+  const matchesFilter = (u) => {
+    const p = u.profile || {};
+    const isAuthor = Boolean(p.talk_title);
+    if (filter === "author" && !isAuthor) return false;
+    if (filter === "listener" && isAuthor) return false;
     const q = query.trim().toLowerCase();
-    return users
-      .map((u) => {
+    if (q && ![p.full_name, u.email, p.organization, sectionTitle(p.section_id)].filter(Boolean).join(" ").toLowerCase().includes(q)) {
+      return false;
+    }
+    return true;
+  };
+
+  const filtered = useMemo(
+    () => users.filter(matchesFilter),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [users, sections, query, filter]
+  );
+
+  const rows = useMemo(
+    () =>
+      filtered.map((u) => {
         const p = u.profile || {};
         return {
           id: u.id,
@@ -47,16 +66,70 @@ export default function ConsoleParticipants() {
           section: sectionTitle(p.section_id),
           isAuthor: Boolean(p.talk_title),
         };
-      })
-      .filter((r) => (filter === "author" ? r.isAuthor : filter === "listener" ? !r.isAuthor : true))
-      .filter((r) => !q || [r.name, r.org, r.section].join(" ").toLowerCase().includes(q));
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [users, sections, query, filter]);
+    [filtered, sections]
+  );
+
+  const downloadCSV = (records) => {
+    const headers = ["ФИО", "E-mail", "Телефон", "Организация", "Должность", "Учёная степень", "Город", "Секция", "Статус"];
+    // CSV для RU-Excel: разделитель «;», BOM для кириллицы, экранирование кавычек.
+    const esc = (v) => {
+      let s = String(v ?? "");
+      // Анти-инъекция формул: ведущие = + - @ (и таб/CR) обезвреживаем апострофом — телефон «+7…» тоже.
+      if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+      return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [headers.join(";")];
+    records.forEach((u) => {
+      const p = u.profile || {};
+      lines.push([
+        p.full_name || "", u.email || "", p.phone || "", p.organization || "", p.position || "",
+        p.degree || "", p.city || "", sectionTitle(p.section_id), p.talk_title ? "Докладчик" : "Слушатель",
+      ].map(esc).join(";"));
+    });
+    const blob = new Blob([`﻿${lines.join("\r\n")}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "uchastniki.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  // Экспорт по ВСЕМУ набору (бэкенд капит page_size=100) — листаем страницы, затем фильтруем.
+  const exportCSV = async () => {
+    setExporting(true);
+    try {
+      let all = [];
+      let page = 1;
+      for (;;) {
+        const r = await apiGet(`/admin/users?role=participant&page=${page}&page_size=100`);
+        const items = Array.isArray(r) ? r : r?.items || [];
+        all = all.concat(items);
+        const tot = typeof r?.total === "number" ? r.total : all.length;
+        if (!items.length || all.length >= tot || page >= 100) break;
+        page += 1;
+      }
+      downloadCSV(all.filter(matchesFilter));
+    } catch {
+      downloadCSV(filtered); // на ошибке — хотя бы загруженный набор
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="con-screen">
       <div className="con-eyebrow">Участники · {total} заявок</div>
-      <h2 className="con-h2" style={{ marginBottom: 22 }}>Заявки участников</h2>
+      <div className="con-head-row">
+        <h2 className="con-h2">Заявки участников</h2>
+        <button type="button" className="con-btn con-btn-ghost" onClick={exportCSV} disabled={!filtered.length || exporting}>
+          {exporting ? "Экспорт…" : "Экспорт в CSV"}
+        </button>
+      </div>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 18, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, maxWidth: 320, height: 42, padding: "0 14px", border: "1px solid var(--line)", borderRadius: 9, background: "var(--surface)" }}>
