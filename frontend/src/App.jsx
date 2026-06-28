@@ -133,6 +133,9 @@ function RootLayout() {
 
 export default function App() {
   useEffect(() => {
+    // На голом домене платформы не применяем брендинг дефолтного вуза (на голом
+    // хосте /api/org резолвится в дефолтный тенант) — платформа нейтральна.
+    if (isPlatformHost()) return;
     // Apply the resolved tenant's branding (primary color) over the academic-blue
     // defaults. Silent fallback to the defaults if the org has no custom color.
     fetchBranding().then((branding) => {
