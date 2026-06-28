@@ -25,6 +25,18 @@ export default function Branding() {
 
   const uploadLogo = async (file) => {
     if (!file) return;
+    // Клиентская проверка до отправки (сервер всё равно валидирует ещё раз).
+    const allowed = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
+    if (file.type && !allowed.includes(file.type)) {
+      setToast({ kind: "err", text: "Поддерживаются PNG, JPEG, WEBP или SVG." });
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setToast({ kind: "err", text: "Файл больше 2 МБ — выберите меньше." });
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     setUploading(true);
     setToast(null);
     try {
@@ -100,13 +112,13 @@ export default function Branding() {
             <div className="con-field-label">Логотип вуза</div>
             <div className="con-upload">
               {logoUrl ? (
-                <img src={logoUrl} alt="Логотип вуза" />
+                <img src={logoUrl} alt="Логотип вуза" onError={(e) => { e.currentTarget.style.display = "none"; }} />
               ) : (
                 <>
                   <div className="con-upload-ic" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16V4M8 8l4-4 4 4M5 20h14" /></svg>
                   </div>
-                  <div className="con-upload-hint">Вставьте ссылку на PNG или SVG</div>
+                  <div className="con-upload-hint">Загрузите файл (PNG, JPEG, WEBP, SVG) или вставьте ссылку</div>
                 </>
               )}
             </div>

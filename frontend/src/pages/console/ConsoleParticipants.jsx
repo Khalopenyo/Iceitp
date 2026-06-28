@@ -27,6 +27,20 @@ export default function ConsoleParticipants() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
 
+  // Доступность модалки: Esc закрывает, фон не скроллится, фокус возвращается на триггер.
+  useEffect(() => {
+    if (!editing) return undefined;
+    const prev = document.activeElement;
+    document.body.style.overflow = "hidden";
+    const onKey = (e) => { if (e.key === "Escape") setEditing(null); };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+      if (prev && typeof prev.focus === "function") prev.focus();
+    };
+  }, [editing]);
+
   const openEdit = (u) => {
     const p = u.profile || {};
     setForm({

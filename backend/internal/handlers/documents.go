@@ -199,7 +199,7 @@ func loadDocumentStatus(db *gorm.DB, user models.User, conf models.Conference) (
 
 func (h *DocumentHandler) loadDocumentRuntimeContext(c *gin.Context, userID uint) (*documentRuntimeContext, error) {
 	var user models.User
-	if err := h.DB.Preload("Profile").First(&user, userID).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Preload("Profile").First(&user, userID).Error; err != nil {
 		return nil, err
 	}
 
@@ -208,7 +208,7 @@ func (h *DocumentHandler) loadDocumentRuntimeContext(c *gin.Context, userID uint
 		return nil, err
 	}
 
-	status, err := loadDocumentStatus(h.DB.Scopes(tenant.ByConference(c)), user, *conf)
+	status, err := loadDocumentStatus(tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)), user, *conf)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +268,7 @@ func (h *DocumentHandler) ProgramPDF(c *gin.Context) {
 		}
 	}
 
-	view, err := loadProgramPDFView(h.DB.Scopes(tenant.ByConference(c)), context.User.ID, mode)
+	view, err := loadProgramPDFView(tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)), context.User.ID, mode)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load authoritative program"})
 		return
@@ -369,14 +369,14 @@ func (h *DocumentHandler) CertificatePDF(c *gin.Context) {
 // buildCertificatePDF собирает PDF-сертификат участника (без записи в ответ) —
 // переиспользуется одиночной выдачей и массовой выгрузкой в zip.
 func (h *DocumentHandler) buildCertificatePDF(c *gin.Context, context *documentRuntimeContext) (*gofpdf.Fpdf, error) {
-	cert, err := h.ensureCertificate(context.Conf.ID, context.User.ID)
+	cert, err := h.ensureCertificate(c, context.Conf.ID, context.User.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	talkTitle := context.User.Profile.TalkTitle
 	var sectionTitle string
-	personalView, err := loadProgramPDFView(h.DB.Scopes(tenant.ByConference(c)), context.User.ID, "personal")
+	personalView, err := loadProgramPDFView(tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)), context.User.ID, "personal")
 	if err == nil && personalView.PersonalEntry != nil {
 		if personalView.PersonalEntry.TalkTitle != "" {
 			talkTitle = personalView.PersonalEntry.TalkTitle
@@ -385,7 +385,7 @@ func (h *DocumentHandler) buildCertificatePDF(c *gin.Context, context *documentR
 	}
 	if sectionTitle == "" && context.User.Profile.SectionID != nil {
 		var sec models.Section
-		if err := h.DB.Select("id", "title").First(&sec, *context.User.Profile.SectionID).Error; err == nil {
+		if err := tenant.DB(c, h.DB).Select("id", "title").First(&sec, *context.User.Profile.SectionID).Error; err == nil {
 			sectionTitle = sec.Title
 		}
 	}
@@ -661,7 +661,7 @@ func (h *DocumentHandler) VerifyCertificate(c *gin.Context) {
 
 func (h *DocumentHandler) getConference(c *gin.Context) (*models.Conference, error) {
 	var conf models.Conference
-	if err := h.DB.Scopes(tenant.ByOrg(c)).Order("id asc").First(&conf).Error; err != nil {
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByOrg(c)).Order("id asc").First(&conf).Error; err != nil {
 		return nil, err
 	}
 	return &conf, nil
@@ -688,15 +688,16 @@ func (h *DocumentHandler) badgeScanURL(token string) string {
 	return strings.TrimSuffix(base, "/") + "/badge/" + url.PathEscape(token)
 }
 
-func (h *DocumentHandler) ensureCertificate(conferenceID, userID uint) (*models.Certificate, error) {
+func (h *DocumentHandler) ensureCertificate(c *gin.Context, conferenceID, userID uint) (*models.Certificate, error) {
+	db := tenant.DB(c, h.DB)
 	var cert models.Certificate
-	if err := h.DB.Where("conference_id = ? AND user_id = ?", conferenceID, userID).First(&cert).Error; err == nil {
+	if err := db.Where("conference_id = ? AND user_id = ?", conferenceID, userID).First(&cert).Error; err == nil {
 		return &cert, nil
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
-	err := h.DB.Transaction(func(tx *gorm.DB) error {
+	err := db.Transaction(func(tx *gorm.DB) error {
 		// Re-check inside transaction to avoid duplicate creation.
 		if err := tx.Where("conference_id = ? AND user_id = ?", conferenceID, userID).First(&cert).Error; err == nil {
 			return nil
@@ -1124,19 +1125,41 @@ func (h *DocumentHandler) AdminBulkExport(c *gin.Context) {
 		return
 	}
 
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
+	// Бейджи только офлайн-участникам — если таких нет, отвечаем 409 ДО старта стрима.
+	if docType == "badge" {
+		hasOffline := false
+		for i := range users {
+			if users[i].UserType != models.UserTypeOnline {
+				hasOffline = true
+				break
+			}
+		}
+		if !hasOffline {
+			c.JSON(http.StatusConflict, gin.H{"error": "нет офлайн-участников для бейджей"})
+			return
+		}
+	}
+
+	filename := "badges.zip"
+	if docType == "certificate" {
+		filename = "certificates.zip"
+	}
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	if truncated {
+		c.Header("X-Bulk-Truncated", strconv.Itoa(maxBulkExport))
+	}
+	c.Status(http.StatusOK)
+
+	// Стримим zip прямо в ответ — в памяти одновременно только один PDF, а не все 500.
+	zw := zip.NewWriter(c.Writer)
 	used := map[string]int{}
-	included, skipped := 0, 0
 	for i := range users {
 		ctx, err := h.loadDocumentRuntimeContext(c, users[i].ID)
 		if err != nil {
-			skipped++
 			continue
 		}
-		// Бейдж — только офлайн-участникам (паритет с AdminBadgePDF).
 		if docType == "badge" && ctx.Status.CurrentUserType == models.UserTypeOnline {
-			skipped++
 			continue
 		}
 		var pdf *gofpdf.Fpdf
@@ -1146,41 +1169,15 @@ func (h *DocumentHandler) AdminBulkExport(c *gin.Context) {
 			pdf, err = h.buildCertificatePDF(c, ctx)
 		}
 		if err != nil {
-			skipped++
 			continue
 		}
 		w, err := zw.Create(bulkEntryName(ctx.User, docType, used))
 		if err != nil {
-			skipped++
 			continue
 		}
-		if err := pdf.Output(w); err != nil {
-			skipped++
-			continue
-		}
-		included++
+		_ = pdf.Output(w)
 	}
-	if err := zw.Close(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to build archive"})
-		return
-	}
-	if included == 0 {
-		c.JSON(http.StatusConflict, gin.H{"error": "нет доступных документов для выгрузки (проверьте тип участников и статус конференции)"})
-		return
-	}
-
-	filename := "badges.zip"
-	if docType == "certificate" {
-		filename = "certificates.zip"
-	}
-	c.Header("Content-Type", "application/zip")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
-	c.Header("X-Bulk-Included", strconv.Itoa(included))
-	c.Header("X-Bulk-Skipped", strconv.Itoa(skipped))
-	if truncated {
-		c.Header("X-Bulk-Truncated", strconv.Itoa(maxBulkExport))
-	}
-	c.Data(http.StatusOK, "application/zip", buf.Bytes())
+	_ = zw.Close()
 }
 
 // bulkEntryName формирует безопасное и уникальное имя файла в архиве из ФИО + id.

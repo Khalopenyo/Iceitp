@@ -37,9 +37,8 @@ export default function ConsoleDocs() {
       const res = await apiGet(`/admin/documents/bulk?type=${type}`);
       const blob = await res.blob();
       triggerBlobDownload(blob, type === "badge" ? "badges.zip" : "certificates.zip");
-      const inc = res.headers?.get?.("X-Bulk-Included");
-      const skip = res.headers?.get?.("X-Bulk-Skipped");
-      setToast({ kind: "ok", text: `Архив готов: ${inc ?? 0} файлов${skip && skip !== "0" ? `, пропущено ${skip}` : ""}.` });
+      const truncated = res.headers?.get?.("X-Bulk-Truncated");
+      setToast({ kind: "ok", text: truncated ? `Архив скачан (первые ${truncated} участников — лимит одного архива).` : "Архив скачан." });
     } catch (e) {
       setToast({ kind: "err", text: e.message || "Не удалось сформировать архив." });
     } finally {

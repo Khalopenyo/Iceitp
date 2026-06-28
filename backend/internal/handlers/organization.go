@@ -3,6 +3,9 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -234,6 +237,19 @@ func (h *OrganizationHandler) UploadLogo(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported image type", "details": "allowed: PNG, JPEG, WEBP, SVG"})
 		return
 	}
+	// Растровые типы реально декодируем — не доверяем заголовку/расширению клиента.
+	// (SVG — текстовый; защищён строгим CSP+sandbox при отдаче. WEBP-декодер не в stdlib.)
+	if contentType == "image/png" || contentType == "image/jpeg" {
+		probe, perr := file.Open()
+		if perr == nil {
+			_, _, derr := image.DecodeConfig(probe)
+			probe.Close()
+			if derr != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "файл не распознан как изображение"})
+				return
+			}
+		}
+	}
 
 	var org models.Organization
 	if err := tenant.DB(c, h.DB).First(&org, tenant.OrgID(c)).Error; err != nil {
@@ -257,8 +273,9 @@ func (h *OrganizationHandler) UploadLogo(c *gin.Context) {
 
 	publicURL := fmt.Sprintf("/api/orgs/%s/logo?v=%d", org.Slug, time.Now().Unix())
 	if err := tenant.DB(c, h.DB).Model(&models.Organization{}).Where("id = ?", org.ID).Updates(map[string]any{
-		"logo_object_key": objectKey,
-		"logo_url":        publicURL,
+		"logo_object_key":   objectKey,
+		"logo_content_type": contentType,
+		"logo_url":          publicURL,
 	}).Error; err != nil {
 		_ = h.Store.Delete(c.Request.Context(), objectKey)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save logo"})
@@ -305,8 +322,14 @@ func (h *OrganizationHandler) GetOrgLogo(c *gin.Context) {
 	}
 	defer obj.Body.Close()
 
-	if obj.ContentType != "" {
-		c.Header("Content-Type", obj.ContentType)
+	// Тип берём из сохранённого при загрузке (filesystem-стор пере-сниффит и ломает SVG);
+	// фолбэк — то, что вернул стор.
+	contentType := strings.TrimSpace(org.LogoContentType)
+	if contentType == "" {
+		contentType = obj.ContentType
+	}
+	if contentType != "" {
+		c.Header("Content-Type", contentType)
 	}
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")

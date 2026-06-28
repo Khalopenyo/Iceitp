@@ -167,9 +167,12 @@ function mapKnownApiMessage(path, status, rawMessage, details) {
       : "Сессия истекла. Войдите снова.";
   }
   if (status === 404) {
+    // Бэкенд прислал понятное русское сообщение (напр. «нет участников для выгрузки») — показываем его.
+    if (raw && /[а-яё]/i.test(raw)) return raw;
     return "Нужные данные не найдены.";
   }
   if (status === 409) {
+    if (raw && /[а-яё]/i.test(raw)) return raw;
     return "Это действие сейчас недоступно из-за конфликта данных.";
   }
   if (status === 429) {
@@ -234,7 +237,13 @@ async function request(path, options = {}) {
     });
   }
   const contentType = res.headers.get("content-type") || "";
-  if (contentType.includes("application/pdf")) {
+  // Бинарные ответы (PDF/ZIP/прочее не-JSON) отдаём сырым Response — вызывающий сам
+  // берёт .blob() и заголовки (см. ConsoleDocs: bulk-zip и скачивание программы).
+  if (
+    contentType.includes("application/pdf") ||
+    contentType.includes("application/zip") ||
+    contentType.includes("application/octet-stream")
+  ) {
     return res;
   }
   return res.json();

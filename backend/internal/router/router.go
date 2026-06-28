@@ -27,7 +27,7 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 		AllowOrigins:     cfg.CORSOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type"},
-		ExposeHeaders:    []string{"Content-Disposition"},
+		ExposeHeaders:    []string{"Content-Disposition", "X-Bulk-Truncated"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}

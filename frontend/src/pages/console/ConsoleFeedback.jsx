@@ -80,7 +80,7 @@ export default function ConsoleFeedback() {
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
                   <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{f.user_name || f.user_email || "Участник"}</span>
-                  <span style={{ color: "#b45309", letterSpacing: 1, fontSize: 13 }} aria-label={`Оценка ${f.rating} из 5`}>{stars(f.rating || 0)}</span>
+                  <span style={{ color: "var(--warn)", letterSpacing: 1, fontSize: 13 }} aria-label={`Оценка ${f.rating} из 5`}>{stars(f.rating || 0)}</span>
                 </div>
                 {f.comment ? <p style={{ margin: "6px 0 0", fontSize: 13.5, color: "var(--muted)", lineHeight: 1.5 }}>{f.comment}</p> : <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--faint)", fontStyle: "italic" }}>Без комментария</p>}
               </div>

@@ -376,6 +376,14 @@ var migrations = []migration{
 			return db.AutoMigrate(&models.Organization{})
 		},
 	},
+	{
+		Version: "202606280027",
+		Name:    "add_org_logo_content_type",
+		Up: func(db *gorm.DB) error {
+			// Additive: organizations.logo_content_type — сохранённый тип лого.
+			return db.AutoMigrate(&models.Organization{})
+		},
+	},
 }
 
 // tenantConferenceIDNotNull flips the per-event conference_id columns (and

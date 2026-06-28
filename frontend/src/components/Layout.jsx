@@ -22,7 +22,7 @@ const PLATFORM_NAME = "КонференцХаб";
 // площадка/трансляции) гейтятся по статусу — см. ниже.
 const PUB_UTILITY_PREFIXES = [
   "/badge", "/questions", "/verify", "/legal", "/personal-data",
-  "/consent-authors", "/forbidden", "/admin", "/feedback", "/map",
+  "/consent-authors", "/forbidden", "/feedback", "/map",
 ];
 
 export default function Layout() {
@@ -169,7 +169,7 @@ export default function Layout() {
         ...(showMapLink ? [{ to: "/map", label: "Карта" }] : []),
         { to: "/feedback", label: "Отзывы" },
         { to: "/chat", label: "Чат" },
-        ...(["admin", "org"].includes(user.role) ? [{ to: "/admin", label: "Админка" }] : []),
+        ...(["admin", "org", "staff"].includes(user.role) ? [{ to: "/console", label: "Консоль" }] : []),
       ]
     : [
         { to: "/", label: "Главная", end: true },

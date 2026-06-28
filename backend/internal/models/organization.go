@@ -43,7 +43,10 @@ type Organization struct {
 	// LogoObjectKey — ключ загруженного файла лого в objectstore (если логотип
 	// загружен файлом, а не задан внешним URL). Отдаётся публично через /api/orgs/:slug/logo.
 	LogoObjectKey string `json:"-"`
-	PrimaryColor  string `json:"primary_color"`
+	// LogoContentType — валидированный content-type загруженного лого. Храним явно,
+	// т.к. filesystem-стор не сохраняет тип и пере-сниффит его (ломает SVG).
+	LogoContentType string `json:"-"`
+	PrimaryColor    string `json:"primary_color"`
 	// Theme — направление оформления публичного сайта вуза: "academic" (Source Serif,
 	// светлый сайдбар) или "digital" (Plex Sans, брендовый сайдбар). См. EventShell.
 	Theme        string         `gorm:"type:varchar(20);not null;default:'academic'" json:"theme"`
