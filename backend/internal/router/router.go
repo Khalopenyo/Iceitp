@@ -59,6 +59,7 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 		PhoneAuthMaxAttempts:    cfg.PhoneAuthMaxAttempts,
 		MailSender:              mail.NewPasswordResetSender(cfg),
 		AuthCodeSender:          sms.NewAuthCodeSender(cfg),
+		FixedAuthCode:           cfg.FixedAuthCode,
 	}
 	userHandler := &handlers.UserHandler{DB: db}
 	sectionHandler := &handlers.SectionHandler{DB: db}

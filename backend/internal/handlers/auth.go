@@ -54,7 +54,23 @@ type AuthHandler struct {
 	PhoneAuthMaxAttempts    int
 	MailSender              mail.PasswordResetSender
 	AuthCodeSender          sms.AuthCodeSender
-	Now                     func() time.Time
+	// FixedAuthCode, если задан валидным N-значным кодом, используется как
+	// фиксированный код подтверждения регистрации вместо случайного, и реальная
+	// отправка СМС пропускается (прод пока без СМС-провайдера). См. config.FixedAuthCode.
+	FixedAuthCode string
+	Now           func() time.Time
+}
+
+// issueRegistrationCode возвращает код подтверждения регистрации. Если задан
+// валидный FixedAuthCode (ровно phoneAuthCodeDigits цифр) — возвращает его и
+// fixed=true, чтобы вызывающий пропустил реальную отправку СМС. Иначе генерирует
+// свежий случайный код.
+func (h *AuthHandler) issueRegistrationCode() (code string, fixed bool, err error) {
+	if fc := strings.TrimSpace(h.FixedAuthCode); len(fc) == phoneAuthCodeDigits && allDigits(fc) {
+		return fc, true, nil
+	}
+	code, err = generateNumericAuthCode(phoneAuthCodeDigits)
+	return code, false, err
 }
 
 type RegisterRequest struct {
@@ -363,7 +379,7 @@ func (h *AuthHandler) RequestRegistrationCode(c *gin.Context) {
 		return
 	}
 
-	code, err := generateNumericAuthCode(phoneAuthCodeDigits)
+	code, fixedCode, err := h.issueRegistrationCode()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate registration code"})
 		return
@@ -409,25 +425,35 @@ func (h *AuthHandler) RequestRegistrationCode(c *gin.Context) {
 		return
 	}
 
-	delivery, err := h.phoneAuthSender().SendAuthCode(c.Request.Context(), sms.AuthCodeMessage{
-		Phone: strings.TrimPrefix(normalized.Phone, "+"),
-		Code:  code,
-	})
-	if err != nil {
-		_ = h.DB.Delete(&models.RegistrationAttempt{}, attempt.ID).Error
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
-	if strings.TrimSpace(delivery.RequestID) != "" {
-		_ = h.DB.Model(&models.RegistrationAttempt{}).Where("id = ?", attempt.ID).Update("provider_request_id", delivery.RequestID).Error
+	// В фиксированном режиме (FIXED_AUTH_CODE) реальную отправку СМС пропускаем:
+	// код заранее известен участнику (возвращаем его в demo_code), провайдер не нужен.
+	if !fixedCode {
+		delivery, err := h.phoneAuthSender().SendAuthCode(c.Request.Context(), sms.AuthCodeMessage{
+			Phone: strings.TrimPrefix(normalized.Phone, "+"),
+			Code:  code,
+		})
+		if err != nil {
+			_ = h.DB.Delete(&models.RegistrationAttempt{}, attempt.ID).Error
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
+		}
+		if strings.TrimSpace(delivery.RequestID) != "" {
+			_ = h.DB.Model(&models.RegistrationAttempt{}).Where("id = ?", attempt.ID).Update("provider_request_id", delivery.RequestID).Error
+		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	resp := gin.H{
 		"message":            "Код отправлен",
 		"verification_token": rawToken,
 		"cooldown_seconds":   int(h.phoneAuthResendCooldown() / time.Second),
 		"expires_in_seconds": int(h.phoneAuthCodeTTL() / time.Second),
-	})
+	}
+	if fixedCode {
+		// Демо-режим без СМС: отдаём код фронту, чтобы подставить его и показать подсказку.
+		resp["message"] = "Демо-режим: используйте код " + code
+		resp["demo_code"] = code
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 func (h *AuthHandler) VerifyRegistrationCode(c *gin.Context) {

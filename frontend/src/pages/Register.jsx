@@ -61,6 +61,9 @@ export default function Register() {
   const [statusMessage, setStatusMessage] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
   const [verificationToken, setVerificationToken] = useState("");
+  // Демо-режим без СМС: бэкенд возвращает фиксированный код (FIXED_AUTH_CODE),
+  // мы его подставляем и показываем подсказку вместо «проверьте Telegram».
+  const [demoCode, setDemoCode] = useState("");
   const [cooldown, setCooldown] = useState(0);
   const [form, setForm] = useState({
     email: "",
@@ -160,9 +163,17 @@ export default function Register() {
     try {
       const data = await apiPost("/auth/register/request-code", payload);
       setVerificationToken(data.verification_token);
-      setVerificationCode("");
       setCooldown(Number(data.cooldown_seconds) || 60);
-      setStatusMessage(data.message || "Код отправлен в Telegram");
+      if (data.demo_code) {
+        // Демо-режим: код заранее известен — подставляем и поясняем.
+        setDemoCode(String(data.demo_code));
+        setVerificationCode(String(data.demo_code));
+        setStatusMessage(`Демо-режим: код подтверждения — ${data.demo_code}. Он уже подставлен, нажмите «Завершить регистрацию».`);
+      } else {
+        setDemoCode("");
+        setVerificationCode("");
+        setStatusMessage(data.message || "Код отправлен в Telegram");
+      }
       setPhase("code");
     } catch (err) {
       setErrorMessage(err.message || "Не удалось отправить код подтверждения.");
@@ -237,11 +248,18 @@ export default function Register() {
   if (phase === "code") {
     return (
       <Card className="reg-card">
-        <h1>Подтверждение телефона</h1>
-        <p className="reg-note">
-          Мы отправили код подтверждения для номера <strong>{normalizedPhone || form.phone}</strong>.
-          Проверьте Telegram, привязанный к этому номеру.
-        </p>
+        <h1>Подтверждение регистрации</h1>
+        {demoCode ? (
+          <p className="reg-note">
+            Подтверждение по СМС временно отключено. Введите код <strong>{demoCode}</strong> —
+            он уже подставлен ниже, просто нажмите «Завершить регистрацию».
+          </p>
+        ) : (
+          <p className="reg-note">
+            Мы отправили код подтверждения для номера <strong>{normalizedPhone || form.phone}</strong>.
+            Проверьте Telegram, привязанный к этому номеру.
+          </p>
+        )}
         {errorMessage ? (
           <div className="auth-status auth-status-error" role="alert">
             {errorMessage}
@@ -264,20 +282,22 @@ export default function Register() {
               required
             />
           </Field>
-          <div className="reg-resend">
-            <button
-              type="button"
-              className={buttonClassName("ghost")}
-              onClick={requestCode}
-              disabled={requestingCode || cooldown > 0}
-            >
-              {requestingCode
-                ? "Отправка…"
-                : cooldown > 0
-                  ? `Повтор через ${cooldown}с`
-                  : "Отправить код заново"}
-            </button>
-          </div>
+          {demoCode ? null : (
+            <div className="reg-resend">
+              <button
+                type="button"
+                className={buttonClassName("ghost")}
+                onClick={requestCode}
+                disabled={requestingCode || cooldown > 0}
+              >
+                {requestingCode
+                  ? "Отправка…"
+                  : cooldown > 0
+                    ? `Повтор через ${cooldown}с`
+                    : "Отправить код заново"}
+              </button>
+            </div>
+          )}
           <div className="reg-actions">
             <Button
               variant="ghost"

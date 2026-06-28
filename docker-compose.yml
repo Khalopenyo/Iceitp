@@ -29,6 +29,7 @@ services:
       PORT: 8080
       GIN_MODE: ${GIN_MODE:-release}
       SEED_DEMO: ${SEED_DEMO:-true}
+      FIXED_AUTH_CODE: ${FIXED_AUTH_CODE:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://127.0.0.1}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       FILE_STORAGE_ROOT: /app/storage

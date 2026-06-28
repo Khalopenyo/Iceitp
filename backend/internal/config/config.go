@@ -55,6 +55,12 @@ type Config struct {
 	// default org on startup. Default false → прод чистый (без демо-данных);
 	// локальная разработка включает SEED_DEMO=true.
 	SeedDemo bool
+
+	// FixedAuthCode, когда задан (например "1234"), отключает реальную отправку
+	// СМС-кода при регистрации участника: код всегда фиксированный. Нужен, пока
+	// не подключён СМС-провайдер. Пустое значение по умолчанию → обычный режим
+	// (случайный код + отправка). Должен быть ровно 4 цифры (phoneAuthCodeDigits).
+	FixedAuthCode string
 }
 
 const (
@@ -158,6 +164,7 @@ func Load() Config {
 		FileStorageRoot:         defaultFileStorageRoot(),
 		RLSEnforced:             envBool("RLS_ENFORCED", false),
 		SeedDemo:                envBool("SEED_DEMO", false),
+		FixedAuthCode:           strings.TrimSpace(os.Getenv("FIXED_AUTH_CODE")),
 	}
 	if cfg.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL is required")
