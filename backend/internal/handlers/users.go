@@ -178,6 +178,53 @@ func (h *UserHandler) UpdateUserRole(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
+// UpdateParticipant lets an organizer edit a participant's application (profile)
+// within their tenant: ФИО/организация/должность/город/степень/секция/доклад. The
+// target must be a role=participant of the caller's org (IDOR guard + can't edit team).
+// Phone is intentionally not editable here (unique-index/verification concerns).
+func (h *UserHandler) UpdateParticipant(c *gin.Context) {
+	id := c.Param("id")
+	var user models.User
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByOrg(c)).
+		Where("id = ? AND role = ?", id, models.RoleParticipant).First(&user).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "participant not found"})
+		return
+	}
+	var payload models.Profile
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	if strings.TrimSpace(payload.FullName) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ФИО не может быть пустым"})
+		return
+	}
+	if payload.SectionID != nil {
+		var section models.Section
+		if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).First(&section, *payload.SectionID).Error; err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "selected section not found"})
+			return
+		}
+	}
+	var profile models.Profile
+	if err := tenant.DB(c, h.DB).Where("user_id = ?", user.ID).First(&profile).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "profile not found"})
+		return
+	}
+	profile.FullName = strings.TrimSpace(payload.FullName)
+	profile.Organization = strings.TrimSpace(payload.Organization)
+	profile.Position = strings.TrimSpace(payload.Position)
+	profile.City = strings.TrimSpace(payload.City)
+	profile.Degree = strings.TrimSpace(payload.Degree)
+	profile.SectionID = payload.SectionID
+	profile.TalkTitle = strings.TrimSpace(payload.TalkTitle)
+	if err := tenant.DB(c, h.DB).Save(&profile).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update participant"})
+		return
+	}
+	c.JSON(http.StatusOK, profile)
+}
+
 func (h *UserHandler) SetBadgeIssued(c *gin.Context) {
 	id := c.Param("id")
 	var payload struct {

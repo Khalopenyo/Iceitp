@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { apiGet } from "../../lib/api.js";
+import { apiGet, apiPut } from "../../lib/api.js";
 import "./console.css";
+
+const EMPTY_FORM = { full_name: "", organization: "", position: "", city: "", degree: "", section_id: "", talk_title: "" };
 
 function initials(name) {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean).slice(0, 2);
@@ -20,6 +22,45 @@ export default function ConsoleParticipants() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [exporting, setExporting] = useState(false);
+  const [editing, setEditing] = useState(null); // user being edited
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const openEdit = (u) => {
+    const p = u.profile || {};
+    setForm({
+      full_name: p.full_name || "", organization: p.organization || "", position: p.position || "",
+      city: p.city || "", degree: p.degree || "", section_id: p.section_id ? String(p.section_id) : "",
+      talk_title: p.talk_title || "",
+    });
+    setEditing(u);
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    if (!form.full_name.trim()) { setToast({ kind: "err", text: "ФИО не может быть пустым." }); return; }
+    setSaving(true);
+    setToast(null);
+    try {
+      const updated = await apiPut(`/admin/users/${editing.id}/profile`, {
+        full_name: form.full_name.trim(),
+        organization: form.organization.trim(),
+        position: form.position.trim(),
+        city: form.city.trim(),
+        degree: form.degree.trim(),
+        section_id: form.section_id ? Number(form.section_id) : null,
+        talk_title: form.talk_title.trim(),
+      });
+      setUsers((prev) => prev.map((u) => (u.id === editing.id ? { ...u, profile: updated } : u)));
+      setToast({ kind: "ok", text: "Заявка обновлена." });
+      setEditing(null);
+    } catch (e) {
+      setToast({ kind: "err", text: e.message || "Не удалось сохранить." });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     // role=participant: организатор и команда (org/admin/staff) — не «заявки участников».
@@ -60,6 +101,7 @@ export default function ConsoleParticipants() {
         const p = u.profile || {};
         return {
           id: u.id,
+          raw: u,
           name: p.full_name || u.email,
           degree: p.degree || "",
           org: p.organization || "",
@@ -123,6 +165,7 @@ export default function ConsoleParticipants() {
 
   return (
     <div className="con-screen">
+      {toast ? <div className={`con-toast ${toast.kind}`} role={toast.kind === "err" ? "alert" : "status"}>{toast.text}</div> : null}
       <div className="con-eyebrow">Участники · {total} заявок</div>
       <div className="con-head-row">
         <h2 className="con-h2">Заявки участников</h2>
@@ -156,12 +199,12 @@ export default function ConsoleParticipants() {
       </div>
 
       <div className="con-card" style={{ padding: 0, overflow: "hidden" }} role="table" aria-label="Заявки участников">
-        <div role="row" style={{ display: "grid", gridTemplateColumns: "1.6fr 1.4fr 1.6fr 130px", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)", background: "var(--surface-2)", fontSize: 11.5, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--muted)" }}>
-          <span role="columnheader">Участник</span><span role="columnheader">Организация</span><span role="columnheader">Секция</span><span role="columnheader">Статус</span>
+        <div role="row" style={{ display: "grid", gridTemplateColumns: "1.6fr 1.4fr 1.6fr 130px 92px", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)", background: "var(--surface-2)", fontSize: 11.5, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--muted)" }}>
+          <span role="columnheader">Участник</span><span role="columnheader">Организация</span><span role="columnheader">Секция</span><span role="columnheader">Статус</span><span role="columnheader" style={{ textAlign: "right" }}>Действия</span>
         </div>
         {rows.length ? (
           rows.map((r) => (
-            <div key={r.id} role="row" style={{ display: "grid", gridTemplateColumns: "1.6fr 1.4fr 1.6fr 130px", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)", alignItems: "center" }}>
+            <div key={r.id} role="row" style={{ display: "grid", gridTemplateColumns: "1.6fr 1.4fr 1.6fr 130px 92px", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)", alignItems: "center" }}>
               <div role="cell" style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                 <span className="con-av">{initials(r.name)}</span>
                 <div style={{ minWidth: 0 }}>
@@ -172,6 +215,9 @@ export default function ConsoleParticipants() {
               <span role="cell" style={{ fontSize: 13, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.org || "—"}</span>
               <span role="cell" style={{ fontSize: 13, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.section || "—"}</span>
               <span role="cell" className={`con-pill ${r.isAuthor ? "ok" : ""}`}>{r.isAuthor ? "Докладчик" : "Слушатель"}</span>
+              <span role="cell" style={{ textAlign: "right" }}>
+                <button type="button" className="con-link-btn" onClick={() => openEdit(r.raw)}>Изменить</button>
+              </span>
             </div>
           ))
         ) : (
@@ -180,6 +226,47 @@ export default function ConsoleParticipants() {
           </div>
         )}
       </div>
+
+      {editing ? (
+        <div className="con-modal-scrim" role="dialog" aria-modal="true" aria-label="Редактирование заявки" onClick={() => !saving && setEditing(null)}>
+          <div className="con-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="con-card-title">Заявка участника</div>
+            <p className="con-sub" style={{ marginTop: 0 }}>{editing.email}</p>
+            <label className="con-field"><span>ФИО</span>
+              <input value={form.full_name} onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))} autoFocus />
+            </label>
+            <label className="con-field"><span>Организация</span>
+              <input value={form.organization} onChange={(e) => setForm((f) => ({ ...f, organization: e.target.value }))} />
+            </label>
+            <div className="con-form-row2">
+              <label className="con-field"><span>Должность</span>
+                <input value={form.position} onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))} />
+              </label>
+              <label className="con-field"><span>Учёная степень</span>
+                <input value={form.degree} onChange={(e) => setForm((f) => ({ ...f, degree: e.target.value }))} />
+              </label>
+            </div>
+            <div className="con-form-row2">
+              <label className="con-field"><span>Город</span>
+                <input value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
+              </label>
+              <label className="con-field"><span>Секция</span>
+                <select value={form.section_id} onChange={(e) => setForm((f) => ({ ...f, section_id: e.target.value }))}>
+                  <option value="">— Без секции —</option>
+                  {sections.map((s) => <option key={s.id} value={String(s.id)}>{s.title}</option>)}
+                </select>
+              </label>
+            </div>
+            <label className="con-field"><span>Тема доклада (пусто — слушатель)</span>
+              <input value={form.talk_title} onChange={(e) => setForm((f) => ({ ...f, talk_title: e.target.value }))} placeholder="Без доклада" />
+            </label>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
+              <button type="button" className="con-btn con-btn-ghost" onClick={() => setEditing(null)} disabled={saving}>Отмена</button>
+              <button type="button" className="con-btn" onClick={saveEdit} disabled={saving}>{saving ? "Сохраняем…" : "Сохранить"}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
