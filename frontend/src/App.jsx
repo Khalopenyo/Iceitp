@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Layout from "./components/Layout.jsx";
 import AuthLayout from "./components/AuthLayout.jsx";
 import OrgConsoleLayout from "./components/OrgConsoleLayout.jsx";
@@ -37,6 +37,7 @@ import EventProfile from "./pages/event/EventProfile.jsx";
 import EventSchedule from "./pages/event/EventSchedule.jsx";
 import EventFeedback from "./pages/event/EventFeedback.jsx";
 import EventMap from "./pages/event/EventMap.jsx";
+import PlatformLanding from "./pages/PlatformLanding.jsx";
 import Register from "./pages/Register.jsx";
 import Login from "./pages/Login.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
@@ -53,7 +54,7 @@ import QuestionPrompt from "./pages/QuestionPrompt.jsx";
 import AdminQuestions from "./pages/AdminQuestions.jsx";
 import ApprovedQuestions from "./pages/ApprovedQuestions.jsx";
 import AdminApprovedQuestions from "./pages/AdminApprovedQuestions.jsx";
-import { fetchBranding, applyBranding } from "./lib/org.js";
+import { fetchBranding, applyBranding, isPlatformHost } from "./lib/org.js";
 
 function ProtectedRoute({ children }) {
   if (!isAuthenticated()) {
@@ -115,6 +116,19 @@ function OpsRoute({ children }) {
     return <Navigate to="/forbidden" replace />;
   }
   return children;
+}
+
+// RootLayout выбирает, что показать на «/»: на голом домене платформы —
+// маркетинговый лендинг Кворума; на тенант-поддомене — сайт вуза (EventShell с
+// сайдбаром и дочерними маршрутами через Outlet).
+function RootLayout() {
+  const { pathname } = useLocation();
+  if (isPlatformHost()) {
+    // На голом домене «/» — лендинг; тенант-диплинки (/program и т.п.) сюда не
+    // относятся → отдаём 404, а не маркетинговую страницу под чужим путём.
+    return pathname === "/" ? <PlatformLanding /> : <NotFound />;
+  }
+  return <EventShell />;
 }
 
 export default function App() {
@@ -179,7 +193,7 @@ export default function App() {
       </Route>
       {/* Публичный сайт вуза — единый shell-с-сайдбаром (редизайн), бренд per-tenant.
           Все витринные экраны под одним каркасом, чтобы переходы не «прыгали» на старый Layout. */}
-      <Route path="/" element={<EventShell />}>
+      <Route path="/" element={<RootLayout />}>
         <Route index element={<EventLanding />} />
         <Route path="dashboard" element={<ProtectedRoute><EventDashboard /></ProtectedRoute>} />
         <Route path="documents" element={<ProtectedRoute><EventDocuments /></ProtectedRoute>} />

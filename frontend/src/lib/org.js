@@ -29,6 +29,18 @@ export function publicSiteUrl(org) {
   return `${protocol}//${org.slug}.${base}`;
 }
 
+// Голые домены платформы. Всё остальное (тенант-поддомены вуз.kvorum.ru, кастомные
+// домены вуза) считаем тенантом — нельзя судить по числу меток (кастомный домен
+// «misis.ru» тоже двухсоставный, но это сайт вуза, а не лендинг платформы).
+const PLATFORM_HOSTS = new Set(["kvorum.ru", "www.kvorum.ru", "localhost", "127.0.0.1"]);
+
+// isPlatformHost — true только на «голом» домене платформы: там показываем
+// маркетинговый лендинг Кворума. На поддомене/кастомном домене вуза — сайт вуза.
+export function isPlatformHost() {
+  if (typeof window === "undefined") return false;
+  return PLATFORM_HOSTS.has(window.location.hostname);
+}
+
 function clampByte(v) {
   return Math.max(0, Math.min(255, Math.round(v)));
 }
