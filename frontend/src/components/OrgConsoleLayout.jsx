@@ -11,7 +11,9 @@ const NAV = [
   { to: "/console/talks", label: "Доклады", icon: "M4 6h16M4 12h10M4 18h7M19 14v6M16 17h6" },
   { to: "/console/speakers", label: "Спикеры", icon: "M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8" },
   { to: "/console/content", label: "Блоки главной", icon: "M3 4h18v5H3zM3 13h18v7H3z" },
-  { to: "/console/map", label: "Карта площадки", icon: "M9 20l-6 2V6l6-2 6 2 6-2v16l-6 2-6-2zM9 4v16M15 6v16" },
+  // Интерактивный конструктор карты готов, но пока не в проде — у участников только
+  // «Карта 360°». Вернуть пункт, когда решим выкатывать (маршрут /console/map жив).
+  // { to: "/console/map", label: "Карта площадки", icon: "M9 20l-6 2V6l6-2 6 2 6-2v16l-6 2-6-2zM9 4v16M15 6v16" },
   { to: "/console/branding", label: "Брендинг", ownerOnly: true, icon: "M12 3s6 6.5 6 11a6 6 0 01-12 0c0-4.5 6-11 6-11z" },
   { to: "/console/participants", label: "Участники", icon: "M9 11a4 4 0 100-8 4 4 0 000 8M2 21c0-3.9 3.1-7 7-7s7 3.1 7 7M17 11a3 3 0 100-6M22 21a5 5 0 00-5-5" },
   { to: "/console/checkin", label: "Регистрация на месте", icon: "M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4M8 8h8v8H8z" },

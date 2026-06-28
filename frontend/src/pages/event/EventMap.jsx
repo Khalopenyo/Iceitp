@@ -6,6 +6,9 @@ import "./event.css";
 
 const VBW = 1000;
 const VBH = 700;
+// Интерактивная векторная схема пока не в проде — участникам показываем только
+// «Карта 360°». Код конструктора/рендера сохранён; вернуть = true, когда выкатим.
+const INTERACTIVE_MAP_ENABLED = false;
 const preferredSceneOrder = ["hall", "highpark", "kvazar", "domafrica", "narnia", "pulsar"];
 
 const hex = (c) => (typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c) ? c : "var(--ev-accent)");
@@ -32,6 +35,7 @@ export default function EventMap() {
   const [activeSceneId, setActiveSceneId] = useState(defaultPanoramaSceneId);
 
   useEffect(() => {
+    if (!INTERACTIVE_MAP_ENABLED) return;
     apiGet("/map")
       .then((r) => {
         const sh = Array.isArray(r?.shapes) ? r.shapes : [];
@@ -53,7 +57,7 @@ export default function EventMap() {
   const fShapes = shapes.filter((s) => (s.floor || 1) === floor);
   const fMarkers = markers.filter((m) => (m.floor || 1) === floor);
   const fRoutes = routes.filter((r) => (r.floor || 1) === floor);
-  const hasMap = shapes.length > 0 || markers.length > 0;
+  const hasMap = INTERACTIVE_MAP_ENABLED && (shapes.length > 0 || markers.length > 0);
 
   const visibleScenes = useMemo(() => {
     const rank = new Map(preferredSceneOrder.map((id, i) => [id, i]));
