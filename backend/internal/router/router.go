@@ -71,6 +71,7 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	roomHandler := &handlers.RoomHandler{DB: db}
 	mapMarkerHandler := &handlers.MapMarkerHandler{DB: db}
 	mapRouteHandler := &handlers.MapRouteHandler{DB: db}
+	venueMapHandler := &handlers.VenueMapHandler{DB: db}
 	conferenceHandler := &handlers.ConferenceHandler{DB: db}
 	programHandler := &handlers.ProgramHandler{DB: db}
 	checkInHandler := &handlers.CheckInHandler{DB: db, JWTSecret: cfg.JWTSecret}
@@ -117,6 +118,7 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	api.GET("/sections", sectionHandler.ListSections)
 	api.GET("/sections/:id", sectionHandler.GetSection)
 	api.GET("/rooms", roomHandler.ListRooms)
+	api.GET("/map", venueMapHandler.GetMap)
 	api.GET("/map/markers", mapMarkerHandler.ListMarkers)
 	api.GET("/map/routes", mapRouteHandler.ListRoutes)
 	api.GET("/conference", conferenceHandler.GetConference)
@@ -177,7 +179,10 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	admin.DELETE("/sections/:id", sectionHandler.DeleteSection)
 	admin.POST("/rooms", roomHandler.CreateRoom)
 	admin.DELETE("/rooms/:id", roomHandler.DeleteRoom)
-	// Identity-scoped чтение карты для консоли (публичный /api/map/* скоуплен по Host).
+	// Identity-scoped карта для конструктора консоли (публичный /api/map* — по Host).
+	// Конструктор грузит/сохраняет всю карту разом: GET/PUT /admin/map.
+	admin.GET("/map", venueMapHandler.GetMap)
+	admin.PUT("/map", venueMapHandler.ReplaceMap)
 	admin.GET("/map/markers", mapMarkerHandler.ListMarkers)
 	admin.PUT("/map/markers", mapMarkerHandler.ReplaceMarkers)
 	admin.PUT("/map/routes", mapRouteHandler.UpsertRoute)

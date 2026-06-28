@@ -37,7 +37,7 @@ func setupTwoTenants(t *testing.T, dbName string) (*gorm.DB, twoTenants) {
 		&models.Organization{}, &models.Conference{}, &models.User{}, &models.Profile{},
 		&models.Section{}, &models.Room{}, &models.Question{}, &models.Feedback{},
 		&models.ProgramAssignment{}, &models.ChatMessage{}, &models.ConsentLog{},
-		&models.MapMarker{}, &models.MapRoute{}, &models.ContentBlock{},
+		&models.MapMarker{}, &models.MapRoute{}, &models.MapShape{}, &models.ContentBlock{},
 	); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -278,6 +278,70 @@ func TestCrossTenantByIDMutationIsolation(t *testing.T) {
 	w = tenantReq(t, r, http.MethodPut, "alpha.platform.ru", idA(f.userA.ID)+"/role", map[string]string{"role": "admin"})
 	if w.Code != http.StatusOK {
 		t.Errorf("same-tenant UpdateUserRole -> %d, want 200 (%s)", w.Code, w.Body.String())
+	}
+}
+
+// TestCrossTenantReplaceMapIsolation proves the combined map replace-all
+// (shapes+markers+routes) by one tenant does not wipe another tenant's map.
+func TestCrossTenantReplaceMapIsolation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, f := setupTwoTenants(t, "iso_venuemap")
+	mustCreateH(t, db, &models.MapShape{Key: "a1", Kind: "room", Label: "A1", X: 0.1, Y: 0.1, W: 0.2, H: 0.2, Color: "#c7d2fe", ConferenceID: &f.confA.ID})
+	mustCreateH(t, db, &models.MapMarker{Key: "am", Label: "AM", Color: "#4f46e5", ConferenceID: &f.confA.ID})
+	mustCreateH(t, db, &models.MapShape{Key: "b1", Kind: "room", Label: "B1", X: 0.1, Y: 0.1, W: 0.2, H: 0.2, Color: "#c7d2fe", ConferenceID: &f.confB.ID})
+
+	r := gin.New()
+	r.Use(tenant.Middleware(db))
+	r.PUT("/map", (&VenueMapHandler{DB: db}).ReplaceMap)
+
+	// beta replaces its whole map.
+	w := tenantReq(t, r, http.MethodPut, "beta.platform.ru", "/map", map[string]any{
+		"shapes":  []map[string]any{{"key": "b2", "kind": "hall", "label": "B2", "x": 0.3, "y": 0.3, "w": 0.2, "h": 0.2, "color": "#fde68a"}},
+		"markers": []map[string]any{{"key": "bm", "label": "BM", "x": 0.5, "y": 0.5, "color": "#b42318"}},
+		"routes":  []map[string]any{},
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("beta ReplaceMap -> %d: %s", w.Code, w.Body.String())
+	}
+
+	// alpha's shape+marker must survive; beta now has exactly its new set.
+	var aShapes, aMarkers, bShapes, bMarkers int64
+	db.Model(&models.MapShape{}).Where("conference_id = ?", f.confA.ID).Count(&aShapes)
+	db.Model(&models.MapMarker{}).Where("conference_id = ?", f.confA.ID).Count(&aMarkers)
+	db.Model(&models.MapShape{}).Where("conference_id = ?", f.confB.ID).Count(&bShapes)
+	db.Model(&models.MapMarker{}).Where("conference_id = ?", f.confB.ID).Count(&bMarkers)
+	if aShapes != 1 || aMarkers != 1 {
+		t.Errorf("alpha map wiped by beta replace: shapes=%d markers=%d, want 1/1", aShapes, aMarkers)
+	}
+	if bShapes != 1 || bMarkers != 1 {
+		t.Errorf("beta map count shapes=%d markers=%d, want 1/1 after replace", bShapes, bMarkers)
+	}
+}
+
+// TestConferenceLessOrgReplaceMap409 proves an org with no active conference gets
+// 409 (not a global delete that would wipe every tenant's map).
+func TestConferenceLessOrgReplaceMap409(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, f := setupTwoTenants(t, "iso_venuemap_confless")
+	mustCreateH(t, db, &models.MapShape{Key: "a1", Kind: "room", Label: "A1", X: 0.1, Y: 0.1, W: 0.2, H: 0.2, Color: "#c7d2fe", ConferenceID: &f.confA.ID})
+	mustCreateH(t, db, &models.Organization{Slug: "gamma", DisplayName: "Gamma"})
+
+	r := gin.New()
+	r.Use(tenant.Middleware(db))
+	r.PUT("/map", (&VenueMapHandler{DB: db}).ReplaceMap)
+
+	w := tenantReq(t, r, http.MethodPut, "gamma.platform.ru", "/map", map[string]any{
+		"shapes":  []map[string]any{{"key": "x", "kind": "room", "label": "X", "x": 0.1, "y": 0.1, "w": 0.2, "h": 0.2, "color": "#c7d2fe"}},
+		"markers": []map[string]any{},
+		"routes":  []map[string]any{},
+	})
+	if w.Code != http.StatusConflict {
+		t.Fatalf("conf-less ReplaceMap -> %d, want 409 (%s)", w.Code, w.Body.String())
+	}
+	var shapes int64
+	db.Model(&models.MapShape{}).Count(&shapes)
+	if shapes != 1 {
+		t.Errorf("conf-less ReplaceMap touched shapes: total=%d, want 1 (alpha's untouched)", shapes)
 	}
 }
 

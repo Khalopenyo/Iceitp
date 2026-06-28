@@ -323,6 +323,51 @@ var migrations = []migration{
 			return db.AutoMigrate(&models.Conference{})
 		},
 	},
+	{
+		Version: "202606280024",
+		Name:    "add_map_shapes",
+		Up: func(db *gorm.DB) error {
+			if err := db.AutoMigrate(&models.MapShape{}); err != nil {
+				return err
+			}
+			if db.Dialector.Name() != "postgres" {
+				return nil
+			}
+			// Новая conference-scoped таблица → та же fail-closed RLS-политика, что и
+			// у прочих conference_id-таблиц (0009 уже отработал — ставим политику здесь).
+			for _, s := range []string{
+				"ALTER TABLE map_shapes ENABLE ROW LEVEL SECURITY",
+				"DROP POLICY IF EXISTS tenant_isolation ON map_shapes",
+				"CREATE POLICY tenant_isolation ON map_shapes " +
+					"USING (conference_id = NULLIF(current_setting('app.conf_id', true), '')::bigint) " +
+					"WITH CHECK (conference_id = NULLIF(current_setting('app.conf_id', true), '')::bigint)",
+			} {
+				if err := db.Exec(s).Error; err != nil {
+					return fmt.Errorf("rls map_shapes: %w", err)
+				}
+			}
+			return nil
+		},
+	},
+	{
+		Version: "202606280025",
+		Name:    "map_shapes_conference_id_not_null",
+		Up: func(db *gorm.DB) error {
+			if db.Dialector.Name() != "postgres" {
+				return nil
+			}
+			// Структурная гарантия как у map_markers/map_routes (миграция 0011 шла
+			// до появления map_shapes). Таблица новая — осиротевших строк нет, но на
+			// всякий случай чистим NULL-conf перед SET NOT NULL.
+			if err := db.Exec("DELETE FROM map_shapes WHERE conference_id IS NULL").Error; err != nil {
+				return fmt.Errorf("cleanup null-conf map_shapes: %w", err)
+			}
+			if err := db.Exec("ALTER TABLE map_shapes ALTER COLUMN conference_id SET NOT NULL").Error; err != nil {
+				return fmt.Errorf("map_shapes conference_id not null: %w", err)
+			}
+			return nil
+		},
+	},
 }
 
 // tenantConferenceIDNotNull flips the per-event conference_id columns (and
