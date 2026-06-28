@@ -30,22 +30,39 @@ export default function ConsoleDocs() {
     }
   };
 
+  const downloadBulk = async (type, key) => {
+    setBusy(key);
+    setToast(null);
+    try {
+      const res = await apiGet(`/admin/documents/bulk?type=${type}`);
+      const blob = await res.blob();
+      triggerBlobDownload(blob, type === "badge" ? "badges.zip" : "certificates.zip");
+      const inc = res.headers?.get?.("X-Bulk-Included");
+      const skip = res.headers?.get?.("X-Bulk-Skipped");
+      setToast({ kind: "ok", text: `Архив готов: ${inc ?? 0} файлов${skip && skip !== "0" ? `, пропущено ${skip}` : ""}.` });
+    } catch (e) {
+      setToast({ kind: "err", text: e.message || "Не удалось сформировать архив." });
+    } finally {
+      setBusy("");
+    }
+  };
+
   const cards = [
     {
       key: "badges",
       icon: "M3 5h18v14H3zM7 9h2M7 13h6",
       title: "Бейджи с QR",
       desc: `${stats.participants ?? 0} персональных бейджей для офлайн check-in`,
-      meta: "PDF · A6",
-      action: { label: "Массовая генерация — скоро", disabled: true },
+      meta: "ZIP · PDF A6",
+      action: { label: busy === "badges" ? "Готовим…" : "Скачать все (zip)", onClick: () => downloadBulk("badge", "badges") },
     },
     {
       key: "certs",
       icon: "M12 14a5 5 0 100-10 5 5 0 000 10zM8.5 13l-1.5 8 5-3 5 3-1.5-8",
       title: "Сертификаты участника",
       desc: `Именные, по данным доклада · ${stats.talks ?? 0} докладчиков`,
-      meta: "PDF · A4",
-      action: { label: "Массовая генерация — скоро", disabled: true },
+      meta: "ZIP · PDF A4",
+      action: { label: busy === "certs" ? "Готовим…" : "Скачать все (zip)", onClick: () => downloadBulk("certificate", "certs") },
     },
     {
       key: "program",

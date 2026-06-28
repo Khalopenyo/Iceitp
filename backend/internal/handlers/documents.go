@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"archive/zip"
 	"bytes"
 	"conferenceplatforma/internal/models"
 	"conferenceplatforma/internal/tenant"
@@ -13,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -356,10 +358,20 @@ func (h *DocumentHandler) CertificatePDF(c *gin.Context) {
 		return
 	}
 
-	cert, err := h.ensureCertificate(context.Conf.ID, context.User.ID)
+	pdf, err := h.buildCertificatePDF(c, context)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to issue certificate"})
 		return
+	}
+	writePDF(c, pdf, "certificate.pdf")
+}
+
+// buildCertificatePDF собирает PDF-сертификат участника (без записи в ответ) —
+// переиспользуется одиночной выдачей и массовой выгрузкой в zip.
+func (h *DocumentHandler) buildCertificatePDF(c *gin.Context, context *documentRuntimeContext) (*gofpdf.Fpdf, error) {
+	cert, err := h.ensureCertificate(context.Conf.ID, context.User.ID)
+	if err != nil {
+		return nil, err
 	}
 
 	talkTitle := context.User.Profile.TalkTitle
@@ -410,7 +422,7 @@ func (h *DocumentHandler) CertificatePDF(c *gin.Context) {
 		pdf.MultiCell(0, 8, fmt.Sprintf("Номер сертификата: %s", cert.Number), "", "L", false)
 		pdf.MultiCell(0, 8, fmt.Sprintf("Дата выдачи: %s", cert.IssuedAt.Format("02.01.2006")), "", "L", false)
 	}
-	writePDF(c, pdf, "certificate.pdf")
+	return pdf, nil
 }
 
 func (h *DocumentHandler) BadgePDF(c *gin.Context) {
@@ -494,11 +506,20 @@ func (h *DocumentHandler) AdminBadgePDF(c *gin.Context) {
 }
 
 func (h *DocumentHandler) writeBadgePDF(c *gin.Context, context *documentRuntimeContext) {
-
-	token, err := h.generateBadgeToken(context.User.ID, context.Conf.ID)
+	pdf, err := h.buildBadgePDF(context)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate badge token"})
 		return
+	}
+	writePDF(c, pdf, "badge.pdf")
+}
+
+// buildBadgePDF собирает PDF-бейдж участника (без записи в ответ) — переиспользуется
+// одиночной выдачей и массовой выгрузкой в zip.
+func (h *DocumentHandler) buildBadgePDF(context *documentRuntimeContext) (*gofpdf.Fpdf, error) {
+	token, err := h.generateBadgeToken(context.User.ID, context.Conf.ID)
+	if err != nil {
+		return nil, err
 	}
 
 	templatePath := badgeTemplatePath()
@@ -519,8 +540,7 @@ func (h *DocumentHandler) writeBadgePDF(c *gin.Context, context *documentRuntime
 	pdf.AddPage()
 	qr, err := qrcode.Encode(h.badgeScanURL(token), qrcode.Medium, 120)
 	if err == nil && renderBadgeTemplate(pdf, templatePath, qr) {
-		writePDF(c, pdf, "badge.pdf")
-		return
+		return pdf, nil
 	}
 
 	pdf.SetFont(fontFamily, "", 16)
@@ -539,7 +559,7 @@ func (h *DocumentHandler) writeBadgePDF(c *gin.Context, context *documentRuntime
 		pdf.RegisterImageOptionsReader("qr", gofpdf.ImageOptions{ImageType: "PNG"}, bytes.NewReader(qr))
 		pdf.ImageOptions("qr", qrX, qrY, qrSize, qrSize, false, gofpdf.ImageOptions{ImageType: "PNG"}, 0, "")
 	}
-	writePDF(c, pdf, "badge.pdf")
+	return pdf, nil
 }
 
 func (h *DocumentHandler) Proceedings(c *gin.Context) {
@@ -1073,4 +1093,116 @@ func writePDFFile(c *gin.Context, path, filename string) {
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", fmt.Sprintf("%s; filename=%s", documentDisposition(c), filename))
 	c.Data(http.StatusOK, "application/pdf", content)
+}
+
+const maxBulkExport = 500 // защита: не генерируем гигантский zip за один запрос
+
+// AdminBulkExport собирает PDF бейджей или сертификатов всех участников тенанта в
+// один zip. ?type=badge|certificate. Бейджи — только офлайн-участникам (как одиночная
+// выдача); сертификаты — всем участникам (ensureCertificate идемпотентен).
+func (h *DocumentHandler) AdminBulkExport(c *gin.Context) {
+	docType := strings.ToLower(strings.TrimSpace(c.DefaultQuery("type", "badge")))
+	if docType != "badge" && docType != "certificate" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "type must be 'badge' or 'certificate'"})
+		return
+	}
+
+	var users []models.User
+	if err := tenant.DB(c, h.DB).Scopes(tenant.ByOrg(c)).
+		Where("role = ?", models.RoleParticipant).
+		Preload("Profile").Order("id asc").Limit(maxBulkExport + 1).Find(&users).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load participants"})
+		return
+	}
+	truncated := false
+	if len(users) > maxBulkExport {
+		users = users[:maxBulkExport]
+		truncated = true
+	}
+	if len(users) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "нет участников для выгрузки"})
+		return
+	}
+
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	used := map[string]int{}
+	included, skipped := 0, 0
+	for i := range users {
+		ctx, err := h.loadDocumentRuntimeContext(c, users[i].ID)
+		if err != nil {
+			skipped++
+			continue
+		}
+		// Бейдж — только офлайн-участникам (паритет с AdminBadgePDF).
+		if docType == "badge" && ctx.Status.CurrentUserType == models.UserTypeOnline {
+			skipped++
+			continue
+		}
+		var pdf *gofpdf.Fpdf
+		if docType == "badge" {
+			pdf, err = h.buildBadgePDF(ctx)
+		} else {
+			pdf, err = h.buildCertificatePDF(c, ctx)
+		}
+		if err != nil {
+			skipped++
+			continue
+		}
+		w, err := zw.Create(bulkEntryName(ctx.User, docType, used))
+		if err != nil {
+			skipped++
+			continue
+		}
+		if err := pdf.Output(w); err != nil {
+			skipped++
+			continue
+		}
+		included++
+	}
+	if err := zw.Close(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to build archive"})
+		return
+	}
+	if included == 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "нет доступных документов для выгрузки (проверьте тип участников и статус конференции)"})
+		return
+	}
+
+	filename := "badges.zip"
+	if docType == "certificate" {
+		filename = "certificates.zip"
+	}
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	c.Header("X-Bulk-Included", strconv.Itoa(included))
+	c.Header("X-Bulk-Skipped", strconv.Itoa(skipped))
+	if truncated {
+		c.Header("X-Bulk-Truncated", strconv.Itoa(maxBulkExport))
+	}
+	c.Data(http.StatusOK, "application/zip", buf.Bytes())
+}
+
+// bulkEntryName формирует безопасное и уникальное имя файла в архиве из ФИО + id.
+func bulkEntryName(user models.User, docType string, used map[string]int) string {
+	base := strings.TrimSpace(user.Profile.FullName)
+	if base == "" {
+		base = strings.TrimSpace(user.Email)
+	}
+	if base == "" {
+		base = "participant"
+	}
+	// убираем разделители путей и управляющие символы
+	base = strings.Map(func(r rune) rune {
+		if r == '/' || r == '\\' || r < 32 {
+			return '-'
+		}
+		return r
+	}, base)
+	name := fmt.Sprintf("%s-%d", base, user.ID)
+	used[name]++
+	if n := used[name]; n > 1 {
+		name = fmt.Sprintf("%s-%d", name, n)
+	}
+	return name + ".pdf"
 }
