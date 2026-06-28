@@ -1,0 +1,37 @@
+# Caddy — TLS-терминатор Кворума: apex (лендинг платформы) + wildcard поддоменов вузов.
+# Весь трафик идёт на контейнер frontend:80 (nginx), который отдаёт SPA и проксирует
+# /api на backend, СОХРАНЯЯ заголовок Host — по нему резолвится тенант (вуз.ДОМЕН).
+#
+# ВАЖНО про wildcard *.ДОМЕН: HTTP-проверка не выдаёт wildcard-сертификат. Нужен ОДИН
+# из вариантов:
+#   (A) DNS-01 (рекомендуется): соберите Caddy с DNS-плагином вашего провайдера
+#       (xcaddy build --with github.com/caddy-dns/<provider>) и задайте токен в DNS_API_TOKEN.
+#   (B) on-demand TLS: по сертификату на каждый поддомен через HTTP-01 (без плагина),
+#       но нужен ask-гейт против абьюза — см. DEPLOY.md.
+#
+# Перед запуском заменить ВАШ_ДОМЕН на реальный домен и <provider> на ваш DNS-плагин.
+
+{
+	email admin@ВАШ_ДОМЕН
+}
+
+# Apex + www — лендинг платформы (сертификат через HTTP-01, плагин не нужен).
+ВАШ_ДОМЕН, www.ВАШ_ДОМЕН {
+	encode zstd gzip
+	reverse_proxy frontend:80 {
+		header_up Host {host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}
+
+# Поддомены вузов — wildcard-сертификат через DNS-01.
+*.ВАШ_ДОМЕН {
+	encode zstd gzip
+	tls {
+		dns <provider> {env.DNS_API_TOKEN}
+	}
+	reverse_proxy frontend:80 {
+		header_up Host {host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}

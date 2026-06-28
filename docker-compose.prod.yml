@@ -22,7 +22,12 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://conf:confpass@db:5432/confdb?sslmode=disable
+      # При RLS_ENFORCED=true: DATABASE_URL = НЕ-владелец (conf_app, под RLS),
+      # MIGRATION_DATABASE_URL = владелец (conf, прогоняет миграции/сид, обходит RLS).
+      # По умолчанию (RLS off) оба = владелец conf — поведение как раньше.
+      DATABASE_URL: ${DATABASE_URL:-postgres://conf:confpass@db:5432/confdb?sslmode=disable}
+      MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:-}
+      RLS_ENFORCED: ${RLS_ENFORCED:-false}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       PORT: 8080
       GIN_MODE: ${GIN_MODE:-release}

@@ -1,0 +1,33 @@
+# Оверлей к docker-compose.prod.yml: ставит Caddy перед frontend и убирает прямую
+# публикацию порта 80 у frontend (теперь наружу смотрит Caddy: 80/443 + TLS).
+#
+# Запуск:
+#   docker compose -f docker-compose.prod.yml -f deploy/docker-compose.caddy.yml \
+#     --env-file .env.production up -d --build
+services:
+  frontend:
+    # за Caddy — наружу порт не публикуем
+    ports: !reset []
+    expose:
+      - "80"
+
+  caddy:
+    # Для wildcard DNS-01 нужен образ Caddy, собранный с DNS-плагином провайдера
+    # (см. deploy/Caddyfile). Базовый caddy:2 умеет только HTTP-01 (apex/on-demand).
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DNS_API_TOKEN: ${DNS_API_TOKEN:-}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:
