@@ -7,6 +7,11 @@ RUN npm ci
 
 COPY . .
 
+# Домен платформы для этого развёртывания (apex → лендинг Кворума). Vite подхватывает
+# VITE_-префиксные переменные окружения на сборке.
+ARG VITE_PLATFORM_DOMAIN=""
+ENV VITE_PLATFORM_DOMAIN=$VITE_PLATFORM_DOMAIN
+
 RUN npm run build
 
 FROM nginx:1.29-alpine

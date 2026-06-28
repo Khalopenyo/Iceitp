@@ -33,6 +33,13 @@ export function publicSiteUrl(org) {
 // домены вуза) считаем тенантом — нельзя судить по числу меток (кастомный домен
 // «misis.ru» тоже двухсоставный, но это сайт вуза, а не лендинг платформы).
 const PLATFORM_HOSTS = new Set(["kvorum.ru", "www.kvorum.ru", "localhost", "127.0.0.1"]);
+// Домен платформы для конкретного развёртывания задаётся на сборке через
+// VITE_PLATFORM_DOMAIN (напр. iceitpconference.ru) — apex и www считаются платформой.
+const PLATFORM_DOMAIN = (import.meta.env.VITE_PLATFORM_DOMAIN || "").trim().toLowerCase();
+if (PLATFORM_DOMAIN) {
+  PLATFORM_HOSTS.add(PLATFORM_DOMAIN);
+  PLATFORM_HOSTS.add("www." + PLATFORM_DOMAIN);
+}
 
 // isPlatformHost — true только на «голом» домене платформы: там показываем
 // маркетинговый лендинг Кворума. На поддомене/кастомном домене вуза — сайт вуза.

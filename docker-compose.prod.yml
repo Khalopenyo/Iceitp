@@ -68,6 +68,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        VITE_PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-}
     restart: unless-stopped
     depends_on:
       api:
