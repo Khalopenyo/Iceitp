@@ -34,20 +34,23 @@ func (p OrganizationPlan) IsPaid() bool {
 // it via organization_id / conference_id; branding, domain and billing live here.
 // A user joins it via Membership (Phase 2). See ADR-0001.
 type Organization struct {
-	ID           uint               `gorm:"primaryKey" json:"id"`
-	Slug         string             `gorm:"uniqueIndex;not null" json:"slug"` // subdomain, e.g. "icetp"
-	DisplayName  string             `gorm:"not null" json:"display_name"`
-	Status       OrganizationStatus `gorm:"type:varchar(20);not null;default:'active'" json:"status"`
-	Plan         OrganizationPlan   `gorm:"type:varchar(20);not null;default:'free'" json:"plan"`
-	LogoURL      string             `json:"logo_url"`
-	PrimaryColor string             `json:"primary_color"`
+	ID          uint               `gorm:"primaryKey" json:"id"`
+	Slug        string             `gorm:"uniqueIndex;not null" json:"slug"` // subdomain, e.g. "icetp"
+	DisplayName string             `gorm:"not null" json:"display_name"`
+	Status      OrganizationStatus `gorm:"type:varchar(20);not null;default:'active'" json:"status"`
+	Plan        OrganizationPlan   `gorm:"type:varchar(20);not null;default:'free'" json:"plan"`
+	LogoURL     string             `json:"logo_url"`
+	// LogoObjectKey — ключ загруженного файла лого в objectstore (если логотип
+	// загружен файлом, а не задан внешним URL). Отдаётся публично через /api/orgs/:slug/logo.
+	LogoObjectKey string `json:"-"`
+	PrimaryColor  string `json:"primary_color"`
 	// Theme — направление оформления публичного сайта вуза: "academic" (Source Serif,
 	// светлый сайдбар) или "digital" (Plex Sans, брендовый сайдбар). См. EventShell.
-	Theme        string             `gorm:"type:varchar(20);not null;default:'academic'" json:"theme"`
-	CustomDomain string             `gorm:"index" json:"custom_domain"`
-	CreatedAt    time.Time          `json:"created_at"`
-	UpdatedAt    time.Time          `json:"updated_at"`
-	DeletedAt    gorm.DeletedAt     `gorm:"index" json:"-"`
+	Theme        string         `gorm:"type:varchar(20);not null;default:'academic'" json:"theme"`
+	CustomDomain string         `gorm:"index" json:"custom_domain"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 func (Organization) TableName() string { return "organizations" }

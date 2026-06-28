@@ -368,6 +368,14 @@ var migrations = []migration{
 			return nil
 		},
 	},
+	{
+		Version: "202606280026",
+		Name:    "add_org_logo_object_key",
+		Up: func(db *gorm.DB) error {
+			// Additive: organizations.logo_object_key — ключ загруженного файла лого.
+			return db.AutoMigrate(&models.Organization{})
+		},
+	},
 }
 
 // tenantConferenceIDNotNull flips the per-event conference_id columns (and

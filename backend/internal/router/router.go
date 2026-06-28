@@ -76,7 +76,7 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	programHandler := &handlers.ProgramHandler{DB: db}
 	checkInHandler := &handlers.CheckInHandler{DB: db, JWTSecret: cfg.JWTSecret}
 	submissionHandler := &handlers.SubmissionHandler{DB: db, Store: store}
-	orgHandler := &handlers.OrganizationHandler{DB: db}
+	orgHandler := &handlers.OrganizationHandler{DB: db, Store: store}
 	teamHandler := &handlers.TeamHandler{DB: db, OwnerDB: ownerDB, AppBaseURL: cfg.AppBaseURL}
 	// OPS — кросс-тенантная зона: owner-пул (bypass RLS), без tenant-скоупа.
 	opsHandler := &handlers.OpsHandler{DB: ownerDB}
@@ -124,6 +124,7 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	api.GET("/conference", conferenceHandler.GetConference)
 	api.GET("/landing", conferenceHandler.GetLanding)
 	api.GET("/org", orgHandler.GetOrg)
+	api.GET("/orgs/:slug/logo", orgHandler.GetOrgLogo)
 	api.GET("/content", contentHandler.ListPublic)
 	api.GET("/speakers", personHandler.ListPublic)
 	api.GET("/certificates/:number", certVerifyLimiter.Middleware("cert_verify"), docHandler.VerifyCertificate)
@@ -205,6 +206,7 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	admin.GET("/org", orgHandler.GetOrg)
 	admin.GET("/landing", conferenceHandler.GetLanding)
 	admin.PUT("/org", ownerOnly, orgHandler.UpdateOrg)
+	admin.POST("/org/logo", ownerOnly, orgHandler.UploadLogo)
 	admin.PUT("/billing", ownerOnly, orgHandler.SelectPlan)
 	// Команда оргкомитета: список видит вся команда, приглашения/роли/удаление —
 	// только владелец.

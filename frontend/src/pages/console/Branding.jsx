@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { apiPut } from "../../lib/api.js";
+import { apiPut, apiPostForm } from "../../lib/api.js";
 import { applyBranding } from "../../lib/org.js";
 import "./console.css";
 
@@ -19,7 +19,29 @@ export default function Branding() {
   const [theme, setTheme] = useState("academic");
   const [customDomain, setCustomDomain] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState(null);
+  const fileRef = useRef(null);
+
+  const uploadLogo = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    setToast(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const updated = await apiPostForm("/admin/org/logo", fd);
+      setOrg(updated);
+      setLogoUrl(updated.logo_url || "");
+      applyBranding(updated);
+      setToast({ kind: "ok", text: "Логотип загружен." });
+    } catch (e) {
+      setToast({ kind: "err", text: e.message || "Не удалось загрузить логотип." });
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
 
   useEffect(() => {
     if (!org) return;
@@ -88,12 +110,26 @@ export default function Branding() {
                 </>
               )}
             </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button type="button" className="con-btn con-btn-ghost" style={{ flex: "none" }} onClick={() => fileRef.current?.click()} disabled={uploading}>
+                {uploading ? "Загрузка…" : "Загрузить файл"}
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                onChange={(e) => uploadLogo(e.target.files?.[0])}
+                style={{ display: "none" }}
+              />
+              <span className="con-sub" style={{ margin: 0, alignSelf: "center", fontSize: 12 }}>PNG, JPEG, WEBP или SVG, до 2 МБ</span>
+            </div>
+            <div className="con-field-label" style={{ marginTop: 12 }}>…или ссылка на логотип</div>
             <input
               value={logoUrl}
               onChange={(e) => setLogoUrl(e.target.value)}
               placeholder="https://…/logo.svg"
               className="con-addr-suffix"
-              style={{ width: "100%", marginTop: 10, height: 38, borderRadius: 9, border: "1px solid var(--line)", background: "var(--surface)", padding: "0 12px", justifyContent: "start", fontFamily: "var(--con-font)" }}
+              style={{ width: "100%", marginTop: 6, height: 38, borderRadius: 9, border: "1px solid var(--line)", background: "var(--surface)", padding: "0 12px", justifyContent: "start", fontFamily: "var(--con-font)" }}
               aria-label="Ссылка на логотип"
             />
           </div>

@@ -1,19 +1,38 @@
 package handlers
 
 import (
+	"errors"
+	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"conferenceplatforma/internal/models"
+	"conferenceplatforma/internal/objectstore"
 	"conferenceplatforma/internal/tenant"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
+const maxLogoFileSize = 2 << 20 // 2 MiB
+
+// Разрешённые типы лого: растровые + svg. Ключ — нормализованный content-type.
+var allowedLogoTypes = map[string]string{
+	"image/png":     ".png",
+	"image/jpeg":    ".jpg",
+	"image/webp":    ".webp",
+	"image/svg+xml": ".svg",
+}
+
 type OrganizationHandler struct {
-	DB *gorm.DB
+	DB    *gorm.DB
+	Store objectstore.Store
 }
 
 // orgBranding is the public per-tenant branding surface the frontend themes from.
@@ -187,4 +206,133 @@ func (h *OrganizationHandler) UpdateOrg(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, brandingOf(org))
+}
+
+// UploadLogo — загрузка файла логотипа (owner-only). Файл кладётся в objectstore,
+// LogoURL переключается на публичный /api/orgs/:slug/logo?v=... (cache-bust), а
+// внешний URL-логотип (если был) перекрывается. Отдаёт обновлённый брендинг.
+func (h *OrganizationHandler) UploadLogo(c *gin.Context) {
+	if h.Store == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "file storage is not configured"})
+		return
+	}
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+		return
+	}
+	if file.Size <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "empty file"})
+		return
+	}
+	if file.Size > maxLogoFileSize {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file is too large", "details": "maximum logo size is 2 MB"})
+		return
+	}
+	contentType := normalizeLogoType(file)
+	if _, ok := allowedLogoTypes[contentType]; !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported image type", "details": "allowed: PNG, JPEG, WEBP, SVG"})
+		return
+	}
+
+	var org models.Organization
+	if err := tenant.DB(c, h.DB).First(&org, tenant.OrgID(c)).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "organization not found"})
+		return
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to open uploaded file"})
+		return
+	}
+	defer src.Close()
+
+	// Один логотип на тенант — стабильный ключ (перезапись при повторной загрузке).
+	objectKey := fmt.Sprintf("org-logos/%d", org.ID)
+	if err := h.Store.Put(c.Request.Context(), objectKey, src, file.Size, contentType); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to save logo"})
+		return
+	}
+
+	publicURL := fmt.Sprintf("/api/orgs/%s/logo?v=%d", org.Slug, time.Now().Unix())
+	if err := tenant.DB(c, h.DB).Model(&models.Organization{}).Where("id = ?", org.ID).Updates(map[string]any{
+		"logo_object_key": objectKey,
+		"logo_url":        publicURL,
+	}).Error; err != nil {
+		_ = h.Store.Delete(c.Request.Context(), objectKey)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save logo"})
+		return
+	}
+
+	if err := tenant.DB(c, h.DB).First(&org, org.ID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load organization"})
+		return
+	}
+	c.JSON(http.StatusOK, brandingOf(org))
+}
+
+// GetOrgLogo — публичная раздача загруженного лого по slug вуза. Без авторизации
+// (логотип показывается на публичном сайте и в auth). CSP отключает скрипты/сеть,
+// чтобы SVG-лого нельзя было использовать как вектор XSS при прямом открытии.
+func (h *OrganizationHandler) GetOrgLogo(c *gin.Context) {
+	if h.Store == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "file storage is not configured"})
+		return
+	}
+	slug := strings.ToLower(strings.TrimSpace(c.Param("slug")))
+	if slug == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "logo not found"})
+		return
+	}
+	var org models.Organization
+	if err := h.DB.Where("slug = ?", slug).First(&org).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "logo not found"})
+		return
+	}
+	if strings.TrimSpace(org.LogoObjectKey) == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "logo not found"})
+		return
+	}
+	obj, err := h.Store.Get(c.Request.Context(), org.LogoObjectKey)
+	if err != nil {
+		if errors.Is(err, objectstore.ErrObjectNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "logo not found"})
+			return
+		}
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to load logo"})
+		return
+	}
+	defer obj.Body.Close()
+
+	if obj.ContentType != "" {
+		c.Header("Content-Type", obj.ContentType)
+	}
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+	c.Header("Cache-Control", "public, max-age=300")
+	if obj.Size > 0 {
+		c.Header("Content-Length", strconv.FormatInt(obj.Size, 10))
+	}
+	_, _ = io.Copy(c.Writer, obj.Body)
+}
+
+// normalizeLogoType определяет content-type загруженного лого: по заголовку, с
+// фолбэком на расширение имени файла (некоторые клиенты не шлют тип для svg).
+func normalizeLogoType(file *multipart.FileHeader) string {
+	ct := strings.ToLower(strings.TrimSpace(strings.Split(file.Header.Get("Content-Type"), ";")[0]))
+	if _, ok := allowedLogoTypes[ct]; ok {
+		return ct
+	}
+	switch strings.ToLower(filepath.Ext(file.Filename)) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".webp":
+		return "image/webp"
+	case ".svg":
+		return "image/svg+xml"
+	}
+	return ct
 }
