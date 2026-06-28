@@ -177,6 +177,8 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	admin.DELETE("/sections/:id", sectionHandler.DeleteSection)
 	admin.POST("/rooms", roomHandler.CreateRoom)
 	admin.DELETE("/rooms/:id", roomHandler.DeleteRoom)
+	// Identity-scoped чтение карты для консоли (публичный /api/map/* скоуплен по Host).
+	admin.GET("/map/markers", mapMarkerHandler.ListMarkers)
 	admin.PUT("/map/markers", mapMarkerHandler.ReplaceMarkers)
 	admin.PUT("/map/routes", mapRouteHandler.UpsertRoute)
 	admin.POST("/seed-demo", ownerOnly, scheduleHandler.SeedDemo)

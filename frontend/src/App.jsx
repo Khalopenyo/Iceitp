@@ -15,6 +15,7 @@ import ConsoleSettings from "./pages/console/ConsoleSettings.jsx";
 import ConsoleSpeakers from "./pages/console/ConsoleSpeakers.jsx";
 import ConsoleContent from "./pages/console/ConsoleContent.jsx";
 import ConsoleTalks from "./pages/console/ConsoleTalks.jsx";
+import ConsoleMap from "./pages/console/ConsoleMap.jsx";
 import ConsoleParticipants from "./pages/console/ConsoleParticipants.jsx";
 import ConsoleModeration from "./pages/console/ConsoleModeration.jsx";
 import ConsoleDocs from "./pages/console/ConsoleDocs.jsx";
@@ -157,6 +158,7 @@ export default function App() {
         <Route path="talks" element={<ConsoleTalks />} />
         <Route path="speakers" element={<ConsoleSpeakers />} />
         <Route path="content" element={<ConsoleContent />} />
+        <Route path="map" element={<ConsoleMap />} />
         <Route path="participants" element={<ConsoleParticipants />} />
         <Route path="checkin" element={<ConsoleCheckin />} />
         <Route path="moderation" element={<ConsoleModeration />} />

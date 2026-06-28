@@ -31,6 +31,7 @@ type updateConferencePayload struct {
 	VenueAddress   *string                 `json:"venue_address"`
 	VenueMapURL    *string                 `json:"venue_map_url"`
 	VenueTransport *string                 `json:"venue_transport"`
+	FloorPlanURL   *string                 `json:"floor_plan_url"`
 	LiveStreamURL  *string                 `json:"live_stream_url"`
 	StreamVKURL    *string                 `json:"stream_vk_url"`
 	StreamYouTube  *string                 `json:"stream_youtube_url"`
@@ -84,6 +85,18 @@ func (h *ConferenceHandler) UpdateConference(c *gin.Context) {
 	setStr(&conf.VenueAddress, payload.VenueAddress)
 	setStr(&conf.VenueMapURL, payload.VenueMapURL)
 	setStr(&conf.VenueTransport, payload.VenueTransport)
+	if payload.FloorPlanURL != nil {
+		// План рендерится как <img src> — допускаем только https-URL или относительный путь.
+		// Протокол-относительные («//host/..») и «/\..» — это внешняя загрузка в обход
+		// https-only намерения; явно отклоняем их.
+		plan := strings.TrimSpace(*payload.FloorPlanURL)
+		isRelPath := strings.HasPrefix(plan, "/") && !strings.HasPrefix(plan, "//") && !strings.HasPrefix(plan, "/\\")
+		if plan != "" && (len(plan) > 500 || !(strings.HasPrefix(plan, "https://") || isRelPath)) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "floor_plan_url must be an https:// URL or a relative path"})
+			return
+		}
+		conf.FloorPlanURL = plan
+	}
 	setStr(&conf.LiveStreamURL, payload.LiveStreamURL)
 	setStr(&conf.StreamVKURL, payload.StreamVKURL)
 	setStr(&conf.StreamYouTube, payload.StreamYouTube)

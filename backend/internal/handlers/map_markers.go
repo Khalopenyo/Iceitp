@@ -3,7 +3,9 @@ package handlers
 import (
 	"conferenceplatforma/internal/models"
 	"conferenceplatforma/internal/tenant"
+	"log"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -12,6 +14,27 @@ import (
 
 type MapMarkerHandler struct {
 	DB *gorm.DB
+}
+
+const (
+	maxMarkers         = 200 // набор отдаётся каждому посетителю карты — ограничиваем
+	maxMarkerKeyLen    = 64
+	maxMarkerLabelLen  = 120
+	defaultMarkerColor = "#4f46e5" // первый цвет палитры консоли (ConsoleMap COLORS)
+)
+
+// Цвет маркера попадает в inline-стиль background на публичной карте; ограничиваем
+// строгим 6-значным hex, чтобы клиент не записал произвольное CSS-значение.
+var markerColorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+func clampUnit(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
 }
 
 func (h *MapMarkerHandler) ListMarkers(c *gin.Context) {
@@ -29,6 +52,10 @@ func (h *MapMarkerHandler) ReplaceMarkers(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
+	if len(payload) > maxMarkers {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "too many markers", "max": maxMarkers})
+		return
+	}
 	seenKeys := map[string]struct{}{}
 	for i := range payload {
 		payload[i].Key = strings.TrimSpace(payload[i].Key)
@@ -38,8 +65,16 @@ func (h *MapMarkerHandler) ReplaceMarkers(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "marker key is required", "index": i})
 			return
 		}
+		if len(payload[i].Key) > maxMarkerKeyLen {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "marker key too long", "index": i})
+			return
+		}
 		if payload[i].Label == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "marker label is required", "index": i, "key": payload[i].Key})
+			return
+		}
+		if len(payload[i].Label) > maxMarkerLabelLen {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "marker label too long", "index": i, "key": payload[i].Key})
 			return
 		}
 		if _, ok := seenKeys[payload[i].Key]; ok {
@@ -51,8 +86,15 @@ func (h *MapMarkerHandler) ReplaceMarkers(c *gin.Context) {
 		if payload[i].Floor <= 0 {
 			payload[i].Floor = 1
 		}
+		// Координаты нормализованы (0..1); клиентский clamp дублируем на сервере.
+		payload[i].X = clampUnit(payload[i].X)
+		payload[i].Y = clampUnit(payload[i].Y)
+		// Цвет: пусто → дефолт палитры; иначе только строгий hex.
 		if payload[i].Color == "" {
-			payload[i].Color = "primary"
+			payload[i].Color = defaultMarkerColor
+		} else if !markerColorRe.MatchString(payload[i].Color) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "marker color must be a #rrggbb hex value", "index": i, "key": payload[i].Key})
+			return
 		}
 	}
 	// A resolved tenant with no active conference must NOT run the bulk replace:
@@ -97,8 +139,8 @@ func (h *MapMarkerHandler) ReplaceMarkers(c *gin.Context) {
 		return nil
 	})
 	if err != nil {
-		// Return details to help debug bad payload / DB constraint issues during development.
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save markers", "details": err.Error()})
+		log.Printf("ReplaceMarkers: save failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save markers"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})

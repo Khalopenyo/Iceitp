@@ -33,6 +33,9 @@ type Conference struct {
 	VenueAddress   string    `json:"venue_address"`
 	VenueMapURL    string    `json:"venue_map_url"`
 	VenueTransport string    `json:"venue_transport"`
+	// FloorPlanURL — изображение плана этажа, на которое организатор расставляет
+	// маркеры (интерактивная карта площадки).
+	FloorPlanURL   string    `json:"floor_plan_url"`
 	LiveStreamURL  string    `gorm:"column:live_stream_url" json:"live_stream_url"`
 	StreamVKURL    string    `gorm:"column:stream_vk_url" json:"stream_vk_url"`
 	StreamYouTube  string    `gorm:"column:stream_youtube_url" json:"stream_youtube_url"`

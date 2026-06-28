@@ -5,6 +5,7 @@ import (
 	"conferenceplatforma/internal/tenant"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 
@@ -80,7 +81,8 @@ func (h *MapRouteHandler) UpsertRoute(c *gin.Context) {
 	if len(payload.Points) == 0 {
 		if err := tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)).Where("from_key = ? AND to_key = ? AND floor = ?", payload.FromKey, payload.ToKey, payload.Floor).
 			Delete(&models.MapRoute{}).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete route", "details": err.Error()})
+			log.Printf("UpsertRoute: delete failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete route"})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "deleted"})
@@ -108,20 +110,23 @@ func (h *MapRouteHandler) UpsertRoute(c *gin.Context) {
 				route.ConferenceID = &cid
 			}
 			if err := tenant.DB(c, h.DB).Create(&route).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save route", "details": err.Error()})
+				log.Printf("UpsertRoute: create failed: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save route"})
 				return
 			}
 			c.JSON(http.StatusOK, route)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load route", "details": err.Error()})
+		log.Printf("UpsertRoute: load failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load route"})
 		return
 	}
 
 	existing.Points = pointsJSON
 	existing.Floor = payload.Floor
 	if err := tenant.DB(c, h.DB).Save(&existing).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save route", "details": err.Error()})
+		log.Printf("UpsertRoute: save failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save route"})
 		return
 	}
 	c.JSON(http.StatusOK, existing)

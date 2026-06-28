@@ -315,6 +315,14 @@ var migrations = []migration{
 			return db.AutoMigrate(&models.Person{})
 		},
 	},
+	{
+		Version: "202606270023",
+		Name:    "add_conference_floor_plan",
+		Up: func(db *gorm.DB) error {
+			// Additive: conferences.floor_plan_url — изображение плана для интерактивной карты.
+			return db.AutoMigrate(&models.Conference{})
+		},
+	},
 }
 
 // tenantConferenceIDNotNull flips the per-event conference_id columns (and

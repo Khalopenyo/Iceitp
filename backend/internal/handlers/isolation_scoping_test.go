@@ -295,7 +295,7 @@ func TestCrossTenantReplaceMarkersIsolation(t *testing.T) {
 
 	// beta replaces its own markers.
 	w := tenantReq(t, r, http.MethodPut, "beta.platform.ru", "/markers",
-		[]map[string]any{{"key": "b2", "label": "B2", "color": "primary"}})
+		[]map[string]any{{"key": "b2", "label": "B2", "color": "#4f46e5"}})
 	if w.Code != http.StatusOK {
 		t.Fatalf("beta ReplaceMarkers -> %d: %s", w.Code, w.Body.String())
 	}
@@ -380,7 +380,7 @@ func TestConferenceLessOrgReplaceMarkers409(t *testing.T) {
 	r.PUT("/markers", (&MapMarkerHandler{DB: db}).ReplaceMarkers)
 
 	w := tenantReq(t, r, http.MethodPut, "gamma.platform.ru", "/markers",
-		[]map[string]any{{"key": "x", "label": "X", "color": "primary"}})
+		[]map[string]any{{"key": "x", "label": "X", "color": "#4f46e5"}})
 	if w.Code != http.StatusConflict {
 		t.Fatalf("conf-less ReplaceMarkers -> %d, want 409 (%s)", w.Code, w.Body.String())
 	}
