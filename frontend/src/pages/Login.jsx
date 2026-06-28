@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { apiPost } from "../lib/api.js";
 import { setUser } from "../lib/auth.js";
+import { isPlatformHost } from "../lib/org.js";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Card, Field, Input, Button } from "../components/ui/index.jsx";
 import { EyeButton } from "../components/ui/EyeButton.jsx";
@@ -93,12 +94,17 @@ export default function Login() {
         Войти через Госуслуги (ЕСИА)
         <em>скоро</em>
       </button>
-      <p className="auth-links auth-links-center">
-        Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
-      </p>
-      <p className="auth-links auth-links-center auth-links-muted">
-        Организуете конференцию? <Link to="/console/signup">Создать рабочее пространство</Link>
-      </p>
+      {isPlatformHost() ? (
+        // Платформа (apex) — вход для организаторов: регистрация вуза.
+        <p className="auth-links auth-links-center">
+          Организуете конференцию? <Link to="/console/signup">Создать рабочее пространство</Link>
+        </p>
+      ) : (
+        // Сайт вуза (поддомен) — вход для участников: регистрация на конференцию.
+        <p className="auth-links auth-links-center">
+          Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
+        </p>
+      )}
     </Card>
   );
 }

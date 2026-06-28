@@ -145,7 +145,9 @@ export default function App() {
     <Routes>
       <Route element={<AuthLayout />}>
         <Route path="login" element={<Login />} />
-        <Route path="register" element={<Register />} />
+        {/* Регистрация участника — только на сайте вуза (поддомен). На платформе
+            участникам регистрироваться негде (нет конференции) → на лендинг. */}
+        <Route path="register" element={isPlatformHost() ? <Navigate to="/" replace /> : <Register />} />
         <Route path="forgot-password" element={<ForgotPassword />} />
         <Route path="reset-password" element={<ResetPassword />} />
       </Route>
