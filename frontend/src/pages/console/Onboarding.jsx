@@ -84,7 +84,7 @@ export default function Onboarding() {
               {error ? <div className="con-toast err" role="alert">{error}</div> : null}
               <label className="con-field">
                 <span>Название конференции</span>
-                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Например, Цифровая экономика 2026" autoFocus />
+                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Например, Название конференции 2026" autoFocus />
               </label>
               <label className="con-field">
                 <span>Организация / вуз</span>

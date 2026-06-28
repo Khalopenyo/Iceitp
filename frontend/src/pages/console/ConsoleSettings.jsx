@@ -178,7 +178,7 @@ export default function ConsoleSettings() {
       {tab === "venue" ? (
         <div className="con-card" style={{ display: "grid", gap: 14 }}>
           <label className="con-field"><span>Адрес площадки</span>
-            <input value={f.venue_address} onChange={(e) => set("venue_address", e.target.value)} placeholder="г. Грозный, проспект Х. Исаева, 100" />
+            <input value={f.venue_address} onChange={(e) => set("venue_address", e.target.value)} placeholder="г. Город, ул. Улица, 1" />
           </label>
           <label className="con-field"><span>Ссылка на карту</span>
             <input value={f.venue_map_url} onChange={(e) => set("venue_map_url", e.target.value)} placeholder="https://yandex.ru/maps/…" />
