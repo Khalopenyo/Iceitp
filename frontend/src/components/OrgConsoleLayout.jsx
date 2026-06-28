@@ -18,6 +18,7 @@ const NAV = [
   { to: "/console/participants", label: "Участники", icon: "M9 11a4 4 0 100-8 4 4 0 000 8M2 21c0-3.9 3.1-7 7-7s7 3.1 7 7M17 11a3 3 0 100-6M22 21a5 5 0 00-5-5" },
   { to: "/console/checkin", label: "Регистрация на месте", icon: "M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4M8 8h8v8H8z" },
   { to: "/console/moderation", label: "Модерация", icon: "M4 5h16v11H9l-5 4z" },
+  { to: "/console/feedback", label: "Отзывы", icon: "M12 17.3l-6.2 3.7 1.6-7L2 9.2l7.1-.6L12 2l2.9 6.6 7.1.6-5.4 4.8 1.6 7z" },
   { to: "/console/docs", label: "Документы", icon: "M6 3h8l4 4v14H6zM14 3v4h4" },
   { to: "/console/team", label: "Команда", icon: "M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M19 8v6M22 11h-6" },
   { to: "/console/billing", label: "Подписка", ownerOnly: true, icon: "M3 7h18v12H3zM3 11h18" },

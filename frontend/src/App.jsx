@@ -22,6 +22,7 @@ import ConsoleDocs from "./pages/console/ConsoleDocs.jsx";
 import ConsoleBilling from "./pages/console/ConsoleBilling.jsx";
 import ConsoleCheckin from "./pages/console/ConsoleCheckin.jsx";
 import ConsoleTeam from "./pages/console/ConsoleTeam.jsx";
+import ConsoleFeedback from "./pages/console/ConsoleFeedback.jsx";
 import EventShell from "./components/EventShell.jsx";
 import EventLanding from "./pages/event/EventLanding.jsx";
 import EventDashboard from "./pages/event/EventDashboard.jsx";
@@ -42,7 +43,6 @@ import Register from "./pages/Register.jsx";
 import Login from "./pages/Login.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
-import Admin from "./pages/Admin.jsx";
 import { isAuthenticated, getUser } from "./lib/auth.js";
 import NoAccess from "./pages/NoAccess.jsx";
 import NotFound from "./pages/NotFound.jsx";
@@ -51,9 +51,7 @@ import About from "./pages/About.jsx";
 import Legal from "./pages/Legal.jsx";
 import BadgeCheckIn from "./pages/BadgeCheckIn.jsx";
 import QuestionPrompt from "./pages/QuestionPrompt.jsx";
-import AdminQuestions from "./pages/AdminQuestions.jsx";
 import ApprovedQuestions from "./pages/ApprovedQuestions.jsx";
-import AdminApprovedQuestions from "./pages/AdminApprovedQuestions.jsx";
 import { fetchBranding, applyBranding, isPlatformHost } from "./lib/org.js";
 
 function ProtectedRoute({ children }) {
@@ -179,6 +177,7 @@ export default function App() {
         <Route path="participants" element={<ConsoleParticipants />} />
         <Route path="checkin" element={<ConsoleCheckin />} />
         <Route path="moderation" element={<ConsoleModeration />} />
+        <Route path="feedback" element={<ConsoleFeedback />} />
         <Route path="docs" element={<ConsoleDocs />} />
         <Route path="team" element={<ConsoleTeam />} />
         <Route path="billing" element={<OwnerRoute><ConsoleBilling /></OwnerRoute>} />
@@ -217,30 +216,6 @@ export default function App() {
         <Route path="badge/:token" element={<BadgeCheckIn />} />
         <Route path="questions/:token" element={<QuestionPrompt />} />
         <Route path="questions/:token/approved" element={<ApprovedQuestions />} />
-        <Route
-          path="admin/questions/approved"
-          element={
-            <AdminRoute>
-              <AdminApprovedQuestions />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="admin/questions"
-          element={
-            <AdminRoute>
-              <AdminQuestions />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="admin"
-          element={
-            <AdminRoute>
-              <Admin />
-            </AdminRoute>
-          }
-        />
         <Route path="forbidden" element={<NoAccess />} />
         <Route path="legal" element={<Legal />} />
         <Route path="personal-data" element={<Legal initialDoc="privacy" />} />

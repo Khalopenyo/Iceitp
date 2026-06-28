@@ -186,11 +186,10 @@ export default function Layout() {
     ? [
         { to: "/feedback", label: "Отзывы" },
         { to: "/chat", label: "Чат" },
-        ...(["admin", "org"].includes(user.role) ? [{ to: "/admin", label: "Админка" }] : []),
       ]
     : [];
-  const adminQuestionNavItem =
-    user?.role === "admin" ? { to: "/admin/questions/approved", label: "Вопросы", mobileLabel: "Вопросы" } : null;
+  // ADM-зона консолидирована в /console — старые /admin* ссылки убраны из легаси-Layout.
+  const adminQuestionNavItem = null;
   const desktopNavItemsWithQuestions = adminQuestionNavItem
     ? [...desktopNavItems, adminQuestionNavItem]
     : desktopNavItems;
