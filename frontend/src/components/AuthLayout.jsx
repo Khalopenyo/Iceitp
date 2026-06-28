@@ -49,7 +49,7 @@ export default function AuthLayout() {
     [platform, branding?.theme, branding?.primary_color]
   );
 
-  const brandName = platform ? "Кворум" : branding?.display_name || "КонференцХаб";
+  const brandName = platform ? "Кворум" : branding?.display_name || "Кворум";
   const brandLogo = platform ? null : branding?.logo_url;
 
   return (

@@ -50,6 +50,11 @@ type Config struct {
 	// a non-owner role without BYPASSRLS (docs/rls/provision_app_role.sql). Default
 	// false → the owner connection bypasses RLS and behaviour is unchanged.
 	RLSEnforced bool
+
+	// SeedDemo, when true, seeds the demo conference/sections/markers into the
+	// default org on startup. Default false → прод чистый (без демо-данных);
+	// локальная разработка включает SEED_DEMO=true.
+	SeedDemo bool
 }
 
 const (
@@ -152,6 +157,7 @@ func Load() Config {
 		GreenSMSTelegramText:    os.Getenv("GREENSMS_TELEGRAM_CASCADE_TEXT"),
 		FileStorageRoot:         defaultFileStorageRoot(),
 		RLSEnforced:             envBool("RLS_ENFORCED", false),
+		SeedDemo:                envBool("SEED_DEMO", false),
 	}
 	if cfg.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL is required")

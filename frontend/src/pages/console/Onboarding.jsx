@@ -88,7 +88,7 @@ export default function Onboarding() {
               </label>
               <label className="con-field">
                 <span>Организация / вуз</span>
-                <input value={org} onChange={(e) => setOrg(e.target.value)} placeholder="Государственный технический университет" />
+                <input value={org} onChange={(e) => setOrg(e.target.value)} placeholder="Название вашего вуза" />
               </label>
               <div className="con-field-row">
                 <label className="con-field">

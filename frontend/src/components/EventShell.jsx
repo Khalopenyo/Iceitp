@@ -8,7 +8,7 @@ import { getConferenceTitle, getConferenceSupportEmail, formatConferenceDateRang
 import StatusPlaceholder from "./StatusPlaceholder.jsx";
 import "../pages/event/event.css";
 
-const PLATFORM_NAME = "КонференцХаб";
+const PLATFORM_NAME = "Кворум";
 
 // Личные (авторизованные) маршруты участника внутри EventShell. Только статус finished их
 // не гейтит (участник должен видеть кабинет/сертификат после конференции). draft и suspended

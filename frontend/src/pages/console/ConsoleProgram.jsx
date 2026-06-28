@@ -121,7 +121,7 @@ export default function ConsoleProgram() {
         <form className="con-card" onSubmit={save} style={{ marginBottom: 14, display: "grid", gap: 12 }}>
           <div className="con-field-row" style={{ gridTemplateColumns: "2fr 1fr" }}>
             <label className="con-field"><span>Название секции</span>
-              <input value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="Цифровая экономика и финтех" autoFocus />
+              <input value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="Название секции" autoFocus />
             </label>
             <label className="con-field"><span>Зал</span>
               <input value={form.room} onChange={(e) => set("room", e.target.value)} placeholder="Зал A-301" />

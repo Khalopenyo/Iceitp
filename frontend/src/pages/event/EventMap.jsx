@@ -9,6 +9,11 @@ const VBH = 700;
 // Интерактивная векторная схема пока не в проде — участникам показываем только
 // «Карта 360°». Код конструктора/рендера сохранён; вернуть = true, когда выкатим.
 const INTERACTIVE_MAP_ENABLED = false;
+// Демо-панорамы 360° (площадка ГГНТУ) убраны из прода — у тенантов пока нет своей
+// загрузки панорам, поэтому раздел «Карта 360°» скрыт и показывается пустое
+// состояние. Код вьюера и данные тура сохранены: вернуть = true, когда появится
+// загрузка панорам тенантом.
+const PANORAMA_DEMO_ENABLED = false;
 const preferredSceneOrder = ["hall", "highpark", "kvazar", "domafrica", "narnia", "pulsar"];
 
 const hex = (c) => (typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c) ? c : "var(--ev-accent)");
@@ -130,20 +135,31 @@ export default function EventMap() {
         </div>
       ) : null}
 
-      <div className="ev-page-eyebrow" style={{ marginTop: hasMap ? 28 : 0 }}>Карта 360°</div>
-      <div className="ev-map-layout">
-        <aside className="ev-map-list" aria-label="Список локаций">
-          {visibleScenes.map((scene) => (
-            <button key={scene.id} type="button" className={`ev-map-loc ${activeScene.id === scene.id ? "active" : ""}`} aria-pressed={activeScene.id === scene.id} onClick={() => setActiveSceneId(scene.id)}>{scene.title}</button>
-          ))}
-        </aside>
-        <div className="ev-map-viewer">
-          <div className="ev-map-toolbar">{activeScene.title}</div>
-          <div className="ev-map-shell">
-            <PanoramaViewer sceneId={activeScene.id} onSceneChange={setActiveSceneId} />
+      {PANORAMA_DEMO_ENABLED ? (
+        <>
+          <div className="ev-page-eyebrow" style={{ marginTop: hasMap ? 28 : 0 }}>Карта 360°</div>
+          <div className="ev-map-layout">
+            <aside className="ev-map-list" aria-label="Список локаций">
+              {visibleScenes.map((scene) => (
+                <button key={scene.id} type="button" className={`ev-map-loc ${activeScene.id === scene.id ? "active" : ""}`} aria-pressed={activeScene.id === scene.id} onClick={() => setActiveSceneId(scene.id)}>{scene.title}</button>
+              ))}
+            </aside>
+            <div className="ev-map-viewer">
+              <div className="ev-map-toolbar">{activeScene.title}</div>
+              <div className="ev-map-shell">
+                <PanoramaViewer sceneId={activeScene.id} onSceneChange={setActiveSceneId} />
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      ) : null}
+
+      {!hasMap && !PANORAMA_DEMO_ENABLED ? (
+        <p className="ev-empty">
+          Карта площадки пока не добавлена. Организатор опубликует схему и панорамы
+          ближе к началу конференции — загляните позже.
+        </p>
+      ) : null}
     </div>
   );
 }

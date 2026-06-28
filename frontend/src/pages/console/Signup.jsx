@@ -127,7 +127,7 @@ export default function Signup() {
               {error ? <div className="con-toast err" role="alert">{error}</div> : null}
               <label className="con-field">
                 <span>Ваше имя</span>
-                <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Иван Петров" autoComplete="name" autoFocus />
+                <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Фамилия Имя Отчество" autoComplete="name" autoFocus />
               </label>
               <label className="con-field">
                 <span>Рабочий e-mail</span>
@@ -144,7 +144,7 @@ export default function Signup() {
               </label>
               <label className="con-field">
                 <span>Название вуза</span>
-                <input value={university} onChange={(e) => setUniversity(e.target.value)} placeholder="Государственный технический университет" autoComplete="organization" />
+                <input value={university} onChange={(e) => setUniversity(e.target.value)} placeholder="Название вашего вуза" autoComplete="organization" />
               </label>
               <label className="con-field">
                 <span>Адрес сайта (поддомен)</span>

@@ -25,14 +25,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("ensure default organization: %v", err)
 	}
-	seed(owner, defaultOrg.ID)
-	// EnsureDefaultOrg ran before the conference existed, so on a fresh install the
-	// org got the generic display name. Refresh it from the conference title now.
-	if strings.TrimSpace(defaultOrg.DisplayName) == "Организация" {
-		var conf models.Conference
-		if err := owner.Order("id asc").First(&conf).Error; err == nil {
-			if title := strings.TrimSpace(conf.Title); title != "" {
-				owner.Model(&models.Organization{}).Where("id = ?", defaultOrg.ID).Update("display_name", title)
+	// Демо-данные (конференция/секции/маркеры дефолт-орг) сидятся только при
+	// SEED_DEMO=true (локальная разработка). В проде флаг выключен → база чистая.
+	if cfg.SeedDemo {
+		seed(owner, defaultOrg.ID)
+		// EnsureDefaultOrg ran before the conference existed, so on a fresh install the
+		// org got the generic display name. Refresh it from the conference title now.
+		if strings.TrimSpace(defaultOrg.DisplayName) == "Организация" {
+			var conf models.Conference
+			if err := owner.Order("id asc").First(&conf).Error; err == nil {
+				if title := strings.TrimSpace(conf.Title); title != "" {
+					owner.Model(&models.Organization{}).Where("id = ?", defaultOrg.ID).Update("display_name", title)
+				}
 			}
 		}
 	}

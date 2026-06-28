@@ -65,7 +65,7 @@ export default function Branding() {
   }, [org]);
 
   const slug = org?.slug || "вуз";
-  const confTitle = conference?.title || "Цифровая экономика и общество 2026";
+  const confTitle = conference?.title || "Название конференции";
 
   const save = async () => {
     setSaving(true);

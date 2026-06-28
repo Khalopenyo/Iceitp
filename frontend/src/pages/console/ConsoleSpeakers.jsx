@@ -138,7 +138,7 @@ export default function ConsoleSpeakers() {
           </div>
           <div className="con-field-row" style={{ gridTemplateColumns: "2fr 1fr" }}>
             <label className="con-field"><span>Организация</span>
-              <input value={form.organization} onChange={(e) => set("organization", e.target.value)} placeholder="ГГНТУ им. М. Д. Миллионщикова" />
+              <input value={form.organization} onChange={(e) => set("organization", e.target.value)} placeholder="Название организации" />
             </label>
             <label className="con-field"><span>Порядок</span>
               <input type="number" value={form.sort_order} onChange={(e) => set("sort_order", e.target.value)} placeholder="0" />

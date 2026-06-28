@@ -137,7 +137,7 @@ export default function ConsoleSettings() {
       {tab === "main" ? (
         <div className="con-card" style={{ display: "grid", gap: 14 }}>
           <label className="con-field"><span>Название конференции</span>
-            <input value={f.title} onChange={(e) => set("title", e.target.value)} placeholder="Цифровая экономика и общество 2026" />
+            <input value={f.title} onChange={(e) => set("title", e.target.value)} placeholder="Название конференции" />
           </label>
           <label className="con-field"><span>Описание</span>
             <textarea value={f.description} onChange={(e) => set("description", e.target.value)} placeholder="Короткое описание конференции для главной страницы." />
