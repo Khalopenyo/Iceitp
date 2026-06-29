@@ -1,3 +1,4 @@
+import { initials as initialsOf } from "../../lib/format.js";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm } from "../../lib/api.js";
@@ -50,7 +51,7 @@ function formatFileSize(size) {
   return `${(size / (1024 * 1024)).toFixed(1)} МБ`;
 }
 const buildAttachmentUrl = (u) => (!u ? "" : apiBaseUrl ? `${apiBaseUrl}${u}` : u);
-const initials = (name) => String(name || "").trim().split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("") || "—";
+const initials = (name) => initialsOf(name, "—");
 
 // EventChat — чат участника в зоне EventShell (по прототипу: вкладки Общий/Моя секция,
 // лента, композер). Логика сохранена из старого Chat: поллинг, черновики, вложения,

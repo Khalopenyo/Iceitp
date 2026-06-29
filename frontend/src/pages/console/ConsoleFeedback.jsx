@@ -1,3 +1,4 @@
+import { initials as initialsOf } from "../../lib/format.js";
 import { useEffect, useMemo, useState } from "react";
 import { apiGet } from "../../lib/api.js";
 import "./console.css";
@@ -5,10 +6,7 @@ import "./console.css";
 const RATINGS = [0, 5, 4, 3, 2, 1];
 const stars = (n) => "★★★★★".slice(0, n) + "☆☆☆☆☆".slice(0, 5 - n);
 
-function initials(name) {
-  const parts = String(name || "").trim().split(/\s+/).filter(Boolean).slice(0, 2);
-  return parts.map((p) => p[0]?.toUpperCase() || "").join("") || "У";
-}
+const initials = (name) => initialsOf(name, "У");
 
 // ConsoleFeedback — раздел «Отзывы» консоли (перенесён из старого /admin при
 // консолидации ADM → /console). Список отзывов участников + средняя оценка.

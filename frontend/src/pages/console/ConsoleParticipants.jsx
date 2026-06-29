@@ -1,13 +1,11 @@
+import { initials as initialsOf } from "../../lib/format.js";
 import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiPut } from "../../lib/api.js";
 import "./console.css";
 
 const EMPTY_FORM = { full_name: "", organization: "", position: "", city: "", degree: "", section_id: "", talk_title: "" };
 
-function initials(name) {
-  const parts = String(name || "").trim().split(/\s+/).filter(Boolean).slice(0, 2);
-  return parts.map((p) => p[0]?.toUpperCase() || "").join("") || "У";
-}
+const initials = (name) => initialsOf(name, "У");
 
 const FILTERS = [
   { key: "all", label: "Все" },

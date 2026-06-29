@@ -1,3 +1,4 @@
+import { initials as initialsOf } from "../lib/format.js";
 import { NavLink, Outlet } from "react-router-dom";
 import { getUser } from "../lib/auth.js";
 import "../pages/console/console.css";
@@ -8,11 +9,7 @@ const NAV = [
   { to: "/ops/tenants", label: "Тенанты", icon: "M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M15 9h.01M9 13h.01M15 13h.01M9 17h.01M15 17h.01" },
 ];
 
-function initials(name) {
-  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "О";
-  return (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
-}
+const initials = (name) => initialsOf(name, "О");
 
 // OpsLayout — операторская консоль платформы (зона OPS). Тот же визуальный язык
 // «Кворум» (.con-root), но с операторской меткой и тёмной плашкой-окружением,

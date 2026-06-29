@@ -1,3 +1,4 @@
+import { initials as initialsOf } from "../../lib/format.js";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../lib/api.js";
 import { getUser } from "../../lib/auth.js";
@@ -13,10 +14,7 @@ const ROLE_STYLE = {
 // Порядок как в макете «Кворум».
 const ROLE_OPTIONS = [["moderator", "Модератор"], ["editor", "Редактор"], ["booth", "Стендист"], ["curator", "Куратор"]];
 
-function initials(text) {
-  const parts = String(text || "").trim().split(/[\s@.]+/).filter(Boolean).slice(0, 2);
-  return parts.map((p) => p[0]?.toUpperCase() || "").join("") || "—";
-}
+const initials = (text) => initialsOf(text, "—", /[\s@.]+/);
 
 function badge(style, children, key) {
   return (

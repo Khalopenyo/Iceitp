@@ -1,3 +1,4 @@
+import { initials as initialsOf } from "../../lib/format.js";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../lib/api.js";
 import "./console.css";
@@ -10,10 +11,7 @@ const ROLES = [
 const ROLE_LABEL = Object.fromEntries(ROLES.map((r) => [r.v, r.label]));
 const EMPTY = { full_name: "", role: "speaker", degree: "", organization: "", position: "", bio: "", photo_url: "", sort_order: 0 };
 
-function initials(name) {
-  const parts = String(name || "").trim().split(/\s+/).filter(Boolean).slice(0, 2);
-  return parts.map((p) => p[0]?.toUpperCase() || "").join("") || "—";
-}
+const initials = (name) => initialsOf(name, "—");
 
 // ConsoleSpeakers — раздел «Спикеры» (доступен всей команде). CRUD персон
 // (спикеры/оргкомитет/программный комитет) через /admin/speakers; питает публичный

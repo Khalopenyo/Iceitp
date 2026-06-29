@@ -1,3 +1,4 @@
+import { initials as initialsOf } from "../lib/format.js";
 import { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet } from "react-router-dom";
 import { apiGet } from "../lib/api.js";
@@ -24,11 +25,7 @@ const NAV = [
   { to: "/console/billing", label: "Подписка", ownerOnly: true, icon: "M3 7h18v12H3zM3 11h18" },
 ];
 
-function initials(name) {
-  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "О";
-  return (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
-}
+const initials = (name) => initialsOf(name, "О");
 function orgMark(name) {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
   return parts.map((p) => p[0]).join("").slice(0, 3).toUpperCase() || "ВУЗ";

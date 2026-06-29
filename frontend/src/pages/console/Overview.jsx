@@ -1,13 +1,11 @@
+import { initials as initialsOf } from "../../lib/format.js";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { apiGet, apiPut } from "../../lib/api.js";
 import { publicSiteUrl } from "../../lib/org.js";
 import "./console.css";
 
-function initials(name) {
-  const parts = String(name || "").trim().split(/\s+/).filter(Boolean).slice(0, 2);
-  return parts.map((p) => p[0]?.toUpperCase() || "").join("") || "У";
-}
+const initials = (name) => initialsOf(name, "У");
 
 function daysUntil(value) {
   if (!value) return null;

@@ -1,14 +1,11 @@
+import { initials as initialsOf } from "../../lib/format.js";
 import { useEffect, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import { apiGet, apiPut } from "../../lib/api.js";
 import { setUser } from "../../lib/auth.js";
 import "./event.css";
 
-function initials(name) {
-  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "У";
-  return (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
-}
+const initials = (name) => initialsOf(name, "У");
 function maskPhone(phone) {
   const p = String(phone || "").trim();
   if (p.length < 6) return p || "—";
