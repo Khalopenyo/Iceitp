@@ -1,3 +1,4 @@
+import Toast from "../../components/Toast.jsx";
 import { initials as initialsOf } from "../../lib/format.js";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../lib/api.js";
@@ -100,7 +101,7 @@ export default function ConsoleTeam() {
 
   return (
     <div className="con-screen">
-      {toast ? <div className={`con-toast ${toast.kind}`} role={toast.kind === "err" ? "alert" : "status"}>{toast.text}</div> : null}
+      <Toast toast={toast} />
 
       <div className="con-eyebrow">Команда · оргкомитет</div>
       <h2 className="con-h2" style={{ marginBottom: 6 }}>Кто работает над конференцией</h2>

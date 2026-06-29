@@ -1,3 +1,4 @@
+import Toast from "../../components/Toast.jsx";
 import { useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { apiPut, apiPostForm } from "../../lib/api.js";
@@ -90,7 +91,7 @@ export default function Branding() {
 
   return (
     <div className="con-screen">
-      {toast ? <div className={`con-toast ${toast.kind}`} role={toast.kind === "err" ? "alert" : "status"}>{toast.text}</div> : null}
+      <Toast toast={toast} />
 
       <div className="con-eyebrow">Брендинг · White-label</div>
       <div className="con-head-row">

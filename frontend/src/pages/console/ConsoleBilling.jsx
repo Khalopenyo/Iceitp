@@ -1,3 +1,4 @@
+import Toast from "../../components/Toast.jsx";
 import { useEffect, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { apiGet, apiPut } from "../../lib/api.js";
@@ -47,7 +48,7 @@ export default function ConsoleBilling() {
 
   return (
     <div className="con-screen">
-      {toast ? <div className={`con-toast ${toast.kind}`} role={toast.kind === "err" ? "alert" : "status"}>{toast.text}</div> : null}
+      <Toast toast={toast} />
 
       <div className="con-eyebrow">Подписка</div>
       <h2 className="con-h2" style={{ marginBottom: 22 }}>Тариф и использование</h2>

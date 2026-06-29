@@ -1,3 +1,4 @@
+import Toast from "../../components/Toast.jsx";
 import { useEffect, useState } from "react";
 import { apiGet, apiPatch } from "../../lib/api.js";
 import "./console.css";
@@ -42,7 +43,7 @@ export default function ConsoleModeration() {
 
   return (
     <div className="con-screen">
-      {toast ? <div className={`con-toast ${toast.kind}`} role={toast.kind === "err" ? "alert" : "status"}>{toast.text}</div> : null}
+      <Toast toast={toast} />
 
       <div className="con-eyebrow">Модерация · вопросы и обратная связь</div>
       <h2 className="con-h2" style={{ marginBottom: 6 }}>Вопросы спикерам</h2>

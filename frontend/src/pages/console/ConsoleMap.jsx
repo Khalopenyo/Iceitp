@@ -1,3 +1,4 @@
+import Toast from "../../components/Toast.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiGet, apiPut } from "../../lib/api.js";
 import "./console.css";
@@ -273,7 +274,7 @@ export default function ConsoleMap() {
 
   return (
     <div className="con-screen">
-      {toast ? <div className={`con-toast ${toast.kind}`} role={toast.kind === "err" ? "alert" : "status"}>{toast.text}</div> : null}
+      <Toast toast={toast} />
 
       <div className="con-eyebrow">Навигация площадки</div>
       <div className="con-head-row">

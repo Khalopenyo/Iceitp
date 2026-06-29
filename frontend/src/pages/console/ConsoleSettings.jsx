@@ -1,3 +1,4 @@
+import Toast from "../../components/Toast.jsx";
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { apiPut } from "../../lib/api.js";
@@ -103,7 +104,7 @@ export default function ConsoleSettings() {
 
   return (
     <div className="con-screen">
-      {toast ? <div className={`con-toast ${toast.kind}`} role={toast.kind === "err" ? "alert" : "status"}>{toast.text}</div> : null}
+      <Toast toast={toast} />
 
       <div className="con-eyebrow">Контент сайта</div>
       <div className="con-head-row">

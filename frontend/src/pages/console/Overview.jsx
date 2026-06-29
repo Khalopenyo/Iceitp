@@ -1,3 +1,4 @@
+import Toast from "../../components/Toast.jsx";
 import { initials as initialsOf } from "../../lib/format.js";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
@@ -90,7 +91,7 @@ export default function Overview() {
 
   return (
     <div className="con-screen">
-      {toast ? <div className={`con-toast ${toast.kind}`} role={toast.kind === "err" ? "alert" : "status"}>{toast.text}</div> : null}
+      <Toast toast={toast} />
 
       <div className="con-head-row">
         <div>
