@@ -79,7 +79,7 @@ func TestRLSIdentityScopeRepinsTenant(t *testing.T) {
 	// control run proves the re-pin (not something else) is responsible.
 	buildRouter := func(withIdentity bool) *gin.Engine {
 		r := gin.New()
-		r.Use(tenant.Middleware(owner))                // bare Host → DefaultOrgID, HostMatched=false
+		r.Use(tenant.Middleware(owner, 0))                // bare Host → DefaultOrgID, HostMatched=false
 		r.Use(tenant.RLSMiddleware(app, true))         // pins the tx to DefaultOrgID
 		r.Use(func(c *gin.Context) {                   // stand in for auth.Middleware
 			c.Set("jwt_org_id", orgB.ID)

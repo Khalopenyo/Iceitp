@@ -3,6 +3,7 @@ package tenant
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"conferenceplatforma/internal/models"
 
@@ -22,14 +23,25 @@ import (
 //
 // TODO Phase 2.x: once enforcement (GORM scope + RLS) is in, reject unknown or
 // suspended tenants instead of falling back.
-func Middleware(db *gorm.DB) gin.HandlerFunc {
+func Middleware(db *gorm.DB, cacheTTL time.Duration) gin.HandlerFunc {
+	cache := newResolveCache(cacheTTL)
 	return func(c *gin.Context) {
 		host := ""
 		if c.Request != nil {
 			host = c.Request.Host
 		}
-		orgID, matched := resolveOrgID(db, host)
-		SetScope(c, Scope{OrgID: orgID, ConfID: resolveConfID(db, orgID), HostMatched: matched})
+		label := leadingLabel(host)
+		orgID, confID, matched, ok := cache.get(label)
+		if !ok {
+			orgID, matched = resolveOrgID(db, host)
+			confID = resolveConfID(db, orgID)
+			// Кэшируем только совпавшие поддомены и apex-фолбэк (label==""), чтобы
+			// поток случайных/несуществующих поддоменов не раздувал кэш без пользы.
+			if matched || label == "" {
+				cache.put(label, orgID, confID, matched)
+			}
+		}
+		SetScope(c, Scope{OrgID: orgID, ConfID: confID, HostMatched: matched})
 		c.Next()
 	}
 }

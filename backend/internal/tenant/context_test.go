@@ -54,7 +54,7 @@ func TestMiddlewareResolvesScope(t *testing.T) {
 	}
 
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	Middleware(db)(c)
+	Middleware(db, 0)(c)
 
 	s, ok := FromContext(c)
 	if !ok || s.OrgID != DefaultOrgID || s.ConfID != conf.ID {
@@ -83,7 +83,7 @@ func TestMiddlewareSubdomainResolution(t *testing.T) {
 	resolve := func(host string) Scope {
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
 		c.Request = httptest.NewRequest(http.MethodGet, "http://"+host+"/api/x", nil)
-		Middleware(db)(c)
+		Middleware(db, 0)(c)
 		s, _ := FromContext(c)
 		return s
 	}

@@ -39,7 +39,7 @@ func TestWritePathStampsConferenceID(t *testing.T) {
 	}
 
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.Use(func(c *gin.Context) { c.Set("user_id", user.ID); c.Next() })
 	r.POST("/feedback", (&FeedbackHandler{DB: db}).CreateFeedback)
 

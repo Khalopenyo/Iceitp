@@ -100,7 +100,7 @@ func Setup(appDB, ownerDB *gorm.DB, cfg config.Config, store objectstore.Store) 
 	// request scope. Phase 2.2 replaces org resolution with subdomain/Host lookup.
 	// Resolve the tenant on the OWNER pool: it reads the RLS-protected conferences
 	// table and must bypass RLS, otherwise ConfID would always be 0 once enforced.
-	api.Use(tenant.Middleware(ownerDB))
+	api.Use(tenant.Middleware(ownerDB, cfg.TenantResolveCacheTTL))
 	// Phase 2.5: when RLS_ENFORCED, wrap each request in a transaction on the APP
 	// pool that sets the app.org_id/app.conf_id session variables so Postgres RLS
 	// enforces tenant isolation. No-op (and zero overhead) when the flag is off.

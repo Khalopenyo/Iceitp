@@ -16,9 +16,15 @@ import (
 
 func main() {
 	cfg := config.Load()
+	pool := db.PoolConfig{
+		MaxOpenConns:    cfg.DBMaxOpenConns,
+		MaxIdleConns:    cfg.DBMaxIdleConns,
+		ConnMaxLifetime: cfg.DBConnMaxLifetime,
+		ConnMaxIdleTime: cfg.DBConnMaxIdleTime,
+	}
 	// Owner connection: owns the tables (bypasses RLS), so migrations + seed run
 	// here. With RLS off this is the same DSN as the app pool below.
-	owner := db.Connect(cfg.MigrationDatabaseURL)
+	owner := db.Connect(cfg.MigrationDatabaseURL, pool)
 	// Create organization #1 BEFORE seeding so the seeder can stamp
 	// organization_id/conference_id on the rows it creates (fresh install).
 	defaultOrg, err := db.EnsureDefaultOrg(owner)
@@ -51,7 +57,7 @@ func main() {
 	// non-owner conf_app role, which is subject to the RLS policies).
 	appDB := owner
 	if cfg.DatabaseURL != cfg.MigrationDatabaseURL {
-		a, err := db.Open(cfg.DatabaseURL)
+		a, err := db.Open(cfg.DatabaseURL, pool)
 		if err != nil {
 			log.Fatalf("connect app database: %v", err)
 		}

@@ -412,7 +412,7 @@ func TestCrossTenantFullProgramPDFIsolation(t *testing.T) {
 	})
 
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.Use(func(c *gin.Context) {
 		userID, _ := strconv.ParseUint(c.GetHeader("X-User-ID"), 10, 64)
 		c.Set("user_id", uint(userID))
@@ -613,7 +613,7 @@ func TestVerifyCertificateIsTenantScoped(t *testing.T) {
 	mustCreateH(t, db, &cert)
 
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	handler := &DocumentHandler{DB: db, JWTSecret: "test-secret"}
 	r.GET("/api/certificates/:number", handler.VerifyCertificate)
 

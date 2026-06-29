@@ -61,6 +61,20 @@ type Config struct {
 	// не подключён СМС-провайдер. Пустое значение по умолчанию → обычный режим
 	// (случайный код + отправка). Должен быть ровно 4 цифры (phoneAuthCodeDigits).
 	FixedAuthCode string
+
+	// Лимиты пула соединений к БД (см. константы выше). Применяются к обоим пулам.
+	DBMaxOpenConns    int
+	DBMaxIdleConns    int
+	DBConnMaxLifetime time.Duration
+	DBConnMaxIdleTime time.Duration
+
+	// TenantResolveCacheTTL — TTL кэша резолва поддомен→организация/конференция в
+	// tenant.Middleware. 0 (по умолчанию) → кэш выключен, поведение прежнее (2
+	// запроса на каждый /api). >0 включает кэш: уменьшает нагрузку на горячем
+	// пути ценой окна устаревания (новый поддомен/первая конференция вуза
+	// появятся не мгновенно). Статус организации (suspended) проверяется отдельно
+	// в RequireActiveOrg и не кэшируется.
+	TenantResolveCacheTTL time.Duration
 }
 
 const (
@@ -71,6 +85,13 @@ const (
 	defaultPhoneAuthCodeTTL  = 10 * time.Minute
 	defaultPhoneAuthResend   = 60 * time.Second
 	defaultPhoneAuthAttempts = 5
+	// Лимиты пула соединений к БД. При RLS каждый запрос держит коннект всю
+	// свою длительность, поэтому пул обязательно ограничиваем, чтобы всплеск не
+	// упёрся в Postgres max_connections.
+	defaultDBMaxOpenConns    = 20
+	defaultDBMaxIdleConns    = 10
+	defaultDBConnMaxLifetime = 30 * time.Minute
+	defaultDBConnMaxIdleTime = 5 * time.Minute
 )
 
 func loadDotEnv() {
@@ -165,6 +186,11 @@ func Load() Config {
 		RLSEnforced:             envBool("RLS_ENFORCED", false),
 		SeedDemo:                envBool("SEED_DEMO", false),
 		FixedAuthCode:           strings.TrimSpace(os.Getenv("FIXED_AUTH_CODE")),
+		DBMaxOpenConns:          envInt("DB_MAX_OPEN_CONNS", defaultDBMaxOpenConns),
+		DBMaxIdleConns:          envInt("DB_MAX_IDLE_CONNS", defaultDBMaxIdleConns),
+		DBConnMaxLifetime:       envDuration("DB_CONN_MAX_LIFETIME", defaultDBConnMaxLifetime),
+		DBConnMaxIdleTime:       envDuration("DB_CONN_MAX_IDLE_TIME", defaultDBConnMaxIdleTime),
+		TenantResolveCacheTTL:   envDuration("TENANT_RESOLVE_CACHE_TTL", 0),
 	}
 	if cfg.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL is required")

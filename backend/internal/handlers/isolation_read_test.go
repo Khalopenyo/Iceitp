@@ -44,7 +44,7 @@ func TestCrossTenantReadIsolation(t *testing.T) {
 	mustCreateH(t, db, &models.MapMarker{Key: "b", Label: "B", Color: "primary", ConferenceID: &confB.ID})
 
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.GET("/sections", (&SectionHandler{DB: db}).ListSections)
 	r.GET("/rooms", (&RoomHandler{DB: db}).ListRooms)
 	r.GET("/markers", (&MapMarkerHandler{DB: db}).ListMarkers)

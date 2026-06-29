@@ -208,14 +208,23 @@ func (h *DocumentHandler) loadDocumentRuntimeContext(c *gin.Context, userID uint
 		return nil, err
 	}
 
-	status, err := loadDocumentStatus(tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)), user, *conf)
+	return h.documentRuntimeContextFor(c, user, *conf)
+}
+
+// documentRuntimeContextFor builds the runtime context from an already-loaded user
+// and conference, computing only the document status. It lets the bulk-export loop
+// avoid re-fetching the (single) conference and re-First-ing each user once per
+// participant — the result is identical to loadDocumentRuntimeContext for the same
+// user/conference.
+func (h *DocumentHandler) documentRuntimeContextFor(c *gin.Context, user models.User, conf models.Conference) (*documentRuntimeContext, error) {
+	status, err := loadDocumentStatus(tenant.DB(c, h.DB).Scopes(tenant.ByConference(c)), user, conf)
 	if err != nil {
 		return nil, err
 	}
 
 	return &documentRuntimeContext{
 		User:   user,
-		Conf:   *conf,
+		Conf:   conf,
 		Status: status,
 	}, nil
 }
@@ -1151,11 +1160,22 @@ func (h *DocumentHandler) AdminBulkExport(c *gin.Context) {
 	}
 	c.Status(http.StatusOK)
 
+	// Конференция одна на весь запрос — грузим её один раз до цикла (раньше
+	// re-fetch на каждого из ≤500 участников). При ошибке сохраняем прежнее
+	// поведение: каждый участник пропускается (как при per-user getConference
+	// error в loadDocumentRuntimeContext) → на выходе пустой zip.
+	conf, confErr := h.getConference(c)
+
 	// Стримим zip прямо в ответ — в памяти одновременно только один PDF, а не все 500.
 	zw := zip.NewWriter(c.Writer)
 	used := map[string]int{}
 	for i := range users {
-		ctx, err := h.loadDocumentRuntimeContext(c, users[i].ID)
+		if confErr != nil {
+			continue
+		}
+		// users[i] уже загружен с Preload("Profile") выше — переиспользуем вместо
+		// повторного First по id на каждого участника.
+		ctx, err := h.documentRuntimeContextFor(c, users[i], *conf)
 		if err != nil {
 			continue
 		}

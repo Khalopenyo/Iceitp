@@ -15,10 +15,11 @@ type entry struct {
 }
 
 type Limiter struct {
-	limit   int
-	window  time.Duration
-	mu      sync.Mutex
-	entries map[string]entry
+	limit     int
+	window    time.Duration
+	mu        sync.Mutex
+	entries   map[string]entry
+	lastSweep time.Time
 }
 
 func New(limit int, window time.Duration) *Limiter {
@@ -41,7 +42,13 @@ func (l *Limiter) Middleware(scope string) gin.HandlerFunc {
 		key := scope + ":" + c.ClientIP()
 
 		l.mu.Lock()
-		l.cleanup(now)
+		// Полный проход по мапе делаем не чаще раза в окно (амортизированно O(1) на
+		// запрос); истечение конкретного ключа всё равно обрабатывается лениво ниже,
+		// поэтому решение о троттлинге для любого ключа не меняется.
+		if now.Sub(l.lastSweep) >= l.window {
+			l.cleanup(now)
+			l.lastSweep = now
+		}
 		record := l.entries[key]
 		if record.resetAt.IsZero() || !record.resetAt.After(now) {
 			record = entry{

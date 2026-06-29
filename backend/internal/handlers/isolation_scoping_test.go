@@ -104,7 +104,7 @@ func TestCrossTenantListIsolation(t *testing.T) {
 	db, f := setupTwoTenants(t, "iso_list")
 
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.GET("/users", (&UserHandler{DB: db}).ListUsers)
 	r.GET("/questions", (&QuestionHandler{DB: db}).ListQuestions)
 	r.GET("/feedback", (&FeedbackHandler{DB: db}).ListFeedback)
@@ -220,7 +220,7 @@ func TestCrossTenantByIDMutationIsolation(t *testing.T) {
 	qh := &QuestionHandler{DB: db}
 
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.PUT("/users/:id/role", uh.UpdateUserRole)
 	r.DELETE("/users/:id", uh.DeleteUser)
 	r.PUT("/sections/:id", sh.UpdateSection)
@@ -291,7 +291,7 @@ func TestCrossTenantReplaceMapIsolation(t *testing.T) {
 	mustCreateH(t, db, &models.MapShape{Key: "b1", Kind: "room", Label: "B1", X: 0.1, Y: 0.1, W: 0.2, H: 0.2, Color: "#c7d2fe", ConferenceID: &f.confB.ID})
 
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.PUT("/map", (&VenueMapHandler{DB: db}).ReplaceMap)
 
 	// beta replaces its whole map.
@@ -327,7 +327,7 @@ func TestConferenceLessOrgReplaceMap409(t *testing.T) {
 	mustCreateH(t, db, &models.Organization{Slug: "gamma", DisplayName: "Gamma"})
 
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.PUT("/map", (&VenueMapHandler{DB: db}).ReplaceMap)
 
 	w := tenantReq(t, r, http.MethodPut, "gamma.platform.ru", "/map", map[string]any{
@@ -354,7 +354,7 @@ func TestCrossTenantReplaceMarkersIsolation(t *testing.T) {
 	mustCreateH(t, db, &models.MapMarker{Key: "b", Label: "B", Color: "primary", ConferenceID: &f.confB.ID})
 
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.PUT("/markers", (&MapMarkerHandler{DB: db}).ReplaceMarkers)
 
 	// beta replaces its own markers.
@@ -386,7 +386,7 @@ func TestConferenceLessOrgReadsFailClosed(t *testing.T) {
 	mustCreateH(t, db, &models.Organization{Slug: "gamma", DisplayName: "Gamma"})
 
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.GET("/sections", (&SectionHandler{DB: db}).ListSections)
 
 	w := tenantReq(t, r, http.MethodGet, "gamma.platform.ru", "/sections", nil)
@@ -412,7 +412,7 @@ func TestGetConferenceNoSideEffectOnFreshOrg(t *testing.T) {
 	mustCreateH(t, db, &models.Organization{Slug: "gamma", DisplayName: "Gamma"})
 
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.GET("/conference", (&ConferenceHandler{DB: db}).GetConference)
 
 	var before int64
@@ -440,7 +440,7 @@ func TestConferenceLessOrgReplaceMarkers409(t *testing.T) {
 	mustCreateH(t, db, &models.Organization{Slug: "gamma", DisplayName: "Gamma"})
 
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.PUT("/markers", (&MapMarkerHandler{DB: db}).ReplaceMarkers)
 
 	w := tenantReq(t, r, http.MethodPut, "gamma.platform.ru", "/markers",
@@ -463,7 +463,7 @@ func TestCrossTenantAdminBadgePDFIsolation(t *testing.T) {
 	db, f := setupTwoTenants(t, "iso_badge")
 
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.GET("/admin/users/:id/badge", (&DocumentHandler{DB: db, JWTSecret: "test-secret"}).AdminBadgePDF)
 
 	w := tenantReq(t, r, http.MethodGet, "beta.platform.ru", "/admin/users/"+uintToStr(f.userA.ID)+"/badge", nil)
@@ -480,7 +480,7 @@ func TestCrossTenantProfileSectionScoping(t *testing.T) {
 	db, f := setupTwoTenants(t, "iso_profile")
 
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.Use(func(c *gin.Context) { c.Set("user_id", f.userB.ID); c.Next() }) // authenticated as org B's user
 	r.PUT("/me/profile", (&UserHandler{DB: db}).UpdateProfile)
 
@@ -522,7 +522,7 @@ func TestConferenceLessOrgSeedDemo409(t *testing.T) {
 	mustCreateH(t, db, &models.Organization{Slug: "gamma", DisplayName: "Gamma"})
 
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.POST("/seed-demo", (&ScheduleHandler{DB: db}).SeedDemo)
 
 	w := tenantReq(t, r, http.MethodPost, "gamma.platform.ru", "/seed-demo", nil)
@@ -542,7 +542,7 @@ func TestOrgBrandingPerTenant(t *testing.T) {
 
 	oh := &OrganizationHandler{DB: db}
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.GET("/org", oh.GetOrg)
 	r.PUT("/org", oh.UpdateOrg)
 
@@ -595,7 +595,7 @@ func TestContentBlocksPerTenant(t *testing.T) {
 
 	ch := &ContentHandler{DB: db}
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.GET("/content", ch.ListPublic)
 	r.POST("/content", ch.Create)
 	r.PUT("/content/:id", ch.Update)
@@ -636,7 +636,7 @@ func TestConferenceLessOrgContentCreate409(t *testing.T) {
 
 	ch := &ContentHandler{DB: db}
 	r := gin.New()
-	r.Use(tenant.Middleware(db))
+	r.Use(tenant.Middleware(db, 0))
 	r.POST("/content", ch.Create)
 
 	w := tenantReq(t, r, http.MethodPost, "gamma.platform.ru", "/content", map[string]any{"kind": "about", "title": "x"})
