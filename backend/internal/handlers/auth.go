@@ -41,6 +41,16 @@ const (
 )
 
 var errInvalidResetToken = errors.New(resetPasswordInvalidTokenMessage)
+
+// Sentinel errors for the registration/phone verify transactions. The tx closures
+// return these and the callers map them to HTTP status via errors.Is, instead of
+// matching on err.Error() strings (which silently fell through to 500 on any typo).
+// The .Error() text is unchanged, so response bodies stay byte-identical.
+var (
+	errInvalidConfirmationCode = errors.New("invalid or expired confirmation code")
+	errTooManyConfirmations    = errors.New("too many confirmation attempts")
+	errUserAlreadyExists       = errors.New("user already exists")
+)
 var errAmbiguousPhone = errors.New("phone is used by multiple accounts")
 
 type AuthHandler struct {
@@ -477,15 +487,15 @@ func (h *AuthHandler) VerifyRegistrationCode(c *gin.Context) {
 		var attempt models.RegistrationAttempt
 		if err := tx.Where("token_hash = ? AND consumed_at IS NULL", hashPasswordResetToken(token)).First(&attempt).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return errors.New("invalid or expired confirmation code")
+				return errInvalidConfirmationCode
 			}
 			return err
 		}
 		if !attempt.ExpiresAt.After(now) {
-			return errors.New("invalid or expired confirmation code")
+			return errInvalidConfirmationCode
 		}
 		if attempt.VerifyAttempts >= maxAttempts {
-			return errors.New("too many confirmation attempts")
+			return errTooManyConfirmations
 		}
 		if attempt.CodeHash != hashPhoneAuthCode(code) {
 			updates := map[string]any{"verify_attempts": attempt.VerifyAttempts + 1}
@@ -496,9 +506,9 @@ func (h *AuthHandler) VerifyRegistrationCode(c *gin.Context) {
 				return err
 			}
 			if attempt.VerifyAttempts+1 >= maxAttempts {
-				return errors.New("too many confirmation attempts")
+				return errTooManyConfirmations
 			}
-			return errors.New("invalid or expired confirmation code")
+			return errInvalidConfirmationCode
 		}
 
 		user := models.User{
@@ -524,7 +534,7 @@ func (h *AuthHandler) VerifyRegistrationCode(c *gin.Context) {
 			user.OrganizationID = &oid
 		}
 		if err := tx.Create(&user).Error; err != nil {
-			return errors.New("user already exists")
+			return errUserAlreadyExists
 		}
 		if err := tx.Model(&models.RegistrationAttempt{}).
 			Where("email = ? AND consumed_at IS NULL", attempt.Email).
@@ -558,12 +568,12 @@ func (h *AuthHandler) VerifyRegistrationCode(c *gin.Context) {
 		return nil
 	})
 	if err != nil {
-		switch err.Error() {
-		case "invalid or expired confirmation code":
+		switch {
+		case errors.Is(err, errInvalidConfirmationCode):
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		case "too many confirmation attempts":
+		case errors.Is(err, errTooManyConfirmations):
 			c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many confirmation attempts"})
-		case "user already exists":
+		case errors.Is(err, errUserAlreadyExists):
 			c.JSON(http.StatusConflict, gin.H{"error": "user already exists"})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify registration"})
@@ -745,15 +755,15 @@ func (h *AuthHandler) VerifyPhoneCode(c *gin.Context) {
 			Order("sent_at desc").
 			First(&authCode).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return errors.New("invalid or expired confirmation code")
+				return errInvalidConfirmationCode
 			}
 			return err
 		}
 		if !authCode.ExpiresAt.After(now) {
-			return errors.New("invalid or expired confirmation code")
+			return errInvalidConfirmationCode
 		}
 		if authCode.VerifyAttempts >= maxAttempts {
-			return errors.New("too many confirmation attempts")
+			return errTooManyConfirmations
 		}
 		if authCode.CodeHash != hashPhoneAuthCode(code) {
 			updates := map[string]any{
@@ -766,9 +776,9 @@ func (h *AuthHandler) VerifyPhoneCode(c *gin.Context) {
 				return err
 			}
 			if authCode.VerifyAttempts+1 >= maxAttempts {
-				return errors.New("too many confirmation attempts")
+				return errTooManyConfirmations
 			}
-			return errors.New("invalid or expired confirmation code")
+			return errInvalidConfirmationCode
 		}
 
 		var user models.User
@@ -785,10 +795,10 @@ func (h *AuthHandler) VerifyPhoneCode(c *gin.Context) {
 		return nil
 	})
 	if err != nil {
-		switch err.Error() {
-		case "invalid or expired confirmation code":
+		switch {
+		case errors.Is(err, errInvalidConfirmationCode):
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		case "too many confirmation attempts":
+		case errors.Is(err, errTooManyConfirmations):
 			c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many confirmation attempts"})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify phone code"})
@@ -983,7 +993,7 @@ func (h *AuthHandler) validateRegistrationRequest(c *gin.Context, req RegisterRe
 		}
 	}
 	if _, err := h.findUserByEmail(h.DB, req.Email); err == nil {
-		return "", RegisterRequest{}, errors.New("user already exists")
+		return "", RegisterRequest{}, errUserAlreadyExists
 	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", RegisterRequest{}, errors.New("failed to validate user")
 	}

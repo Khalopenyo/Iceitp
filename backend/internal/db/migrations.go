@@ -431,17 +431,11 @@ func tenantConferenceIDNotNull(db *gorm.DB) error {
 	if err := linkExistingToDefaultOrg(db); err != nil {
 		return err
 	}
-	alters := []string{
-		"ALTER TABLE sections ALTER COLUMN conference_id SET NOT NULL",
-		"ALTER TABLE rooms ALTER COLUMN conference_id SET NOT NULL",
-		"ALTER TABLE map_markers ALTER COLUMN conference_id SET NOT NULL",
-		"ALTER TABLE map_routes ALTER COLUMN conference_id SET NOT NULL",
-		"ALTER TABLE program_assignments ALTER COLUMN conference_id SET NOT NULL",
-		"ALTER TABLE feedbacks ALTER COLUMN conference_id SET NOT NULL",
-		"ALTER TABLE chat_messages ALTER COLUMN conference_id SET NOT NULL",
-		"ALTER TABLE article_submissions ALTER COLUMN conference_id SET NOT NULL",
-		"ALTER TABLE conferences ALTER COLUMN organization_id SET NOT NULL",
+	alters := make([]string, 0, len(tenantNotNullConfTables)+1)
+	for _, t := range tenantNotNullConfTables {
+		alters = append(alters, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN conference_id SET NOT NULL", t))
 	}
+	alters = append(alters, "ALTER TABLE conferences ALTER COLUMN organization_id SET NOT NULL")
 	for _, s := range alters {
 		if err := db.Exec(s).Error; err != nil {
 			return fmt.Errorf("not null flip: %w", err)
@@ -450,19 +444,49 @@ func tenantConferenceIDNotNull(db *gorm.DB) error {
 	return nil
 }
 
-// rlsConfTables is the set migration 0009 applies the conference_id policy to;
-// rlsOrgTables the organization_id-scoped ones. Parent-scoped tables (profiles,
-// consent_logs, chat_attachments) carry no own tenant column and are covered by
-// subquery policies in tenantRLSParentTables (migration 0010). Tables added LATER
-// (content_blocks, migration 0012) get their policy in their own migration — they
-// cannot be listed here because 0009 runs before they exist.
-var rlsConfTables = []string{
-	"sections", "rooms", "map_markers", "map_routes", "program_assignments",
-	"feedbacks", "chat_messages", "article_submissions", "questions",
-	"check_ins", "certificates",
+// tenantScopedTable describes one tenant-scoped table in the single registry below.
+type tenantScopedTable struct {
+	table   string // physical table name
+	column  string // tenant column: "conference_id" or "organization_id"
+	setting string // RLS session variable: "app.conf_id" or "app.org_id"
+	rls     bool   // gets a Postgres RLS tenant_isolation policy
 }
 
-var rlsOrgTables = []string{"users", "conferences"}
+// tenantScopedTables is the SINGLE source of truth for which tables carry a tenant
+// column and how they are isolated. It replaces the previously separate
+// rlsConfTables / rlsOrgTables lists so the RLS policy set is derived from one
+// place. The NOT-NULL flip and per-event backfill lists below stay explicit (they
+// live inside already-applied, frozen migration bodies, so their SQL must not
+// change) but are guarded against drift by a unit test asserting they are subsets
+// of this registry. Conference order is preserved so RLS execution is deterministic.
+//
+// Parent-scoped tables (profiles, consent_logs, chat_attachments) carry no own
+// tenant column and are covered by subquery policies in tenantRLSParentTables
+// (migration 0010), so they are intentionally absent here. Tables added after
+// migration 0009 (e.g. content_blocks) get their policy in their own migration.
+var tenantScopedTables = []tenantScopedTable{
+	{"sections", "conference_id", "app.conf_id", true},
+	{"rooms", "conference_id", "app.conf_id", true},
+	{"map_markers", "conference_id", "app.conf_id", true},
+	{"map_routes", "conference_id", "app.conf_id", true},
+	{"program_assignments", "conference_id", "app.conf_id", true},
+	{"feedbacks", "conference_id", "app.conf_id", true},
+	{"chat_messages", "conference_id", "app.conf_id", true},
+	{"article_submissions", "conference_id", "app.conf_id", true},
+	{"questions", "conference_id", "app.conf_id", true},
+	{"check_ins", "conference_id", "app.conf_id", true},
+	{"certificates", "conference_id", "app.conf_id", true},
+	{"users", "organization_id", "app.org_id", true},
+	{"conferences", "organization_id", "app.org_id", true},
+}
+
+// tenantNotNullConfTables are the conference_id columns migration 0011 flips to NOT
+// NULL. Explicit ordered list (frozen migration body); every entry must exist in
+// tenantScopedTables — enforced by TestTenantScopedRegistryCoversNotNullList.
+var tenantNotNullConfTables = []string{
+	"sections", "rooms", "map_markers", "map_routes",
+	"program_assignments", "feedbacks", "chat_messages", "article_submissions",
+}
 
 // tenantRowLevelSecurity installs fail-closed Postgres RLS as a defense-in-depth
 // backstop under the application-layer scoping. Each tenant-scoped table gets a
@@ -499,13 +523,11 @@ func tenantRowLevelSecurity(db *gorm.DB) error {
 		return nil
 	}
 
-	for _, t := range rlsConfTables {
-		if err := apply(t, "conference_id", "app.conf_id"); err != nil {
-			return err
+	for _, t := range tenantScopedTables {
+		if !t.rls {
+			continue
 		}
-	}
-	for _, t := range rlsOrgTables {
-		if err := apply(t, "organization_id", "app.org_id"); err != nil {
+		if err := apply(t.table, t.column, t.setting); err != nil {
 			return err
 		}
 	}

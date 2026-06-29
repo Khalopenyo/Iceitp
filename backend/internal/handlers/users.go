@@ -258,6 +258,22 @@ func (h *UserHandler) SetBadgeIssued(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "badge_issued": payload.BadgeIssued})
 }
 
+// userOwnedModels are every table holding rows keyed by user_id. There is no
+// DB-level FK CASCADE on them, so DeleteUser must purge all of them before deleting
+// the user — otherwise a deleted account leaves orphaned PII (152-ФЗ erasure
+// failure). Adding a user-owned table is one line here; TestUserOwnedModelsHaveUserID
+// guards that every entry really is user-keyed.
+var userOwnedModels = []any{
+	&models.Profile{},
+	&models.Feedback{},
+	&models.ChatMessage{},
+	&models.ProgramAssignment{},
+	&models.CheckIn{},
+	&models.Certificate{},
+	&models.ArticleSubmission{},
+	&models.ConsentLog{},
+}
+
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	id := c.Param("id")
 	// Cross-tenant guard: only proceed if the target user belongs to the caller's
@@ -274,29 +290,10 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		return
 	}
 	err := tenant.DB(c, h.DB).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("user_id = ?", id).Delete(&models.Profile{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("user_id = ?", id).Delete(&models.Feedback{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("user_id = ?", id).Delete(&models.ChatMessage{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("user_id = ?", id).Delete(&models.ProgramAssignment{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("user_id = ?", id).Delete(&models.CheckIn{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("user_id = ?", id).Delete(&models.Certificate{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("user_id = ?", id).Delete(&models.ArticleSubmission{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("user_id = ?", id).Delete(&models.ConsentLog{}).Error; err != nil {
-			return err
+		for _, m := range userOwnedModels {
+			if err := tx.Where("user_id = ?", id).Delete(m).Error; err != nil {
+				return err
+			}
 		}
 		if err := tx.Delete(&models.User{}, id).Error; err != nil {
 			return err
