@@ -1,3 +1,5 @@
+import { parseHex, toHex, tint, shade } from "./color.js";
+
 // Токены оформления публичного сайта вуза (зона EventShell). Две ветки из прототипа
 // редизайна: "academic" (Source Serif 4, светлый сайдбар) и "digital" (IBM Plex Sans,
 // брендовый сайдбар). Акцент-цвет приходит ПЕР-ТЕНАНТ из org.primary_color, поэтому
@@ -29,19 +31,12 @@ const FALLBACK_ACCENT = "#b42318"; // дефолт, если у вуза не з
 const DARK_INK = "#23201c";
 const hexRe = /^#[0-9a-fA-F]{6}$/;
 
-function clamp(n) { return Math.max(0, Math.min(255, Math.round(n))); }
-function parse(hex) {
-  return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-}
-function toHex(rgb) {
-  return "#" + rgb.map((v) => clamp(v).toString(16).padStart(2, "0")).join("");
-}
 function darken(hex, amount) {
-  return toHex(parse(hex).map((v) => v * (1 - amount)));
+  return toHex(shade(parseHex(hex), amount));
 }
 // Светлая «подложка» акцента: смешиваем с белым (≈92%).
 function wash(hex) {
-  return toHex(parse(hex).map((v) => v + (255 - v) * 0.92));
+  return toHex(tint(parseHex(hex), 0.92));
 }
 // WCAG относительная яркость + контраст (а не упрощённая яркость — иначе порог
 // промахивается на средне-светлых цветах).
@@ -50,7 +45,7 @@ function lin(c) {
   return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
 }
 function relLum(hex) {
-  const [r, g, b] = parse(hex);
+  const { r, g, b } = parseHex(hex);
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
 function contrast(h1, h2) {
@@ -83,7 +78,7 @@ export function eventThemeVars(theme, accentColor) {
   const onAccentMuted = onAccent === "#ffffff" ? "rgba(255,255,255,.86)" : "rgba(35,32,28,.74)";
   // Видимое фокус-кольцо: полупрозрачный акцент (НЕ wash — он почти белый и невидим
   // как самостоятельное кольцо на белой поверхности).
-  const [fr, fg, fb] = parse(accent);
+  const { r: fr, g: fg, b: fb } = parseHex(accent);
   const vars = {
     ...BASE[dir],
     "--ev-accent": accent,

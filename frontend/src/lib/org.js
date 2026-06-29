@@ -1,4 +1,5 @@
 import { apiGet } from "./api.js";
+import { parseHex, toHex, tint, shade } from "./color.js";
 
 // fetchBranding loads the resolved tenant's branding (slug/display_name/logo_url/
 // primary_color/status). Returns null on failure so theming silently falls back
@@ -46,35 +47,6 @@ if (PLATFORM_DOMAIN) {
 export function isPlatformHost() {
   if (typeof window === "undefined") return false;
   return PLATFORM_HOSTS.has(window.location.hostname);
-}
-
-function clampByte(v) {
-  return Math.max(0, Math.min(255, Math.round(v)));
-}
-
-function parseHex(hex) {
-  const m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex || "").trim());
-  if (!m) return null;
-  const n = parseInt(m[1], 16);
-  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
-}
-
-function toHex({ r, g, b }) {
-  return "#" + [r, g, b].map((v) => clampByte(v).toString(16).padStart(2, "0")).join("");
-}
-
-// mix toward white (amount 0..1) — for light tints.
-function tint(rgb, amount) {
-  return {
-    r: rgb.r + (255 - rgb.r) * amount,
-    g: rgb.g + (255 - rgb.g) * amount,
-    b: rgb.b + (255 - rgb.b) * amount,
-  };
-}
-
-// mix toward black (amount 0..1) — for darker accent.
-function shade(rgb, amount) {
-  return { r: rgb.r * (1 - amount), g: rgb.g * (1 - amount), b: rgb.b * (1 - amount) };
 }
 
 // applyBranding derives the brand blue scale (--bl-*) from the tenant's
