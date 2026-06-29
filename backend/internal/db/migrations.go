@@ -384,6 +384,33 @@ var migrations = []migration{
 			return db.AutoMigrate(&models.Organization{})
 		},
 	},
+	{
+		Version: "202606290028",
+		Name:    "add_perf_indexes",
+		Up: func(db *gorm.DB) error {
+			// Чисто аддитивные композитные индексы под форму горячих запросов —
+			// результаты те же, только без полного скана/сортировки.
+			//   chat: ListMessages ORDER BY created_at desc по (conference_id, channel[, section_id])
+			//   users: ListUsers ORDER BY users.created_at desc в рамках организации
+			//   questions: ListQuestions ORDER BY created_at desc в рамках конференции
+			indexes := []string{
+				`CREATE INDEX IF NOT EXISTS idx_chat_conf_channel_created
+					ON chat_messages (conference_id, channel, created_at DESC)`,
+				`CREATE INDEX IF NOT EXISTS idx_chat_conf_channel_section_created
+					ON chat_messages (conference_id, channel, section_id, created_at DESC)`,
+				`CREATE INDEX IF NOT EXISTS idx_users_org_created
+					ON users (organization_id, created_at DESC)`,
+				`CREATE INDEX IF NOT EXISTS idx_questions_conf_created
+					ON questions (conference_id, created_at DESC)`,
+			}
+			for _, s := range indexes {
+				if err := db.Exec(s).Error; err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	},
 }
 
 // tenantConferenceIDNotNull flips the per-event conference_id columns (and
