@@ -44,6 +44,10 @@ type Config struct {
 	GreenSMSTelegramCascade string
 	GreenSMSTelegramText    string
 	FileStorageRoot         string
+	// FileStorageBackend selects the objectstore implementation. "" / "filesystem"
+	// (default) → local filesystem at FileStorageRoot (single-VM deployments
+	// unchanged). The seam lets an S3 backend be added behind the Store interface.
+	FileStorageBackend string
 	// RLSEnforced, when true, wraps each tenant request in a transaction that sets
 	// the app.org_id / app.conf_id session variables so Postgres Row-Level
 	// Security (migration 202606200009) is active. Requires the app to connect as
@@ -183,6 +187,7 @@ func Load() Config {
 		GreenSMSTelegramCascade: strings.TrimSpace(os.Getenv("GREENSMS_TELEGRAM_CASCADE")),
 		GreenSMSTelegramText:    os.Getenv("GREENSMS_TELEGRAM_CASCADE_TEXT"),
 		FileStorageRoot:         defaultFileStorageRoot(),
+		FileStorageBackend:      strings.TrimSpace(os.Getenv("FILE_STORAGE_BACKEND")),
 		RLSEnforced:             envBool("RLS_ENFORCED", false),
 		SeedDemo:                envBool("SEED_DEMO", false),
 		FixedAuthCode:           strings.TrimSpace(os.Getenv("FIXED_AUTH_CODE")),

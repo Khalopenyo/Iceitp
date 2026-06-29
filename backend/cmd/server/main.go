@@ -64,7 +64,7 @@ func main() {
 		appDB = a
 	}
 
-	store, err := objectstore.NewFilesystemStore(cfg.FileStorageRoot)
+	store, err := objectstore.New(cfg.FileStorageBackend, cfg.FileStorageRoot)
 	if err != nil {
 		log.Fatalf("init file storage: %v", err)
 	}
