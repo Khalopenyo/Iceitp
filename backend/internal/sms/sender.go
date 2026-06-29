@@ -122,46 +122,7 @@ func (s *GreenSMSSender) sendSMSCode(ctx context.Context, message AuthCodeMessag
 	if s.from != "" {
 		values.Set("from", s.from)
 	}
-	if s.token == "" {
-		values.Set("user", s.user)
-		values.Set("pass", s.pass)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.baseURL+"/sms/send", bytes.NewBufferString(values.Encode()))
-	if err != nil {
-		return AuthCodeDelivery{}, err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Accept", "application/json")
-	if s.token != "" {
-		req.Header.Set("Authorization", "Bearer "+s.token)
-	}
-
-	res, err := s.client.Do(req)
-	if err != nil {
-		return AuthCodeDelivery{}, err
-	}
-	defer res.Body.Close()
-
-	var payload greenSMSResponse
-	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
-		return AuthCodeDelivery{}, fmt.Errorf("decode greensms response: %w", err)
-	}
-
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		if strings.TrimSpace(payload.Error) != "" {
-			return AuthCodeDelivery{}, fmt.Errorf("greensms: %s", strings.TrimSpace(payload.Error))
-		}
-		return AuthCodeDelivery{}, fmt.Errorf("greensms: unexpected status %d", res.StatusCode)
-	}
-	if strings.TrimSpace(payload.RequestID) == "" {
-		if strings.TrimSpace(payload.Error) != "" {
-			return AuthCodeDelivery{}, fmt.Errorf("greensms: %s", strings.TrimSpace(payload.Error))
-		}
-		return AuthCodeDelivery{}, fmt.Errorf("greensms: missing request_id")
-	}
-
-	return AuthCodeDelivery{RequestID: payload.RequestID}, nil
+	return s.post(ctx, "/sms/send", values)
 }
 
 func (s *GreenSMSSender) sendTelegramCode(ctx context.Context, message AuthCodeMessage) (AuthCodeDelivery, error) {
@@ -184,12 +145,21 @@ func (s *GreenSMSSender) sendTelegramCode(ctx context.Context, message AuthCodeM
 		}
 		values.Set("cascade_txt", cascadeText)
 	}
+	return s.post(ctx, "/telegram/send", values)
+}
+
+// post sends form-encoded values to baseURL+path with the standard GreenSMS headers
+// and auth (Bearer token, or user/pass in the body), then maps the response to an
+// AuthCodeDelivery. Shared by sendSMSCode and sendTelegramCode so the request build,
+// header set, and status/request_id outcome logic live in exactly one place. Form
+// key order is irrelevant (url.Values.Encode sorts keys), so behaviour is unchanged.
+func (s *GreenSMSSender) post(ctx context.Context, path string, values url.Values) (AuthCodeDelivery, error) {
 	if s.token == "" {
 		values.Set("user", s.user)
 		values.Set("pass", s.pass)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.baseURL+"/telegram/send", bytes.NewBufferString(values.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.baseURL+path, bytes.NewBufferString(values.Encode()))
 	if err != nil {
 		return AuthCodeDelivery{}, err
 	}

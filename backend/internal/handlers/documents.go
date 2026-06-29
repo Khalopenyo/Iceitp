@@ -685,16 +685,11 @@ func (h *DocumentHandler) generateBadgeToken(userID, conferenceID uint) (string,
 		// Окно события, а не 72ч: сокращает риск переигрывания утёкшего scan-URL.
 		"exp": time.Now().Add(24 * time.Hour).Unix(),
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(h.JWTSecret))
+	return signTokenClaims(h.JWTSecret, claims)
 }
 
 func (h *DocumentHandler) badgeScanURL(token string) string {
-	base := strings.TrimSpace(h.AppBaseURL)
-	if base == "" {
-		return "/badge/" + url.PathEscape(token)
-	}
-	return strings.TrimSuffix(base, "/") + "/badge/" + url.PathEscape(token)
+	return appURL(h.AppBaseURL, "/badge/"+url.PathEscape(token))
 }
 
 func (h *DocumentHandler) ensureCertificate(c *gin.Context, conferenceID, userID uint) (*models.Certificate, error) {

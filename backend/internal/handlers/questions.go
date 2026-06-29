@@ -149,16 +149,8 @@ func (h *QuestionHandler) ApprovedQuestions(c *gin.Context) {
 	}
 
 	for i := range response {
-		if response[i].CreatedAt != "" {
-			if parsed, err := time.Parse(time.RFC3339Nano, response[i].CreatedAt); err == nil {
-				response[i].CreatedAt = parsed.Format(time.RFC3339)
-			}
-		}
-		if response[i].ModeratedAt != "" {
-			if parsed, err := time.Parse(time.RFC3339Nano, response[i].ModeratedAt); err == nil {
-				response[i].ModeratedAt = parsed.Format(time.RFC3339)
-			}
-		}
+		response[i].CreatedAt = normalizeRFC3339(response[i].CreatedAt)
+		response[i].ModeratedAt = normalizeRFC3339(response[i].ModeratedAt)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -274,16 +266,8 @@ func (h *QuestionHandler) ListQuestions(c *gin.Context) {
 	}
 
 	for i := range response {
-		if response[i].CreatedAt != "" {
-			if parsed, err := time.Parse(time.RFC3339Nano, response[i].CreatedAt); err == nil {
-				response[i].CreatedAt = parsed.Format(time.RFC3339)
-			}
-		}
-		if response[i].ModeratedAt != "" {
-			if parsed, err := time.Parse(time.RFC3339Nano, response[i].ModeratedAt); err == nil {
-				response[i].ModeratedAt = parsed.Format(time.RFC3339)
-			}
-		}
+		response[i].CreatedAt = normalizeRFC3339(response[i].CreatedAt)
+		response[i].ModeratedAt = normalizeRFC3339(response[i].ModeratedAt)
 	}
 
 	c.JSON(http.StatusOK, paginatedResponse[questionEntry]{
@@ -370,24 +354,15 @@ func (h *QuestionHandler) generateQuestionToken(conferenceID uint) (string, erro
 		"iat":           time.Now().Unix(),
 		"exp":           time.Now().Add(30 * 24 * time.Hour).Unix(),
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(h.JWTSecret))
+	return signTokenClaims(h.JWTSecret, claims)
 }
 
 func (h *QuestionHandler) questionPageURL(token string) string {
-	base := strings.TrimSpace(h.AppBaseURL)
-	if base == "" {
-		return "/questions/" + url.PathEscape(token)
-	}
-	return strings.TrimSuffix(base, "/") + "/questions/" + url.PathEscape(token)
+	return appURL(h.AppBaseURL, "/questions/"+url.PathEscape(token))
 }
 
 func (h *QuestionHandler) approvedQuestionsPageURL(token string) string {
-	base := strings.TrimSpace(h.AppBaseURL)
-	if base == "" {
-		return "/questions/" + url.PathEscape(token) + "/approved"
-	}
-	return strings.TrimSuffix(base, "/") + "/questions/" + url.PathEscape(token) + "/approved"
+	return appURL(h.AppBaseURL, "/questions/"+url.PathEscape(token)+"/approved")
 }
 
 func writeQuestionTokenError(c *gin.Context, err error) {

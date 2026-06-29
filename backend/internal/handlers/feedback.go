@@ -5,7 +5,6 @@ import (
 	"conferenceplatforma/internal/tenant"
 	"net/http"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
@@ -113,11 +112,7 @@ func (h *FeedbackHandler) ListFeedback(c *gin.Context) {
 	}
 
 	for i := range response {
-		if response[i].CreatedAt != "" {
-			if parsed, err := time.Parse(time.RFC3339Nano, response[i].CreatedAt); err == nil {
-				response[i].CreatedAt = parsed.Format(time.RFC3339)
-			}
-		}
+		response[i].CreatedAt = normalizeRFC3339(response[i].CreatedAt)
 	}
 
 	c.JSON(http.StatusOK, paginatedResponse[feedbackEntry]{
