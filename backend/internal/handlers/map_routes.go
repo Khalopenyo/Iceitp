@@ -61,20 +61,14 @@ func (h *MapRouteHandler) UpsertRoute(c *gin.Context) {
 		payload.Floor = 1
 	}
 
-	// Validate and normalize points.
+	// Normalize to the 0..1 unit space used everywhere else (markers, shapes and the
+	// bulk /admin/map writer all use clampUnit). Routes were the lone path clamping
+	// to 0..100, which could leave mixed-unit point arrays in one table. The console
+	// editor already sends 0..1, so this is a no-op for it and only corrects
+	// out-of-range input — it ends the dual-coordinate-system hazard.
 	for i := range payload.Points {
-		if payload.Points[i].X < 0 {
-			payload.Points[i].X = 0
-		}
-		if payload.Points[i].X > 100 {
-			payload.Points[i].X = 100
-		}
-		if payload.Points[i].Y < 0 {
-			payload.Points[i].Y = 0
-		}
-		if payload.Points[i].Y > 100 {
-			payload.Points[i].Y = 100
-		}
+		payload.Points[i].X = clampUnit(payload.Points[i].X)
+		payload.Points[i].Y = clampUnit(payload.Points[i].Y)
 	}
 
 	// Empty points => delete route.
