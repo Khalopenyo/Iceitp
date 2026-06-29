@@ -1,3 +1,4 @@
+import { triggerBlobDownload } from "../../lib/download.js";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiGet } from "../../lib/api.js";
@@ -68,14 +69,7 @@ export default function EventSchedule() {
   const exportICS = () => {
     const ics = buildICS(sections.filter((s) => hasRealTime(s.start_at)));
     const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "raspisanie.ics";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    triggerBlobDownload(blob, "raspisanie.ics");
   };
 
   return (

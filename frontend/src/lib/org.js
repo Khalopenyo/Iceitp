@@ -4,11 +4,24 @@ import { parseHex, toHex, tint, shade } from "./color.js";
 // fetchBranding loads the resolved tenant's branding (slug/display_name/logo_url/
 // primary_color/status). Returns null on failure so theming silently falls back
 // to the academic-blue defaults in index.css.
+//
+// Concurrent callers (App + the active shell both fetch on first paint) share a
+// single in-flight request — the promise is cleared once it settles, so a later
+// mount refetches fresh data (no staleness window, identical results).
+let brandingInFlight = null;
 export async function fetchBranding() {
+  if (brandingInFlight) return brandingInFlight;
+  brandingInFlight = (async () => {
+    try {
+      return await apiGet("/org", { suppressAuthRedirect: true });
+    } catch {
+      return null;
+    }
+  })();
   try {
-    return await apiGet("/org", { suppressAuthRedirect: true });
-  } catch {
-    return null;
+    return await brandingInFlight;
+  } finally {
+    brandingInFlight = null;
   }
 }
 

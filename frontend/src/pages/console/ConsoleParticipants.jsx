@@ -1,3 +1,4 @@
+import { triggerBlobDownload } from "../../lib/download.js";
 import Toast from "../../components/Toast.jsx";
 import { initials as initialsOf } from "../../lib/format.js";
 import { useEffect, useMemo, useState } from "react";
@@ -144,14 +145,7 @@ export default function ConsoleParticipants() {
       ].map(esc).join(";"));
     });
     const blob = new Blob([`﻿${lines.join("\r\n")}`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "uchastniki.csv";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    triggerBlobDownload(blob, "uchastniki.csv");
   };
 
   // Экспорт по ВСЕМУ набору (бэкенд капит page_size=100) — листаем страницы, затем фильтруем.
